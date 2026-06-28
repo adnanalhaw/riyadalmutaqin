@@ -1,0 +1,29 @@
+name = "riyad-almutaqin"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# الموقع العام يُقدَّم كأصول ثابتة (static assets)، والـ Worker يتولّى /api فقط.
+[assets]
+directory = "./public"
+binding = "ASSETS"
+not_found_handling = "single-page-application"
+
+# قاعدة البيانات — Cloudflare D1 (SQLite)
+# أنشئها بـ:  wrangler d1 create riyad_db   ثم ضع database_id أدناه.
+[[d1_databases]]
+binding = "DB"
+database_name = "riyad_db"
+database_id = "PLACEHOLDER_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# تخزين الملفات (صوت/صور) — Cloudflare R2
+# أنشئه بـ:  wrangler r2 bucket create riyad-media
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "riyad-media"
+
+# متغيّرات عامة غير سرّية. الأسرار تُضاف عبر:  wrangler secret put <NAME>
+[vars]
+ENVIRONMENT = "production"
+SITE_NAME = "رياض المتقين"

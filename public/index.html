@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>رياض المتقين — منصة دعوية</title>
+  <meta name="description" content="منصة رياض المتقين الدعوية: دروس ومقاطع وسلاسل علمية، مع منطقة أعضاء ومحتوى حصري." />
+  <meta name="theme-color" content="#0f5132" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <nav class="container nav">
+      <a class="brand" href="/">
+        <span class="brand-mark">﷽</span>
+        <span class="brand-name">رياض المتقين</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="#about">عن القناة</a></li>
+        <li><a href="#lessons">الدروس</a></li>
+        <li><a href="#clips">المقاطع</a></li>
+        <li><a href="#contact">تواصل</a></li>
+      </ul>
+      <a class="btn btn-outline" href="/account">دخول الأعضاء</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero">
+      <div class="container hero-inner">
+        <p class="eyebrow">منصة دعوية</p>
+        <h1>رياض المتقين</h1>
+        <p class="lead">
+          دروسٌ ومقاطعُ وسلاسلُ علميةٌ نافعة، تُبثُّ للجميع مجاناً،
+          ومنطقةُ أعضاءٍ بمحتوًى حصريٍّ وشهاداتِ إتمامٍ ومتابعةٍ للتقدّم.
+        </p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="#lessons">تصفّح الدروس</a>
+          <a class="btn btn-ghost" href="/account">انضمّ كعضو</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="about" class="section">
+      <div class="container">
+        <h2>عن القناة</h2>
+        <p class="section-text">
+          رياض المتقين منصةٌ دعويةٌ تهدف إلى تقريب العلم النافع بأسلوبٍ ميسّر،
+          عبر دروسٍ مرتّبةٍ في سلاسل، ومقاطعَ قصيرةٍ، وموادَّ صوتيةٍ ومرئية.
+          المحتوى العام متاحٌ للجميع، ويُتاح للأعضاء محتوًى حصريٌّ ومكتبةٌ شخصية.
+        </p>
+        <div class="cards">
+          <article class="card">
+            <h3>دروسٌ مرتّبة</h3>
+            <p>سلاسلُ علميةٌ متسلسلةٌ تُكمِل الدرس من حيث توقّفت.</p>
+          </article>
+          <article class="card">
+            <h3>محتوًى حصري</h3>
+            <p>موادُّ خاصةٌ بالأعضاء مع شهادات إتمامٍ عند إكمال الدورات.</p>
+          </article>
+          <article class="card">
+            <h3>مكتبةٌ شخصية</h3>
+            <p>احفظ المفضّلة وتابِع تقدّمك في مكانٍ واحد.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="lessons" class="section section-alt">
+      <div class="container">
+        <h2>الدروس</h2>
+        <p class="section-text">سيظهر هنا فهرس الدورات والدروس بعد إعداد المحتوى.</p>
+        <div id="lessons-grid" class="cards" aria-live="polite">
+          <p class="muted">يجري التحضير…</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="clips" class="section">
+      <div class="container">
+        <h2>المقاطع</h2>
+        <p class="section-text">مقاطعُ قصيرةٌ منتقاةٌ من الدروس والسلاسل.</p>
+        <div class="cards muted-cards">
+          <article class="card card-placeholder">قريباً</article>
+          <article class="card card-placeholder">قريباً</article>
+          <article class="card card-placeholder">قريباً</article>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact" class="section section-alt">
+      <div class="container">
+        <h2>تواصل</h2>
+        <p class="section-text">
+          لإرسال سؤالٍ أو ملاحظة، يمكنك التواصل عبر صفحة الأعضاء بعد الدخول،
+          أو عبر منصّات القناة.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <span>رياض المتقين © <span id="year"></span></span>
+      <span class="muted">منصة دعوية</span>
+    </div>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
