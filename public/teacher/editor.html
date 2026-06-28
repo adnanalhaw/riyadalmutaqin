@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>المونتاج — رياض المتقين</title>
-  <meta name="description" content="محرّر المونتاج داخل المتصفّح: قص ودمج وإضافة شعار وعنوان وتصدير." />
+  <meta name="description" content="محرّر المونتاج داخل المتصفّح: قص وإضافة شعار وعنوان وتصدير." />
   <meta name="theme-color" content="#0b1430" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -22,38 +22,72 @@
         <section>
           <div class="page-head" style="padding-top:0">
             <h1>المونتاج</h1>
-            <p>حرّر دروسك داخل المتصفّح قبل النشر.</p>
+            <p>حمّل فيديو، قُصّ المقطع، أضِف شعاراً وعنواناً، ثم صدّره — كل ذلك داخل المتصفّح.</p>
           </div>
 
-          <!-- منطقة المعاينة -->
-          <div class="vthumb" style="aspect-ratio:16/9;margin-bottom:1rem">
-            <div class="play">▶</div>
-            <span class="badge soon" style="position:absolute;top:1rem;inset-inline-start:1rem">معاينة</span>
-          </div>
-
-          <!-- أدوات -->
-          <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.2rem">
-            <button class="btn btn-outline" type="button">✂ قص</button>
-            <button class="btn btn-outline" type="button">⧉ دمج</button>
-            <button class="btn btn-outline" type="button">★ إضافة شعار</button>
-            <button class="btn btn-outline" type="button">T إضافة عنوان</button>
-            <button class="btn btn-primary" type="button">⤓ تصدير</button>
-          </div>
-
-          <!-- شريط زمني -->
-          <div style="background:var(--navy-800);border:1px solid var(--border);border-radius:12px;padding:1rem">
-            <div class="muted" style="margin-bottom:.6rem;font-size:.85rem">الشريط الزمني</div>
-            <div style="display:flex;gap:.4rem;align-items:stretch;height:64px;overflow-x:auto">
-              <div style="flex:0 0 22%;border-radius:8px;background:linear-gradient(135deg,var(--gold),var(--gold-soft));display:grid;place-items:center;color:#2a1f04;font-weight:700;font-size:.8rem">مقطع ١</div>
-              <div style="flex:0 0 30%;border-radius:8px;background:var(--gold-faint);border:1px solid var(--gold-dim);display:grid;place-items:center;color:var(--gold);font-weight:700;font-size:.8rem">مقطع ٢</div>
-              <div style="flex:0 0 18%;border-radius:8px;background:var(--gold-faint);border:1px solid var(--gold-dim);display:grid;place-items:center;color:var(--gold);font-weight:700;font-size:.8rem">شعار</div>
-              <div style="flex:0 0 28%;border-radius:8px;background:var(--gold-faint);border:1px solid var(--gold-dim);display:grid;place-items:center;color:var(--gold);font-weight:700;font-size:.8rem">مقطع ٣</div>
+          <div class="card" style="margin-bottom:1.2rem">
+            <div class="field" style="margin:0">
+              <label for="file">١) اختر ملف فيديو</label>
+              <input type="file" id="file" accept="video/*" />
             </div>
-            <div style="height:2px;background:var(--gold);width:35%;margin-top:.5rem;border-radius:2px"></div>
           </div>
 
-          <div class="notice">
-            يعمل المونتاج الكامل داخل المتصفّح وسيُفعَّل في مرحلة الاستوديو (Studio). الواجهة أعلاه نموذجٌ توضيحيٌّ للأدوات والشريط الزمني.
+          <!-- المعاينة -->
+          <div style="position:relative;background:#000;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:1rem">
+            <canvas id="stage" style="width:100%;display:block;aspect-ratio:16/9;background:#000"></canvas>
+            <video id="src" playsinline style="display:none"></video>
+          </div>
+
+          <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.2rem">
+            <button class="btn btn-outline" id="play" type="button">▶ تشغيل المقطع</button>
+            <button class="btn btn-ghost" id="pause" type="button">⏸ إيقاف</button>
+            <span class="muted" id="timeLbl" style="align-self:center">٠:٠٠ / ٠:٠٠</span>
+          </div>
+
+          <!-- القص -->
+          <div class="card" style="margin-bottom:1.2rem">
+            <h3 style="color:var(--gold);margin-top:0">٢) القص</h3>
+            <div class="field">
+              <label>بداية المقطع: <span class="gold" id="startLbl">٠:٠٠</span></label>
+              <input type="range" id="start" min="0" max="100" value="0" step="0.1" style="width:100%" />
+            </div>
+            <div class="field" style="margin:0">
+              <label>نهاية المقطع: <span class="gold" id="endLbl">٠:٠٠</span></label>
+              <input type="range" id="end" min="0" max="100" value="100" step="0.1" style="width:100%" />
+            </div>
+          </div>
+
+          <!-- الشعار والعنوان -->
+          <div class="card" style="margin-bottom:1.2rem">
+            <h3 style="color:var(--gold);margin-top:0">٣) الشعار والعنوان</h3>
+            <div class="field" style="display:flex;align-items:center;gap:.6rem">
+              <input type="checkbox" id="logoToggle" checked style="width:auto" />
+              <label for="logoToggle" style="margin:0">إظهار شعار رياض المتقين</label>
+            </div>
+            <div class="field">
+              <label for="logoFile">شعار مخصّص (اختياري)</label>
+              <input type="file" id="logoFile" accept="image/*" />
+            </div>
+            <div class="field">
+              <label for="title">العنوان على الفيديو</label>
+              <input type="text" id="title" placeholder="مثال: شرح كتاب التوحيد — الدرس الأول" />
+            </div>
+            <div class="field" style="margin:0">
+              <label for="subtitle">سطر فرعي (اسم الدكتور — اختياري)</label>
+              <input type="text" id="subtitle" placeholder="مثال: د. عبد الله الراشد" />
+            </div>
+          </div>
+
+          <!-- التصدير -->
+          <div class="card">
+            <h3 style="color:var(--gold);margin-top:0">٤) التصدير</h3>
+            <button class="btn btn-primary" id="export" type="button">⤓ تصدير المقطع</button>
+            <span id="status" class="muted" style="margin-inline-start:.8rem"></span>
+            <div id="downloadWrap" style="margin-top:1rem"></div>
+            <div class="notice" style="margin-top:1rem">
+              يعمل المحرّر بالكامل داخل متصفّحك (Canvas + MediaRecorder) — لا يُرفع فيديوك إلى أيّ خادم.
+              الناتج بصيغة WebM. دمج عدّة مقاطع سيُضاف لاحقاً.
+            </div>
           </div>
         </section>
       </div>
@@ -63,5 +97,6 @@
   <div data-footer></div>
   <script src="/layout.js"></script>
   <script src="/teacher/nav.js"></script>
+  <script src="/teacher/editor.js"></script>
 </body>
 </html>
