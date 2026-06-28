@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>حسابي — رياض المتقين</title>
+  <meta name="description" content="حسابك في رياض المتقين: بياناتك ومكتبتك ومتابعة تقدّمك." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="page-head">
+        <h1>حسابي</h1>
+        <p id="welcome">مرحباً بك في رياض المتقين.</p>
+      </div>
+
+      <div class="grid" style="margin-bottom:1.5rem">
+        <div class="card">
+          <div class="ic">👤</div>
+          <h3>بياناتي</h3>
+          <p>الاسم: <span class="gold" id="uName">—</span></p>
+          <p>البريد: <span class="gold" id="uEmail">—</span></p>
+          <p>النوع: <span class="gold" id="uRole">متعلّم</span></p>
+        </div>
+        <a class="card link" href="/library"><div class="ic">📚</div><h3>مكتبة الحفظ</h3><p>الدروس والمقاطع التي حفظتها.</p></a>
+        <a class="card link" href="/live"><div class="ic">🔴</div><h3>الدروس المباشرة</h3><p>تابِع البثّ والدروس القادمة.</p></a>
+      </div>
+
+      <button class="btn btn-outline" id="logout2">تسجيل الخروج</button>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    var ROLES = { student: "متعلّم", teacher: "معلّم", admin: "مدير" };
+    fetch("/api/auth/me", { headers: { accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        var user = data && data.user;
+        if (!user) { location.href = "/login"; return; }
+        document.getElementById("uName").textContent = user.name;
+        document.getElementById("uEmail").textContent = user.email;
+        document.getElementById("uRole").textContent = ROLES[user.role] || user.role;
+        document.getElementById("welcome").textContent = "مرحباً " + user.name + "، نسأل الله لك العلم النافع.";
+      })
+      .catch(function () { location.href = "/login"; });
+
+    document.getElementById("logout2").addEventListener("click", function () {
+      fetch("/api/auth/logout", { method: "POST" }).then(function () { location.href = "/"; });
+    });
+  </script>
+</body>
+</html>

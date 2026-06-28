@@ -41,7 +41,7 @@
 
         <button class="btn btn-primary" type="submit" style="width:100%">تسجيل</button>
 
-        <div class="notice" id="regNotice" hidden>سيُفعَّل إنشاء الحساب قريباً بعد ربط الواجهة الخلفية.</div>
+        <div class="notice" id="regNotice" hidden></div>
 
         <p class="muted center" style="margin-top:1.2rem">
           <a class="gold" href="/login">لديك حساب بالفعل؟ تسجيل الدخول</a>
@@ -53,9 +53,32 @@
   <div data-footer></div>
   <script src="/layout.js"></script>
   <script>
-    document.getElementById("registerForm").addEventListener("submit", function (e) {
+    var form = document.getElementById("registerForm");
+    var notice = document.getElementById("regNotice");
+    function show(msg) { notice.textContent = msg; notice.hidden = false; }
+
+    form.addEventListener("submit", function (e) {
       e.preventDefault();
-      document.getElementById("regNotice").hidden = false;
+      var name = document.getElementById("name").value.trim();
+      var email = document.getElementById("email").value.trim();
+      var password = document.getElementById("password").value;
+      var confirm = document.getElementById("confirm").value;
+
+      if (password.length < 8) return show("كلمة المرور يجب أن تكون 8 أحرف فأكثر.");
+      if (password !== confirm) return show("كلمتا المرور غير متطابقتين.");
+
+      show("جارٍ إنشاء الحساب…");
+      fetch("/api/auth/register", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: name, email: email, password: password }),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (res.ok && res.d.ok) { location.href = "/account"; }
+          else { show(res.d.error || "تعذّر إنشاء الحساب."); }
+        })
+        .catch(function () { show("حدث خطأ في الاتصال. حاوِل مجدداً."); });
     });
   </script>
 </body>

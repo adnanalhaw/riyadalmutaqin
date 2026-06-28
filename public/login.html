@@ -43,7 +43,7 @@
 
         <button class="btn btn-primary" type="submit" style="width:100%">دخول</button>
 
-        <div class="notice" id="loginNotice" hidden>سيُفعَّل تسجيل الدخول قريباً بعد ربط الواجهة الخلفية.</div>
+        <div class="notice" id="loginNotice" hidden></div>
 
         <p class="muted center" style="margin-top:1.2rem">
           <a class="gold" href="/register">ليس لديك حساب؟ سجّل الآن</a>
@@ -77,9 +77,29 @@
       var qrole = params.get("role");
       if (qrole === "teacher" || qrole === "student") setRole(qrole);
 
+      var notice = document.getElementById("loginNotice");
+      function show(msg) { notice.textContent = msg; notice.hidden = false; }
+
       document.getElementById("loginForm").addEventListener("submit", function (e) {
         e.preventDefault();
-        document.getElementById("loginNotice").hidden = false;
+        var email = document.getElementById("email").value.trim();
+        var password = document.getElementById("password").value;
+        show("جارٍ التحقّق…");
+        fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: email, password: password }),
+        })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (res) {
+            if (res.ok && res.d.ok) {
+              var role = res.d.user && res.d.user.role;
+              location.href = (role === "teacher" || role === "admin") ? "/teacher" : "/account";
+            } else {
+              show(res.d.error || "تعذّر تسجيل الدخول.");
+            }
+          })
+          .catch(function () { show("حدث خطأ في الاتصال. حاوِل مجدداً."); });
       });
     })();
   </script>
