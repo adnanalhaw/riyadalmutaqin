@@ -4,111 +4,102 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>رياض المتقين — منصة دعوية</title>
-  <meta name="description" content="منصة رياض المتقين الدعوية: دروس ومقاطع وسلاسل علمية، مع منطقة أعضاء ومحتوى حصري." />
-  <meta name="theme-color" content="#0f5132" />
+  <meta name="description" content="رياض المتقين: القرآن والسنّة بفهم سلف الأمّة. منصة دعوية لنشر العلم النافع عبر دروس مباشرة ومقاطع ومكتبة صوتية." />
+  <meta name="theme-color" content="#0b1430" />
+  <meta property="og:title" content="رياض المتقين" />
+  <meta property="og:description" content="القرآن والسنّة بفهم سلف الأمّة" />
+  <meta property="og:type" content="website" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header class="site-header">
-    <nav class="container nav">
-      <a class="brand" href="/">
-        <span class="brand-mark">﷽</span>
-        <span class="brand-name">رياض المتقين</span>
-      </a>
-      <ul class="nav-links">
-        <li><a href="#about">عن القناة</a></li>
-        <li><a href="#lessons">الدروس</a></li>
-        <li><a href="#clips">المقاطع</a></li>
-        <li><a href="#contact">تواصل</a></li>
-      </ul>
-      <a class="btn btn-outline" href="/account">دخول الأعضاء</a>
-    </nav>
-  </header>
+  <div data-header></div>
 
   <main>
+    <!-- البطل -->
     <section class="hero">
-      <div class="container hero-inner">
-        <p class="eyebrow">منصة دعوية</p>
-        <h1>رياض المتقين</h1>
-        <p class="lead">
-          دروسٌ ومقاطعُ وسلاسلُ علميةٌ نافعة، تُبثُّ للجميع مجاناً،
-          ومنطقةُ أعضاءٍ بمحتوًى حصريٍّ وشهاداتِ إتمامٍ ومتابعةٍ للتقدّم.
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-primary" href="#lessons">تصفّح الدروس</a>
-          <a class="btn btn-ghost" href="/account">انضمّ كعضو</a>
+      <div class="container">
+        <div class="frame">
+          <span class="corner-tr"></span><span class="corner-br"></span>
+          <img class="logo-badge" src="/assets/logo.svg" alt="شعار رياض المتقين" />
+          <h1>رياض المتقين</h1>
+          <div class="divider">◆</div>
+          <p class="tagline">القرآن والسنّة بفهم سلف الأمّة</p>
+          <p class="lead">
+            قناةٌ دعويةٌ تُعنى بنشر العلم النافع من الكتاب والسنّة على فهم سلف الأمّة،
+            عبر دروسٍ مباشرة ومقاطعَ مختارةٍ ومكتبةٍ صوتية.
+          </p>
+          <div class="hero-actions" style="margin-top:1.6rem;display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap">
+            <a class="btn btn-primary" href="/live">الدروس المباشرة</a>
+            <a class="btn btn-outline" href="/register">انضمّ كمتعلّم</a>
+          </div>
         </div>
       </div>
     </section>
 
-    <section id="about" class="section">
+    <!-- ماذا نقدّم -->
+    <section class="section">
       <div class="container">
-        <h2>عن القناة</h2>
-        <p class="section-text">
-          رياض المتقين منصةٌ دعويةٌ تهدف إلى تقريب العلم النافع بأسلوبٍ ميسّر،
-          عبر دروسٍ مرتّبةٍ في سلاسل، ومقاطعَ قصيرةٍ، وموادَّ صوتيةٍ ومرئية.
-          المحتوى العام متاحٌ للجميع، ويُتاح للأعضاء محتوًى حصريٌّ ومكتبةٌ شخصية.
-        </p>
-        <div class="cards">
-          <article class="card">
-            <h3>دروسٌ مرتّبة</h3>
-            <p>سلاسلُ علميةٌ متسلسلةٌ تُكمِل الدرس من حيث توقّفت.</p>
-          </article>
-          <article class="card">
-            <h3>محتوًى حصري</h3>
-            <p>موادُّ خاصةٌ بالأعضاء مع شهادات إتمامٍ عند إكمال الدورات.</p>
-          </article>
-          <article class="card">
-            <h3>مكتبةٌ شخصية</h3>
-            <p>احفظ المفضّلة وتابِع تقدّمك في مكانٍ واحد.</p>
-          </article>
+        <h2>ماذا نقدّم</h2>
+        <p class="sub">منصةٌ متكاملةٌ للعلم النافع: بثٌّ مباشر، ومكتباتٌ منظّمة، وأدواتٌ للمعلّم.</p>
+        <div class="grid">
+          <a class="card link" href="/live"><div class="ic">🔴</div><h3>الدروس المباشرة</h3><p>بثٌّ مباشر (لايف) ومسجّل، يُنشَر تلقائياً على يوتيوب.</p></a>
+          <a class="card link" href="/clips"><div class="ic">🎬</div><h3>مكتبة المقاطع</h3><p>مقاطعُ قصيرةٌ منتقاةٌ من الدروس والسلاسل.</p></a>
+          <a class="card link" href="/audio"><div class="ic">🎧</div><h3>المكتبة الصوتية</h3><p>موادُّ صوتيةٌ للاستماع والحفظ في أيّ وقت.</p></a>
+          <a class="card link" href="/library"><div class="ic">📚</div><h3>مكتبة الحفظ</h3><p>احفظ الفيديوهات والدروس لمتابعتها لاحقاً.</p></a>
         </div>
       </div>
     </section>
 
-    <section id="lessons" class="section section-alt">
+    <!-- الرؤية والأهداف -->
+    <section class="section" id="vision">
       <div class="container">
-        <h2>الدروس</h2>
-        <p class="section-text">سيظهر هنا فهرس الدورات والدروس بعد إعداد المحتوى.</p>
-        <div id="lessons-grid" class="cards" aria-live="polite">
-          <p class="muted">يجري التحضير…</p>
+        <h2>رؤيتنا وأهدافنا</h2>
+        <p class="sub">نشر العلم الصحيح بأسلوبٍ ميسّر يصل إلى كل بيت.</p>
+        <div class="grid">
+          <div class="card"><div class="ic">🌱</div><h3>الرؤية</h3><p>أن نكون مرجعاً دعوياً موثوقاً ينشر العلم النافع على فهم سلف الأمّة.</p></div>
+          <div class="card"><div class="ic">🎯</div><h3>الرسالة</h3><p>تقريب الكتاب والسنّة للناس بمحتوًى منظّمٍ مرئيٍّ وصوتيٍّ عالي الجودة.</p></div>
+          <div class="card"><div class="ic">📖</div><h3>المنهج</h3><p>الالتزام بفهم السلف الصالح، والاعتماد على كلام أهل العلم المعتبرين.</p></div>
         </div>
       </div>
     </section>
 
-    <section id="clips" class="section">
+    <!-- نظامان للدخول -->
+    <section class="section">
       <div class="container">
-        <h2>المقاطع</h2>
-        <p class="section-text">مقاطعُ قصيرةٌ منتقاةٌ من الدروس والسلاسل.</p>
-        <div class="cards muted-cards">
-          <article class="card card-placeholder">قريباً</article>
-          <article class="card card-placeholder">قريباً</article>
-          <article class="card card-placeholder">قريباً</article>
+        <h2>نظامان للدخول</h2>
+        <p class="sub">واجهةٌ للمتعلّم وأخرى للمعلّم، كلٌّ بصلاحياته.</p>
+        <div class="grid" style="max-width:760px;margin-inline:auto">
+          <a class="card link" href="/register"><div class="ic">🧑‍🎓</div><h3>المتعلّم</h3><p>تسجيل، حضور البث المباشر، مكتبة حفظ، المقاطع والمكتبة الصوتية.</p></a>
+          <a class="card link" href="/login?role=teacher"><div class="ic">🧑‍🏫</div><h3>المعلّم</h3><p>إدارة الدروس، المونتاج، تحليل البيانات، والنشر على القنوات.</p></a>
         </div>
       </div>
     </section>
 
-    <section id="contact" class="section section-alt">
+    <!-- تابعونا -->
+    <section class="section" id="follow">
       <div class="container">
-        <h2>تواصل</h2>
-        <p class="section-text">
-          لإرسال سؤالٍ أو ملاحظة، يمكنك التواصل عبر صفحة الأعضاء بعد الدخول،
-          أو عبر منصّات القناة.
-        </p>
+        <h2>تابِعونا</h2>
+        <div class="social-list">
+          <a class="social-row" href="#" data-social="youtube"><span class="ic">▶</span><span class="name">يوتيوب</span><span class="chev">‹</span></a>
+          <a class="social-row" href="#" data-social="tiktok"><span class="ic">♪</span><span class="name">تيك توك</span><span class="chev">‹</span></a>
+          <a class="social-row" href="#" data-social="facebook"><span class="ic">f</span><span class="name">فيسبوك</span><span class="chev">‹</span></a>
+        </div>
+      </div>
+    </section>
+
+    <!-- آية -->
+    <section class="container">
+      <div class="ayah">
+        <p class="verse" style="font-family:'Amiri',serif">﴿ وَذَكِّرْ فَإِنَّ الذِّكْرَىٰ تَنفَعُ الْمُؤْمِنِينَ ﴾</p>
+        <p class="ref">سورة الذاريات · ٥٥</p>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="container footer-inner">
-      <span>رياض المتقين © <span id="year"></span></span>
-      <span class="muted">منصة دعوية</span>
-    </div>
-  </footer>
-
-  <script src="/app.js"></script>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
 </body>
 </html>

@@ -1,0 +1,31 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="رياض المتقين">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e8c558"/>
+      <stop offset="1" stop-color="#d4af37"/>
+    </linearGradient>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0" stop-color="#16294f"/>
+      <stop offset="1" stop-color="#0a1430"/>
+    </radialGradient>
+  </defs>
+  <circle cx="60" cy="60" r="57" fill="url(#bg)" stroke="url(#g)" stroke-width="3"/>
+  <!-- مسجد بسيط -->
+  <g fill="url(#g)" opacity="0.9">
+    <rect x="84" y="52" width="3" height="26"/>
+    <circle cx="85.5" cy="49" r="3.2"/>
+    <path d="M40 78 h44 v3 h-44 z"/>
+  </g>
+  <!-- كتاب مفتوح -->
+  <g fill="none" stroke="url(#g)" stroke-width="2.4" stroke-linejoin="round">
+    <path d="M60 56 C50 50 40 50 33 53 L33 74 C40 71 50 71 60 76 C70 71 80 71 87 74 L87 53 C80 50 70 50 60 56 Z"/>
+    <path d="M60 56 L60 76"/>
+  </g>
+  <!-- مصباح -->
+  <g fill="url(#g)">
+    <circle cx="74" cy="44" r="3.4"/>
+    <path d="M74 47 q3 5 0 8 q-3 -3 0 -8 z" opacity="0.85"/>
+  </g>
+  <!-- اسم -->
+  <text x="60" y="30" text-anchor="middle" font-family="Tajawal, sans-serif" font-size="11" font-weight="700" fill="url(#g)">رياض المتقين</text>
+</svg>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إنشاء حساب متعلّم — رياض المتقين</title>
+  <meta name="description" content="أنشئ حساب متعلّم في رياض المتقين لحضور الدروس المباشرة وحفظ المقاطع." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="page-head center">
+        <h1>إنشاء حساب متعلّم</h1>
+        <p>انضمّ إلى رياض المتقين وابدأ رحلتك مع العلم النافع.</p>
+      </div>
+
+      <form class="form-wrap" id="registerForm" action="/api/auth/register" method="post" novalidate>
+        <div class="field">
+          <label for="name">الاسم</label>
+          <input type="text" id="name" name="name" placeholder="اسمك الكامل" required />
+        </div>
+        <div class="field">
+          <label for="email">البريد الإلكتروني</label>
+          <input type="email" id="email" name="email" placeholder="name@example.com" required />
+        </div>
+        <div class="field">
+          <label for="password">كلمة المرور</label>
+          <input type="password" id="password" name="password" placeholder="••••••••" required />
+        </div>
+        <div class="field">
+          <label for="confirm">تأكيد كلمة المرور</label>
+          <input type="password" id="confirm" name="confirm" placeholder="••••••••" required />
+        </div>
+
+        <button class="btn btn-primary" type="submit" style="width:100%">تسجيل</button>
+
+        <div class="notice" id="regNotice" hidden>سيُفعَّل إنشاء الحساب قريباً بعد ربط الواجهة الخلفية.</div>
+
+        <p class="muted center" style="margin-top:1.2rem">
+          <a class="gold" href="/login">لديك حساب بالفعل؟ تسجيل الدخول</a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    document.getElementById("registerForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      document.getElementById("regNotice").hidden = false;
+    });
+  </script>
+</body>
+</html>

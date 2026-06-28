@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>بطاقة المشاركة — رياض المتقين</title>
+  <meta name="description" content="بطاقة مشاركة رياض المتقين: القرآن والسنّة بفهم سلف الأمّة. انسخ الرابط أو شارِكه عبر واتساب وتويتر." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <section class="hero">
+      <div class="container">
+        <div class="frame" style="max-width:620px;margin-inline:auto;text-align:center">
+          <span class="corner-tr"></span><span class="corner-br"></span>
+          <img class="logo-badge" src="/assets/logo.svg" alt="شعار رياض المتقين" />
+          <h1>رياض المتقين</h1>
+          <div class="divider">◆</div>
+          <p class="tagline">القرآن والسنّة بفهم سلف الأمّة</p>
+          <p class="lead">
+            قناةٌ دعويةٌ تُعنى بنشر العلم النافع من الكتاب والسنّة على فهم سلف الأمّة،
+            عبر دروسٍ مباشرة ومقاطعَ مختارةٍ ومكتبةٍ صوتية.
+          </p>
+
+          <div class="social-list" style="margin-top:1.6rem">
+            <a class="social-row" href="#" data-social="youtube"><span class="ic">▶</span><span class="name">يوتيوب</span><span class="chev">‹</span></a>
+            <a class="social-row" href="#" data-social="tiktok"><span class="ic">♪</span><span class="name">تيك توك</span><span class="chev">‹</span></a>
+            <a class="social-row" href="#" data-social="facebook"><span class="ic">f</span><span class="name">فيسبوك</span><span class="chev">‹</span></a>
+          </div>
+
+          <div class="ayah" style="margin:1.8rem auto 0">
+            <p class="verse" style="font-family:'Amiri',serif">﴿ وَذَكِّرْ فَإِنَّ الذِّكْرَىٰ تَنفَعُ الْمُؤْمِنِينَ ﴾</p>
+            <p class="ref">سورة الذاريات · ٥٥</p>
+          </div>
+        </div>
+
+        <div style="max-width:620px;margin:1.6rem auto 0;display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap">
+          <button class="btn btn-primary" id="copyBtn">⧉ نسخ الرابط</button>
+          <button class="btn btn-outline" id="waBtn">مشاركة على واتساب</button>
+          <button class="btn btn-outline" id="twBtn">مشاركة على تويتر/إكس</button>
+          <button class="btn btn-ghost" id="nativeBtn">مشاركة…</button>
+        </div>
+        <p class="muted center" id="copyMsg" style="margin-top:.8rem;min-height:1.2rem"></p>
+      </div>
+    </section>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      var url = location.origin + "/";
+      var text = "رياض المتقين — القرآن والسنّة بفهم سلف الأمّة";
+      var msg = document.getElementById("copyMsg");
+
+      document.getElementById("copyBtn").addEventListener("click", function () {
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(url).then(function () {
+            msg.textContent = "تمّ نسخ الرابط ✓";
+          }, function () {
+            msg.textContent = url;
+          });
+        } else {
+          msg.textContent = url;
+        }
+      });
+
+      document.getElementById("waBtn").addEventListener("click", function () {
+        window.open("https://wa.me/?text=" + encodeURIComponent(text + " " + url), "_blank");
+      });
+
+      document.getElementById("twBtn").addEventListener("click", function () {
+        window.open("https://twitter.com/intent/tweet?text=" + encodeURIComponent(text) + "&url=" + encodeURIComponent(url), "_blank");
+      });
+
+      document.getElementById("nativeBtn").addEventListener("click", function () {
+        if (navigator.share) {
+          navigator.share({ title: "رياض المتقين", text: text, url: url }).catch(function () {});
+        } else {
+          msg.textContent = "المشاركة المباشرة غير مدعومة في هذا المتصفّح، انسخ الرابط.";
+        }
+      });
+    })();
+  </script>
+</body>
+</html>

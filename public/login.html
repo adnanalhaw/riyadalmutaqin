@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تسجيل الدخول — رياض المتقين</title>
+  <meta name="description" content="تسجيل الدخول إلى رياض المتقين كمتعلّم أو معلّم." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="page-head center">
+        <h1>تسجيل الدخول</h1>
+        <p>ادخل إلى حسابك للمتابعة.</p>
+      </div>
+
+      <form class="form-wrap" id="loginForm" action="/api/auth/login" method="post" novalidate>
+        <div class="tabs" role="tablist">
+          <button type="button" data-role="student" class="active">متعلّم</button>
+          <button type="button" data-role="teacher">معلّم</button>
+        </div>
+        <input type="hidden" name="role" id="roleField" value="student" />
+
+        <div class="field">
+          <label for="email">البريد الإلكتروني</label>
+          <input type="email" id="email" name="email" placeholder="name@example.com" required />
+        </div>
+        <div class="field">
+          <label for="password">كلمة المرور</label>
+          <input type="password" id="password" name="password" placeholder="••••••••" required />
+        </div>
+        <div class="field" style="display:flex;align-items:center;gap:.5rem">
+          <input type="checkbox" id="remember" name="remember" style="width:auto" />
+          <label for="remember" style="margin:0">تذكّرني</label>
+        </div>
+
+        <button class="btn btn-primary" type="submit" style="width:100%">دخول</button>
+
+        <div class="notice" id="loginNotice" hidden>سيُفعَّل تسجيل الدخول قريباً بعد ربط الواجهة الخلفية.</div>
+
+        <p class="muted center" style="margin-top:1.2rem">
+          <a class="gold" href="/register">ليس لديك حساب؟ سجّل الآن</a>
+        </p>
+        <p class="muted center" style="margin-top:.3rem">
+          <a href="#">نسيت كلمة المرور؟</a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      var tabs = document.querySelectorAll(".tabs button");
+      var roleField = document.getElementById("roleField");
+
+      function setRole(role) {
+        roleField.value = role;
+        tabs.forEach(function (b) {
+          b.classList.toggle("active", b.getAttribute("data-role") === role);
+        });
+      }
+
+      tabs.forEach(function (b) {
+        b.addEventListener("click", function () { setRole(b.getAttribute("data-role")); });
+      });
+
+      var params = new URLSearchParams(location.search);
+      var qrole = params.get("role");
+      if (qrole === "teacher" || qrole === "student") setRole(qrole);
+
+      document.getElementById("loginForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        document.getElementById("loginNotice").hidden = false;
+      });
+    })();
+  </script>
+</body>
+</html>

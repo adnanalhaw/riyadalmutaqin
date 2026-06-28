@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة المعلّم — رياض المتقين</title>
+  <meta name="description" content="لوحة تحكّم المعلّم في رياض المتقين: الدروس، المونتاج، التحليلات، والنشر." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar">
+          <h4>لوحة المعلّم</h4>
+          <a class="active" href="/teacher">📊 لوحة التحكم</a>
+          <a href="/teacher/lessons">🔴 الدروس المباشرة</a>
+          <a href="/teacher/editor">✂ المونتاج</a>
+          <a href="/teacher/analytics">📈 تحليل البيانات</a>
+          <a href="/teacher/publish">📤 النشر على القنوات</a>
+        </aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>لوحة المعلّم</h1>
+            <p>نظرةٌ عامةٌ على نشاطك ومحتواك.</p>
+          </div>
+
+          <div class="notice">
+            مرحباً بك في لوحة المعلّم. من هنا تدير الدروس المباشرة والمسجّلة، وتعمل على المونتاج،
+            وتتابع التحليلات، وتنشر على القنوات. الأرقام أدناه نموذجٌ توضيحيٌّ حتى ربط الواجهة الخلفية.
+          </div>
+
+          <div class="stats" style="margin-top:1.5rem">
+            <div class="stat"><div class="num">٤٨</div><div class="lbl">عدد الدروس</div></div>
+            <div class="stat"><div class="num">١٢٤٠</div><div class="lbl">المتعلّمون</div></div>
+            <div class="stat"><div class="num">٨٦ ألف</div><div class="lbl">مشاهدات يوتيوب</div></div>
+            <div class="stat"><div class="num">١٣٢</div><div class="lbl">المقاطع المنشورة</div></div>
+          </div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2.2rem 0 1rem">إجراءات سريعة</h2>
+          <div class="grid">
+            <a class="card link" href="/teacher/lessons"><div class="ic">🔴</div><h3>درسٌ جديد</h3><p>ابدأ بثّاً مباشراً أو ارفع درساً مسجّلاً أو استورِد من يوتيوب.</p></a>
+            <a class="card link" href="/teacher/editor"><div class="ic">✂</div><h3>المونتاج</h3><p>قُصّ ودمّج وأضِف شعاراً وعنواناً قبل النشر.</p></a>
+            <a class="card link" href="/teacher/analytics"><div class="ic">📈</div><h3>تحليل البيانات</h3><p>تابِع المشاهدات والتفاعل وأداء الدروس.</p></a>
+            <a class="card link" href="/teacher/publish"><div class="ic">📤</div><h3>النشر على القنوات</h3><p>انشُر على يوتيوب وتيك توك وفيسبوك وإكس وتيليجرام.</p></a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+</body>
+</html>

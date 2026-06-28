@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة الدروس المباشرة — رياض المتقين</title>
+  <meta name="description" content="إدارة الدروس المباشرة والمسجّلة، الاستيراد من يوتيوب، والنشر التلقائي." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar">
+          <h4>لوحة المعلّم</h4>
+          <a href="/teacher">📊 لوحة التحكم</a>
+          <a class="active" href="/teacher/lessons">🔴 الدروس المباشرة</a>
+          <a href="/teacher/editor">✂ المونتاج</a>
+          <a href="/teacher/analytics">📈 تحليل البيانات</a>
+          <a href="/teacher/publish">📤 النشر على القنوات</a>
+        </aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>إدارة الدروس المباشرة</h1>
+            <p>ابدأ بثّاً، ارفع درساً مسجّلاً، أو استورِد فيديو من يوتيوب بغلافك وعنوانك.</p>
+          </div>
+
+          <!-- بثّ مباشر جديد -->
+          <div class="card" style="margin-bottom:1.5rem">
+            <h3 style="color:var(--gold);margin-top:0">بثٌّ مباشر جديد</h3>
+            <form id="liveForm">
+              <div class="field">
+                <label for="liveTitle">عنوان الدرس</label>
+                <input type="text" id="liveTitle" placeholder="مثال: شرح كتاب التوحيد — الدرس الثالث عشر" />
+              </div>
+              <div class="field">
+                <label for="liveDoctor">اسم الدكتور</label>
+                <input type="text" id="liveDoctor" placeholder="مثال: د. عبد الله الراشد" />
+              </div>
+              <div class="field">
+                <label for="liveDesc">الوصف</label>
+                <textarea id="liveDesc" rows="3" placeholder="نبذة مختصرة عن الدرس"></textarea>
+              </div>
+              <div class="field">
+                <label for="liveCover">رفع صورة الغلاف</label>
+                <input type="file" id="liveCover" accept="image/*" />
+              </div>
+              <div class="field" style="display:flex;gap:1.5rem;align-items:center">
+                <label style="display:flex;align-items:center;gap:.5rem;margin:0">
+                  <input type="radio" name="liveMode" value="now" checked style="width:auto" /> بثٌّ مباشر الآن
+                </label>
+                <label style="display:flex;align-items:center;gap:.5rem;margin:0">
+                  <input type="radio" name="liveMode" value="schedule" style="width:auto" /> جدولة
+                </label>
+              </div>
+              <div class="field" id="scheduleField" hidden>
+                <label for="liveWhen">موعد الجدولة</label>
+                <input type="datetime-local" id="liveWhen" />
+              </div>
+              <button class="btn btn-primary" type="submit">بدء البث</button>
+              <div class="notice" data-formnotice hidden>سيُحفظ بعد ربط الواجهة الخلفية.</div>
+            </form>
+          </div>
+
+          <!-- رفع / استيراد -->
+          <div class="card" style="margin-bottom:1.5rem">
+            <h3 style="color:var(--gold);margin-top:0">رفع فيديو مسجّل / استيراد من يوتيوب</h3>
+            <div class="tabs" style="max-width:420px">
+              <button type="button" data-tab="upload" class="active">رفع ملف</button>
+              <button type="button" data-tab="youtube">استيراد من يوتيوب</button>
+            </div>
+
+            <form id="uploadForm" data-panel="upload">
+              <div class="field">
+                <label for="upFile">ملف الفيديو</label>
+                <input type="file" id="upFile" accept="video/*" />
+              </div>
+              <div class="field">
+                <label for="upTitle">عنوان الدرس</label>
+                <input type="text" id="upTitle" placeholder="عنوان الدرس" />
+              </div>
+              <div class="field">
+                <label for="upDoctor">اسم الدكتور</label>
+                <input type="text" id="upDoctor" placeholder="اسم الدكتور" />
+              </div>
+              <button class="btn btn-primary" type="submit">رفع الدرس</button>
+              <div class="notice" data-formnotice hidden>سيُحفظ بعد ربط الواجهة الخلفية.</div>
+            </form>
+
+            <form id="ytForm" data-panel="youtube" hidden>
+              <div class="notice" style="margin-top:0">
+                استورِد فيديو من يوتيوب وأعِد تقديمه على الموقع بغلاف القناة الخاص بك، وعنوانٍ من اختيارك، واسم الدكتور.
+              </div>
+              <div class="field">
+                <label for="ytUrl">رابط فيديو يوتيوب</label>
+                <input type="url" id="ytUrl" placeholder="https://www.youtube.com/watch?v=..." />
+              </div>
+              <div class="field">
+                <label for="ytTitle">العنوان (على الموقع)</label>
+                <input type="text" id="ytTitle" placeholder="عنوانك الخاص" />
+              </div>
+              <div class="field">
+                <label for="ytDoctor">اسم الدكتور</label>
+                <input type="text" id="ytDoctor" placeholder="اسم الدكتور" />
+              </div>
+              <div class="field">
+                <label for="ytCover">صورتي / غلافي</label>
+                <input type="file" id="ytCover" accept="image/*" />
+              </div>
+              <button class="btn btn-primary" type="submit">استيراد ونشر</button>
+              <div class="notice" data-formnotice hidden>سيُحفظ بعد ربط الواجهة الخلفية.</div>
+            </form>
+          </div>
+
+          <!-- النشر التلقائي -->
+          <div class="card" style="margin-bottom:1.5rem">
+            <h3 style="color:var(--gold);margin-top:0">النشر التلقائي على يوتيوب</h3>
+            <label style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem">
+              <input type="checkbox" style="width:auto" /> نشرٌ تلقائيٌّ على قناة يوتيوب عند انتهاء البث
+            </label>
+            <div class="notice" style="margin-top:0">
+              يتطلّب النشر التلقائي ربط حساب يوتيوب عبر تفويض (OAuth) في مرحلة الربط (Integration).
+            </div>
+            <button class="btn btn-ghost" type="button" disabled style="opacity:.6;cursor:not-allowed">ربط حساب يوتيوب</button>
+          </div>
+
+          <!-- الدروس الموجودة -->
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">الدروس الموجودة</h2>
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="t">
+              <thead>
+                <tr><th>العنوان</th><th>الدكتور</th><th>النوع</th><th>الحالة</th><th>إجراءات</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>شرح كتاب التوحيد — الدرس الثاني عشر</td><td>د. عبد الله الراشد</td>
+                  <td><span class="badge live">مباشر</span></td><td><span class="badge">منشور</span></td>
+                  <td><a class="gold" href="#">تعديل</a> · <a href="#">حذف</a></td>
+                </tr>
+                <tr>
+                  <td>تفسير سورة الكهف — الجزء الأول</td><td>د. محمد العمري</td>
+                  <td><span class="badge soon">مسجّل</span></td><td><span class="badge soon">مسودة</span></td>
+                  <td><a class="gold" href="#">تعديل</a> · <a href="#">حذف</a></td>
+                </tr>
+                <tr>
+                  <td>آداب طالب العلم</td><td>د. سالم القحطاني</td>
+                  <td><span class="badge">يوتيوب</span></td><td><span class="badge">منشور</span></td>
+                  <td><a class="gold" href="#">تعديل</a> · <a href="#">حذف</a></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      // تبويبات الرفع/الاستيراد
+      var tabBtns = document.querySelectorAll('.tabs [data-tab]');
+      tabBtns.forEach(function (b) {
+        b.addEventListener('click', function () {
+          var tab = b.getAttribute('data-tab');
+          tabBtns.forEach(function (x) { x.classList.toggle('active', x === b); });
+          document.querySelectorAll('[data-panel]').forEach(function (p) {
+            p.hidden = p.getAttribute('data-panel') !== tab;
+          });
+        });
+      });
+
+      // إظهار حقل الجدولة
+      document.querySelectorAll('input[name="liveMode"]').forEach(function (r) {
+        r.addEventListener('change', function () {
+          document.getElementById('scheduleField').hidden = (document.querySelector('input[name="liveMode"]:checked').value !== 'schedule');
+        });
+      });
+
+      // إشعار الحفظ عند الإرسال
+      ['liveForm', 'uploadForm', 'ytForm'].forEach(function (id) {
+        var f = document.getElementById(id);
+        f.addEventListener('submit', function (e) {
+          e.preventDefault();
+          f.querySelector('[data-formnotice]').hidden = false;
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

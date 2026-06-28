@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>النشر على القنوات — رياض المتقين</title>
+  <meta name="description" content="إنشاء منشور ونشره على يوتيوب وتيك توك وفيسبوك وإكس وتيليجرام، مع الجدولة." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar">
+          <h4>لوحة المعلّم</h4>
+          <a href="/teacher">📊 لوحة التحكم</a>
+          <a href="/teacher/lessons">🔴 الدروس المباشرة</a>
+          <a href="/teacher/editor">✂ المونتاج</a>
+          <a href="/teacher/analytics">📈 تحليل البيانات</a>
+          <a class="active" href="/teacher/publish">📤 النشر على القنوات</a>
+        </aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>النشر على القنوات</h1>
+            <p>اكتب منشوراً واحداً وانشُره على عدّة قنوات دفعةً واحدة.</p>
+          </div>
+
+          <div class="card" style="margin-bottom:1.5rem">
+            <form id="publishForm">
+              <div class="field">
+                <label for="content">المحتوى</label>
+                <textarea id="content" rows="4" placeholder="اكتب نصّ المنشور هنا…"></textarea>
+              </div>
+              <div class="field">
+                <label for="media">رفع صورة / فيديو</label>
+                <input type="file" id="media" accept="image/*,video/*" />
+              </div>
+
+              <div class="field">
+                <label>القنوات المستهدفة</label>
+                <div style="display:flex;flex-direction:column;gap:.6rem">
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" checked style="width:auto" /> يوتيوب</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="tiktok" style="width:auto" /> تيك توك</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> فيسبوك</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="x" style="width:auto" /> إكس / تويتر</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" style="width:auto" /> تيليجرام</label>
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="scheduleAt">جدولة النشر</label>
+                <input type="datetime-local" id="scheduleAt" />
+              </div>
+
+              <div style="display:flex;gap:.7rem;flex-wrap:wrap">
+                <button class="btn btn-primary" type="submit" data-action="now">نشر الآن</button>
+                <button class="btn btn-outline" type="submit" data-action="schedule">جدولة</button>
+              </div>
+              <div class="notice" id="pubNotice" hidden>سيتم ربط واجهة كل قناة (API) في مرحلة الربط (Integration).</div>
+            </form>
+          </div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">المنشورات المجدولة</h2>
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="t">
+              <thead>
+                <tr><th>المحتوى</th><th>القنوات</th><th>الموعد</th><th>الحالة</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>تذكير بدرس الخميس: شرح كتاب التوحيد</td><td>يوتيوب · فيسبوك · إكس</td><td>الأربعاء ١ يوليو · ٨:٠٠ م</td><td><span class="badge soon">مجدول</span></td></tr>
+                <tr><td>مقطع: فضل لا إله إلا الله</td><td>تيك توك · تيليجرام</td><td>الجمعة ٣ يوليو · ١٠:٠٠ ص</td><td><span class="badge soon">مجدول</span></td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="notice">
+            يتطلّب النشر التلقائي ربط حساب كل قناة عبر واجهتها البرمجية في مرحلة الربط (Integration).
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    document.getElementById("publishForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      document.getElementById("pubNotice").hidden = false;
+    });
+  </script>
+</body>
+</html>
