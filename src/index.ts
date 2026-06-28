@@ -423,6 +423,79 @@ async function handleTeacher(
     }
   }
 
+  // إحصاءات اللوحة
+  if (route === "GET /api/teacher/stats") {
+    const row = await env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM lessons) AS lessons,
+         (SELECT COUNT(*) FROM users WHERE role = 'student') AS students,
+         (SELECT COUNT(*) FROM clips) AS clips,
+         (SELECT COUNT(*) FROM audio_posts) AS audio`,
+    ).first();
+    return json({ ok: true, stats: row });
+  }
+
+  // ===== المقاطع =====
+  if (route === "GET /api/teacher/clips") {
+    const { results } = await env.DB.prepare(
+      "SELECT id, title, doctor_name, youtube_id, duration, is_published, created_at FROM clips ORDER BY created_at DESC",
+    ).all();
+    return json({ ok: true, clips: results });
+  }
+  if (route === "POST /api/teacher/clips") {
+    const b = await readJson(request);
+    const title = String(b.title ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "العنوان مطلوب." }, 400);
+    const youtubeId = b.youtube_id ? extractYouTubeId(String(b.youtube_id)) : null;
+    const doctor = String(b.doctor_name ?? "").trim() || null;
+    const duration = Number.isFinite(Number(b.duration)) ? Math.max(0, Math.floor(Number(b.duration))) : null;
+    const res = await env.DB.prepare(
+      "INSERT INTO clips (title, doctor_name, youtube_id, duration) VALUES (?, ?, ?, ?)",
+    )
+      .bind(title, doctor, youtubeId, duration)
+      .run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "clip.create", `clip:${id}`);
+    return json({ ok: true, id }, 201);
+  }
+  const mc = path.match(/^\/api\/teacher\/clips\/(\d+)$/);
+  if (mc && request.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM clips WHERE id = ?").bind(Number(mc[1])).run();
+    await audit(env, user.email, "clip.delete", `clip:${mc[1]}`);
+    return json({ ok: true });
+  }
+
+  // ===== الصوتيات (الصوت يُرفع إلى R2 عبر /api/teacher/media kind=audio) =====
+  if (route === "GET /api/teacher/audio") {
+    const { results } = await env.DB.prepare(
+      "SELECT id, title, description, doctor_name, audio_url, duration, created_at FROM audio_posts ORDER BY created_at DESC",
+    ).all();
+    return json({ ok: true, audio: results });
+  }
+  if (route === "POST /api/teacher/audio") {
+    const b = await readJson(request);
+    const title = String(b.title ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "العنوان مطلوب." }, 400);
+    const doctor = String(b.doctor_name ?? "").trim() || null;
+    const description = String(b.description ?? "").trim() || null;
+    const audioUrl = b.audio_url ? String(b.audio_url) : null;
+    const duration = Number.isFinite(Number(b.duration)) ? Math.max(0, Math.floor(Number(b.duration))) : null;
+    const res = await env.DB.prepare(
+      "INSERT INTO audio_posts (title, description, doctor_name, audio_url, duration) VALUES (?, ?, ?, ?, ?)",
+    )
+      .bind(title, description, doctor, audioUrl, duration)
+      .run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "audio.create", `audio:${id}`);
+    return json({ ok: true, id }, 201);
+  }
+  const ma = path.match(/^\/api\/teacher\/audio\/(\d+)$/);
+  if (ma && request.method === "DELETE") {
+    await env.DB.prepare("DELETE FROM audio_posts WHERE id = ?").bind(Number(ma[1])).run();
+    await audit(env, user.email, "audio.delete", `audio:${ma[1]}`);
+    return json({ ok: true });
+  }
+
   // بقيّة واجهات المعلّم تُربط لاحقاً (يوتيوب/تحليلات/نشر).
   return notReady("teacher." + path.slice("/api/teacher/".length));
 }

@@ -17,14 +17,7 @@
   <main>
     <div class="container">
       <div class="portal">
-        <aside class="sidebar">
-          <h4>لوحة المعلّم</h4>
-          <a href="/teacher">📊 لوحة التحكم</a>
-          <a class="active" href="/teacher/lessons">🔴 الدروس المباشرة</a>
-          <a href="/teacher/editor">✂ المونتاج</a>
-          <a href="/teacher/analytics">📈 تحليل البيانات</a>
-          <a href="/teacher/publish">📤 النشر على القنوات</a>
-        </aside>
+        <aside class="sidebar" data-teacher-nav></aside>
 
         <section>
           <div class="page-head" style="padding-top:0">
@@ -150,10 +143,11 @@
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/teacher/nav.js"></script>
   <script src="/content.js"></script>
   <script>
     (function () {
-      var ar = RM.ar, esc = RM.esc;
+      var esc = RM.esc;
 
       // تبويبات الرفع/الاستيراد
       var tabBtns = document.querySelectorAll('.tabs [data-tab]');
