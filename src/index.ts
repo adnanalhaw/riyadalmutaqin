@@ -76,6 +76,10 @@ const redirect = (location: string, setCookie?: string): Response => {
   return new Response(null, { status: 302, headers });
 };
 
+/** ردّ يُلزم المستخدم بتعيين كلمة مرور جديدة قبل استخدام المنصّة. */
+const mustChange = (): Response =>
+  json({ ok: false, error: "يجب تعيين كلمة مرور جديدة أولاً.", code: "must_change_password" }, 403);
+
 /** ردّ موحّد للنقاط غير المُفعّلة بعد. */
 const notReady = (feature: string): Response =>
   json(
@@ -151,6 +155,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (path === "/api/library" || path === "/api/library/remove") {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
 
     // قائمة المحفوظات
     if (route === "GET /api/library") {
@@ -199,6 +204,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (path === "/api/progress") {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
 
     if (route === "GET /api/progress") {
       const { results } = await env.DB.prepare(
@@ -241,14 +247,95 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return new Response(obj.body, { headers });
   }
 
+  // ===== المدير (يتطلّب دور admin) =====
+  if (path.startsWith("/api/admin/")) {
+    const user = await getSessionUser(request, env.DB);
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
+    if (user.role !== "admin") return json({ ok: false, error: "forbidden" }, 403);
+    return handleAdmin(request, env, user, path, route);
+  }
+
   // ===== المعلّم (يتطلّب دور teacher/admin) =====
   if (path.startsWith("/api/teacher/")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
     if (user.role !== "teacher" && user.role !== "admin") {
       return json({ ok: false, error: "forbidden" }, 403);
     }
     return handleTeacher(request, env, user, path, route);
+  }
+
+  return json({ ok: false, error: "Not Found" }, 404);
+}
+
+/** واجهات المدير: إدارة حسابات المعلّمين والأدوار. */
+async function handleAdmin(
+  request: Request,
+  env: Env,
+  admin: AuthUser,
+  path: string,
+  route: string,
+): Promise<Response> {
+  // قائمة المستخدمين
+  if (route === "GET /api/admin/users") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, name, email, role, status, created_at FROM users ORDER BY
+         CASE role WHEN 'admin' THEN 0 WHEN 'teacher' THEN 1 ELSE 2 END, created_at DESC`,
+    ).all();
+    return json({ ok: true, users: results });
+  }
+
+  // إنشاء حساب معلّم (المدير وحده)
+  if (route === "POST /api/admin/teachers") {
+    const b = await readJson(request);
+    const name = String(b.name ?? "").trim();
+    const email = String(b.email ?? "").trim().toLowerCase();
+    const password = String(b.password ?? "");
+    if (name.length < 2 || name.length > 80) return json({ ok: false, error: "الاسم غير صالح." }, 400);
+    if (!isValidEmail(email)) return json({ ok: false, error: "البريد الإلكتروني غير صالح." }, 400);
+    if (password.length < 8) return json({ ok: false, error: "كلمة المرور يجب أن تكون 8 أحرف فأكثر." }, 400);
+
+    const exists = await env.DB.prepare("SELECT id FROM users WHERE email = ?").bind(email).first();
+    if (exists) return json({ ok: false, error: "هذا البريد مسجّل بالفعل." }, 409);
+
+    const passwordHash = await hashPassword(password);
+    const res = await env.DB.prepare(
+      "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'teacher')",
+    )
+      .bind(name, email, passwordHash)
+      .run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, admin.email, "admin.teacher.create", `user:${id}`);
+    return json({ ok: true, id }, 201);
+  }
+
+  // تعديل دور/حالة مستخدم
+  const mu = path.match(/^\/api\/admin\/users\/(\d+)$/);
+  if (mu && request.method === "PATCH") {
+    const id = Number(mu[1]);
+    if (id === admin.id) return json({ ok: false, error: "لا يمكنك تعديل دورك أو حالتك بنفسك." }, 400);
+    const b = await readJson(request);
+    const fields: string[] = [];
+    const vals: (string | number)[] = [];
+    if ("role" in b) {
+      const role = String(b.role);
+      if (!["student", "teacher", "admin"].includes(role)) return json({ ok: false, error: "دور غير صالح." }, 400);
+      fields.push("role = ?");
+      vals.push(role);
+    }
+    if ("status" in b) {
+      const status = String(b.status);
+      if (!["active", "suspended"].includes(status)) return json({ ok: false, error: "حالة غير صالحة." }, 400);
+      fields.push("status = ?");
+      vals.push(status);
+    }
+    if (!fields.length) return json({ ok: false, error: "لا تغييرات." }, 400);
+    vals.push(id);
+    await env.DB.prepare(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`).bind(...vals).run();
+    await audit(env, admin.email, "admin.user.update", `user:${id}`);
+    return json({ ok: true });
   }
 
   return json({ ok: false, error: "Not Found" }, 404);
@@ -357,10 +444,14 @@ async function forgotPassword(request: Request, env: Env): Promise<Response> {
   const generic = json({ ok: true, message: "إن كان بريدك مسجّلاً فستصلك رسالةٌ بكلمة مرورٍ مؤقّتة." });
   if (!isValidEmail(email)) return generic;
 
+  // نبدأ توليد التجزئة دائماً (PBKDF2 مكلِف) لتوحيد زمن الاستجابة ومنع تعداد الحسابات بالتوقيت.
+  const temp = tempPassword();
+  const hashPromise = hashPassword(temp);
+
   const row = await env.DB.prepare("SELECT id, name, status, last_reset_at FROM users WHERE email = ?")
     .bind(email)
     .first<{ id: number; name: string; status: string; last_reset_at: string | null }>();
-  if (!row || row.status !== "active") return generic;
+  if (!row || row.status !== "active") { await hashPromise; return generic; }
 
   // حدّ التكرار: طلبٌ واحد كل ٥ دقائق لكل حساب.
   const recent = await env.DB.prepare(
@@ -368,9 +459,8 @@ async function forgotPassword(request: Request, env: Env): Promise<Response> {
   )
     .bind(row.id)
     .first();
-  if (recent) return generic;
+  if (recent) { await hashPromise; return generic; }
 
-  const temp = tempPassword();
   const html =
     `<div dir="rtl" style="font-family:Tajawal,Arial,sans-serif">` +
     `<h2>رياض المتقين</h2><p>مرحباً ${row.name || ""}،</p>` +
@@ -381,9 +471,9 @@ async function forgotPassword(request: Request, env: Env): Promise<Response> {
 
   // نرسل البريد أولاً؛ لا نغيّر كلمة المرور إلا إذا نجح الإرسال (حتى لا يُحبَس المستخدم).
   const sent = await sendEmail(env, email, "كلمة مرور مؤقّتة — رياض المتقين", html);
-  if (!sent.ok) return generic;
+  if (!sent.ok) { await hashPromise; return generic; }
 
-  const hash = await hashPassword(temp);
+  const hash = await hashPromise;
   await env.DB.prepare(
     "UPDATE users SET password_hash = ?, must_change_password = 1, last_reset_at = datetime('now') WHERE id = ?",
   )
@@ -404,8 +494,11 @@ async function changePassword(request: Request, env: Env): Promise<Response> {
   await env.DB.prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?")
     .bind(hash, user.id)
     .run();
+  // إبطال كل الجلسات (يقطع أي جهاز آخر) ثم إصدار جلسة جديدة للجهاز الحالي.
+  await env.DB.prepare("DELETE FROM sessions WHERE user_id = ?").bind(user.id).run();
+  const setCookie = await createSession(env.DB, user.id);
   await audit(env, user.email, "auth.change_password", `user:${user.id}`);
-  return json({ ok: true });
+  return json({ ok: true }, 200, { "Set-Cookie": setCookie });
 }
 
 /* ===== أدوات المعلّم ===== */

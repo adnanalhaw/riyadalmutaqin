@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة المعلّمين — رياض المتقين</title>
+  <meta name="description" content="لوحة المدير: إنشاء حسابات المعلّمين وإدارة الأدوار والحالة." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-teacher-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>إدارة المعلّمين</h1>
+            <p>المدير وحده يُنشئ حسابات المعلّمين ويحدّد الأدوار والحالة.</p>
+          </div>
+
+          <!-- إنشاء معلّم -->
+          <div class="card" style="margin-bottom:1.5rem">
+            <h3 style="color:var(--gold);margin-top:0">إنشاء حساب معلّم جديد</h3>
+            <form id="createForm">
+              <div class="field">
+                <label for="name">الاسم</label>
+                <input type="text" id="name" placeholder="مثال: د. عبد الله الراشد" />
+              </div>
+              <div class="field">
+                <label for="email">البريد الإلكتروني</label>
+                <input type="email" id="email" placeholder="teacher@example.com" />
+              </div>
+              <div class="field">
+                <label for="password">كلمة المرور المبدئية</label>
+                <input type="text" id="password" placeholder="٨ أحرف فأكثر" />
+                <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">سلّمها للمعلّم؛ يمكنه تغييرها لاحقاً عبر «نسيت كلمة المرور».</p>
+              </div>
+              <button class="btn btn-primary" type="submit">إنشاء المعلّم</button>
+              <div class="notice" id="createNotice" hidden></div>
+            </form>
+          </div>
+
+          <!-- المستخدمون -->
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">المستخدمون</h2>
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="t">
+              <thead>
+                <tr><th>الاسم</th><th>البريد</th><th>الدور</th><th>الحالة</th><th>إجراءات</th></tr>
+              </thead>
+              <tbody id="usersBody">
+                <tr><td colspan="5" class="muted">يجري التحميل…</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/teacher/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var esc = RM.esc;
+      var ROLES = { student: "متعلّم", teacher: "معلّم", admin: "مدير" };
+
+      // المدير وحده
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "admin") { location.href = "/teacher"; return; }
+        loadUsers();
+      });
+
+      function notify(msg) {
+        var n = document.getElementById("createNotice");
+        n.textContent = msg; n.hidden = false;
+      }
+
+      document.getElementById("createForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        notify("جارٍ الإنشاء…");
+        RM.api("/api/admin/teachers", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("name").value.trim(),
+            email: document.getElementById("email").value.trim(),
+            password: document.getElementById("password").value,
+          }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) { notify("تمّ إنشاء المعلّم ✓"); e.target.reset(); loadUsers(); }
+          else { notify(res.d.error || "تعذّر الإنشاء."); }
+        }).catch(function () { notify("حدث خطأ في الاتصال."); });
+      });
+
+      function loadUsers() {
+        RM.api("/api/admin/users").then(function (res) {
+          var list = (res.d && res.d.users) || [];
+          var body = document.getElementById("usersBody");
+          if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا مستخدمون.</td></tr>'; return; }
+          body.innerHTML = list.map(function (u) {
+            var roleSel = '<select class="rm-role" data-id="' + u.id + '">' +
+              ["student", "teacher", "admin"].map(function (r) {
+                return '<option value="' + r + '"' + (u.role === r ? " selected" : "") + ">" + ROLES[r] + "</option>";
+              }).join("") + "</select>";
+            var statusBadge = u.status === "active"
+              ? '<span class="badge">نشِط</span>' : '<span class="badge soon">معطّل</span>';
+            var toggle = u.status === "active"
+              ? '<a href="#" class="gold rm-suspend" data-id="' + u.id + '">تعطيل</a>'
+              : '<a href="#" class="gold rm-activate" data-id="' + u.id + '">تفعيل</a>';
+            return "<tr>" +
+              "<td>" + esc(u.name) + "</td>" +
+              "<td>" + esc(u.email) + "</td>" +
+              "<td>" + roleSel + "</td>" +
+              "<td>" + statusBadge + "</td>" +
+              "<td>" + toggle + "</td>" +
+              "</tr>";
+          }).join("");
+        });
+      }
+
+      function patchUser(id, body, done) {
+        RM.api("/api/admin/users/" + id, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }).then(function (res) {
+          if (!res.ok || !res.d.ok) alert(res.d.error || "تعذّر التعديل.");
+          if (done) done();
+        });
+      }
+
+      document.getElementById("usersBody").addEventListener("change", function (e) {
+        var sel = e.target.closest(".rm-role");
+        if (!sel) return;
+        patchUser(sel.getAttribute("data-id"), { role: sel.value }, loadUsers);
+      });
+
+      document.getElementById("usersBody").addEventListener("click", function (e) {
+        var s = e.target.closest(".rm-suspend"), a = e.target.closest(".rm-activate");
+        if (!s && !a) return;
+        e.preventDefault();
+        var el = s || a;
+        patchUser(el.getAttribute("data-id"), { status: s ? "suspended" : "active" }, loadUsers);
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -15,6 +15,8 @@ export interface AuthUser {
   name: string;
   email: string;
   role: "student" | "teacher" | "admin";
+  /** يجب على المستخدم تعيين كلمة مرور جديدة قبل استخدام المنصّة. */
+  mustChangePassword?: boolean;
 }
 
 /* ===== ترميز ===== */
@@ -98,14 +100,21 @@ export async function getSessionUser(request: Request, db: D1Database): Promise<
   const tokenHash = await sha256Hex(token);
   const row = await db
     .prepare(
-      `SELECT u.id, u.name, u.email, u.role
+      `SELECT u.id, u.name, u.email, u.role, u.must_change_password
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ? AND s.expires_at > datetime('now')
           AND u.status = 'active'`,
     )
     .bind(tokenHash)
-    .first<AuthUser>();
-  return row ?? null;
+    .first<{ id: number; name: string; email: string; role: AuthUser["role"]; must_change_password: number }>();
+  if (!row) return null;
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    mustChangePassword: Boolean(row.must_change_password),
+  };
 }
 
 /** يحذف الجلسة الحالية ويُعيد كوكي إزالة. */

@@ -17,14 +17,27 @@
     return l.exact ? path === "/teacher" : path.indexOf(l.href) === 0;
   }
 
-  var html =
-    "<h4>لوحة المعلّم</h4>" +
-    links
-      .map(function (l) {
-        return '<a class="' + (active(l) ? "active" : "") + '" href="' + l.href + '">' + l.label + "</a>";
-      })
-      .join("");
+  function renderNav(extra) {
+    var all = links.concat(extra || []);
+    var html =
+      "<h4>لوحة المعلّم</h4>" +
+      all
+        .map(function (l) {
+          return '<a class="' + (active(l) ? "active" : "") + '" href="' + l.href + '">' + l.label + "</a>";
+        })
+        .join("");
+    var el = document.querySelector("[data-teacher-nav]");
+    if (el) el.innerHTML = html;
+  }
 
-  var el = document.querySelector("[data-teacher-nav]");
-  if (el) el.innerHTML = html;
+  // رابط إدارة المعلّمين يظهر للمدير فقط.
+  renderNav();
+  fetch("/api/auth/me", { headers: { accept: "application/json" } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      if (d && d.user && d.user.role === "admin") {
+        renderNav([{ href: "/teacher/admin", label: "👑 إدارة المعلّمين" }]);
+      }
+    })
+    .catch(function () {});
 })();
