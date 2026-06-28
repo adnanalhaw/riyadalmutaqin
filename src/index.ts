@@ -500,15 +500,44 @@ async function handleTeacher(
   return notReady("teacher." + path.slice("/api/teacher/".length));
 }
 
+const CONTENT_SECURITY_POLICY = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com",
+  "img-src 'self' data: blob: https://i.ytimg.com https://*.ytimg.com",
+  "media-src 'self' blob:",
+  "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'self'",
+].join("; ");
+
+/** يضيف ترويسات الأمان لكل استجابة (وCSP لصفحات HTML). */
+function harden(res: Response): Response {
+  const headers = new Headers(res.headers);
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  headers.set("X-Frame-Options", "SAMEORIGIN");
+  headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  headers.set("Permissions-Policy", "geolocation=(), camera=(), microphone=()");
+  if ((headers.get("content-type") || "").includes("text/html")) {
+    headers.set("Content-Security-Policy", CONTENT_SECURITY_POLICY);
+  }
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api" || url.pathname.startsWith("/api/")) {
-      return handleApi(request, env);
-    }
+    const res =
+      url.pathname === "/api" || url.pathname.startsWith("/api/")
+        ? await handleApi(request, env)
+        : await env.ASSETS.fetch(request); // الموقع العام (أصول ثابتة)
 
-    // كل ما عدا ذلك: الموقع العام (أصول ثابتة).
-    return env.ASSETS.fetch(request);
+    return harden(res);
   },
 } satisfies ExportedHandler<Env>;

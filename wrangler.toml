@@ -7,7 +7,9 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "./public"
 binding = "ASSETS"
-not_found_handling = "single-page-application"
+not_found_handling = "404-page"
+# يُشغّل الـ Worker قبل تقديم الأصول حتى تُضاف ترويسات الأمان لكل صفحة.
+run_worker_first = true
 
 # قاعدة البيانات — Cloudflare D1 (SQLite)
 # أنشئها بـ:  wrangler d1 create riyad_db   ثم ضع database_id أدناه.

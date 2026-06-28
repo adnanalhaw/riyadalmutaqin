@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /teacher
+Disallow: /account
+Disallow: /api/
+
+Sitemap: https://riyadalmutaqin.com/sitemap.xml

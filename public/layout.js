@@ -6,6 +6,15 @@
   var path = location.pathname.replace(/\/index\.html$/, "/").replace(/\.html$/, "");
   if (path === "") path = "/";
 
+  // أيقونة الموقع (لكل الصفحات عبر نقطة واحدة)
+  if (!document.querySelector('link[rel="icon"]')) {
+    var fav = document.createElement("link");
+    fav.rel = "icon";
+    fav.type = "image/svg+xml";
+    fav.href = "/assets/logo.svg";
+    document.head.appendChild(fav);
+  }
+
   var links = [
     { href: "/", label: "الرئيسية" },
     { href: "/live", label: "الدروس المباشرة" },
