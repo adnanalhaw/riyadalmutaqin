@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>نسيت كلمة المرور — رياض المتقين</title>
+  <meta name="description" content="استعادة الوصول إلى حسابك في رياض المتقين عبر بريدك الإلكتروني." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="page-head center">
+        <h1>نسيت كلمة المرور</h1>
+        <p>أدخل بريدك وستصلك كلمة مرورٍ مؤقّتة لتسجيل الدخول.</p>
+      </div>
+
+      <form class="form-wrap" id="forgotForm" novalidate>
+        <div class="field">
+          <label for="email">البريد الإلكتروني</label>
+          <input type="email" id="email" name="email" placeholder="name@example.com" required />
+        </div>
+        <button class="btn btn-primary" type="submit" style="width:100%">إرسال كلمة مرور مؤقّتة</button>
+        <div class="notice" id="msg" hidden></div>
+        <p class="muted center" style="margin-top:1.2rem">
+          <a class="gold" href="/login">العودة لتسجيل الدخول</a>
+        </p>
+      </form>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    document.getElementById("forgotForm").addEventListener("submit", function (e) {
+      e.preventDefault();
+      var msg = document.getElementById("msg");
+      msg.hidden = false; msg.textContent = "جارٍ الإرسال…";
+      fetch("/api/auth/forgot", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: document.getElementById("email").value.trim() }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          msg.textContent = d.message || "إن كان بريدك مسجّلاً فستصلك رسالة. تحقّق من بريدك (وصندوق المهملات).";
+        })
+        .catch(function () { msg.textContent = "حدث خطأ في الاتصال. حاوِل مجدداً."; });
+    });
+  </script>
+</body>
+</html>

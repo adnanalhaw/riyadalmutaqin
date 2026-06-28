@@ -49,7 +49,7 @@
           <a class="gold" href="/register">ليس لديك حساب؟ سجّل الآن</a>
         </p>
         <p class="muted center" style="margin-top:.3rem">
-          <a href="#">نسيت كلمة المرور؟</a>
+          <a class="gold" href="/forgot">نسيت كلمة المرور؟</a>
         </p>
       </form>
     </div>
@@ -93,6 +93,7 @@
           .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
           .then(function (res) {
             if (res.ok && res.d.ok) {
+              if (res.d.must_change_password) { location.href = "/change-password"; return; }
               var role = res.d.user && res.d.user.role;
               location.href = (role === "teacher" || role === "admin") ? "/teacher" : "/account";
             } else {

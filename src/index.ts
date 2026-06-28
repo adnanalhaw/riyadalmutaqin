@@ -37,6 +37,9 @@ export interface Env {
   /** تكامل تيليجرام للنشر التلقائي (اختياري — يُضاف عبر wrangler secret put). */
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
+  /** إرسال البريد عبر Resend (لإعادة ضبط كلمة المرور). */
+  RESEND_API_KEY?: string;
+  MAIL_FROM?: string;
 }
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -101,9 +104,18 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (route === "POST /api/auth/register") return register(request, env);
   if (route === "POST /api/auth/login") return login(request, env);
   if (route === "POST /api/auth/logout") return logout(request, env);
+  if (route === "POST /api/auth/forgot") return forgotPassword(request, env);
+  if (route === "POST /api/auth/change-password") return changePassword(request, env);
   if (route === "GET /api/auth/me") {
     const user = await getSessionUser(request, env.DB);
-    return json({ ok: true, user });
+    let mustChange = false;
+    if (user) {
+      const r = await env.DB.prepare("SELECT must_change_password AS m FROM users WHERE id = ?")
+        .bind(user.id)
+        .first<{ m: number }>();
+      mustChange = Boolean(r && r.m);
+    }
+    return json({ ok: true, user, must_change_password: mustChange });
   }
 
   // ===== المحتوى العام (قراءة من D1) =====
@@ -287,10 +299,10 @@ async function login(request: Request, env: Env): Promise<Response> {
   }
 
   const row = await env.DB.prepare(
-    "SELECT id, name, email, role, password_hash, status FROM users WHERE email = ?",
+    "SELECT id, name, email, role, password_hash, status, must_change_password FROM users WHERE email = ?",
   )
     .bind(email)
-    .first<{ id: number; name: string; email: string; role: AuthUser["role"]; password_hash: string; status: string }>();
+    .first<{ id: number; name: string; email: string; role: AuthUser["role"]; password_hash: string; status: string; must_change_password: number }>();
 
   const ok = row && row.status === "active" && (await verifyPassword(password, row.password_hash));
   await env.DB.prepare("INSERT INTO login_attempts (ip, email, success) VALUES (?, ?, ?)")
@@ -304,12 +316,96 @@ async function login(request: Request, env: Env): Promise<Response> {
 
   const setCookie = await createSession(env.DB, row.id);
   const user: AuthUser = { id: row.id, name: row.name, email: row.email, role: row.role };
-  return json({ ok: true, user }, 200, { "Set-Cookie": setCookie });
+  return json({ ok: true, user, must_change_password: Boolean(row.must_change_password) }, 200, { "Set-Cookie": setCookie });
 }
 
 async function logout(request: Request, env: Env): Promise<Response> {
   const setCookie = await destroySession(request, env.DB);
   return json({ ok: true }, 200, { "Set-Cookie": setCookie });
+}
+
+/* ===== إعادة ضبط كلمة المرور (بريد عبر Resend) ===== */
+
+/** يرسل بريداً عبر Resend. */
+async function sendEmail(env: Env, to: string, subject: string, html: string): Promise<{ ok: boolean; error?: string }> {
+  if (!env.RESEND_API_KEY) return { ok: false, error: "خدمة البريد غير مُعَدّة." };
+  const from = env.MAIL_FROM || "رياض المتقين <no-reply@riyadalmutaqin.com>";
+  try {
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { authorization: `Bearer ${env.RESEND_API_KEY}`, "content-type": "application/json" },
+      body: JSON.stringify({ from, to: [to], subject, html }),
+    });
+    if (res.ok) return { ok: true };
+    const t = await res.text().catch(() => "");
+    return { ok: false, error: `HTTP ${res.status} ${t.slice(0, 140)}` };
+  } catch (err) {
+    return { ok: false, error: String((err as Error).message) };
+  }
+}
+
+/** كلمة مرور مؤقّتة قابلة للقراءة (≥ 8 أحرف). */
+function tempPassword(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(9));
+  return "Rm" + Array.from(bytes).map((b) => b.toString(36)).join("").slice(0, 9);
+}
+
+/** نسيت كلمة المرور: يرسل كلمة مؤقّتة ويُلزم بتغييرها. الردّ موحّد لمنع تعداد الحسابات. */
+async function forgotPassword(request: Request, env: Env): Promise<Response> {
+  const b = await readJson(request);
+  const email = String(b.email ?? "").trim().toLowerCase();
+  const generic = json({ ok: true, message: "إن كان بريدك مسجّلاً فستصلك رسالةٌ بكلمة مرورٍ مؤقّتة." });
+  if (!isValidEmail(email)) return generic;
+
+  const row = await env.DB.prepare("SELECT id, name, status, last_reset_at FROM users WHERE email = ?")
+    .bind(email)
+    .first<{ id: number; name: string; status: string; last_reset_at: string | null }>();
+  if (!row || row.status !== "active") return generic;
+
+  // حدّ التكرار: طلبٌ واحد كل ٥ دقائق لكل حساب.
+  const recent = await env.DB.prepare(
+    "SELECT 1 AS x FROM users WHERE id = ? AND last_reset_at IS NOT NULL AND last_reset_at > datetime('now','-5 minutes')",
+  )
+    .bind(row.id)
+    .first();
+  if (recent) return generic;
+
+  const temp = tempPassword();
+  const html =
+    `<div dir="rtl" style="font-family:Tajawal,Arial,sans-serif">` +
+    `<h2>رياض المتقين</h2><p>مرحباً ${row.name || ""}،</p>` +
+    `<p>كلمة مرورك المؤقّتة هي:</p>` +
+    `<p style="font-size:1.4rem;font-weight:bold;letter-spacing:1px">${temp}</p>` +
+    `<p>ادخل بها ثم سيُطلب منك تعيين كلمة مرورٍ جديدة فوراً.</p>` +
+    `<p>إن لم تطلب ذلك فتجاهل هذه الرسالة.</p></div>`;
+
+  // نرسل البريد أولاً؛ لا نغيّر كلمة المرور إلا إذا نجح الإرسال (حتى لا يُحبَس المستخدم).
+  const sent = await sendEmail(env, email, "كلمة مرور مؤقّتة — رياض المتقين", html);
+  if (!sent.ok) return generic;
+
+  const hash = await hashPassword(temp);
+  await env.DB.prepare(
+    "UPDATE users SET password_hash = ?, must_change_password = 1, last_reset_at = datetime('now') WHERE id = ?",
+  )
+    .bind(hash, row.id)
+    .run();
+  await audit(env, email, "auth.forgot", `user:${row.id}`);
+  return generic;
+}
+
+/** تغيير كلمة المرور (يتطلّب جلسة) — يُزيل علم الإلزام. */
+async function changePassword(request: Request, env: Env): Promise<Response> {
+  const user = await getSessionUser(request, env.DB);
+  if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+  const b = await readJson(request);
+  const np = String(b.new_password ?? "");
+  if (np.length < 8) return json({ ok: false, error: "كلمة المرور يجب أن تكون 8 أحرف فأكثر." }, 400);
+  const hash = await hashPassword(np);
+  await env.DB.prepare("UPDATE users SET password_hash = ?, must_change_password = 0 WHERE id = ?")
+    .bind(hash, user.id)
+    .run();
+  await audit(env, user.email, "auth.change_password", `user:${user.id}`);
+  return json({ ok: true });
 }
 
 /* ===== أدوات المعلّم ===== */

@@ -84,6 +84,13 @@
 
   fetch("/api/auth/me", { headers: { accept: "application/json" } })
     .then(function (r) { return r.ok ? r.json() : null; })
-    .then(function (data) { render(data && data.user ? data.user : null); })
+    .then(function (data) {
+      // إلزام تغيير كلمة المرور المؤقّتة قبل أي صفحة أخرى.
+      if (data && data.user && data.must_change_password && path !== "/change-password") {
+        location.href = "/change-password";
+        return;
+      }
+      render(data && data.user ? data.user : null);
+    })
     .catch(function () { render(null); });
 })();
