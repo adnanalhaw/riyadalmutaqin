@@ -32,8 +32,9 @@
                 <textarea id="content" rows="4" placeholder="اكتب نصّ المنشور هنا…"></textarea>
               </div>
               <div class="field">
-                <label for="media">رفع صورة / فيديو</label>
-                <input type="file" id="media" accept="image/*,video/*" />
+                <label for="media">رفع صورة (للبطاقة)</label>
+                <input type="file" id="media" accept="image/*" />
+                <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">للفيديو: ارفعه على يوتيوب وأدرِج رابطه في نصّ المنشور.</p>
               </div>
 
               <div class="field">
@@ -56,25 +57,24 @@
                 <button class="btn btn-primary" type="submit" data-action="now">نشر الآن</button>
                 <button class="btn btn-outline" type="submit" data-action="schedule">جدولة</button>
               </div>
-              <div class="notice" id="pubNotice" hidden>سيتم ربط واجهة كل قناة (API) في مرحلة الربط (Integration).</div>
+              <div class="notice" id="pubNotice" hidden></div>
             </form>
           </div>
 
-          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">المنشورات المجدولة</h2>
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">المنشورات</h2>
           <div class="card" style="padding:0;overflow:hidden">
             <table class="t">
               <thead>
-                <tr><th>المحتوى</th><th>القنوات</th><th>الموعد</th><th>الحالة</th></tr>
+                <tr><th>المحتوى</th><th>القنوات</th><th>الموعد</th><th>الحالة</th><th>إجراءات</th></tr>
               </thead>
-              <tbody>
-                <tr><td>تذكير بدرس الخميس: شرح كتاب التوحيد</td><td>يوتيوب · فيسبوك · إكس</td><td>الأربعاء ١ يوليو · ٨:٠٠ م</td><td><span class="badge soon">مجدول</span></td></tr>
-                <tr><td>مقطع: فضل لا إله إلا الله</td><td>تيك توك · تيليجرام</td><td>الجمعة ٣ يوليو · ١٠:٠٠ ص</td><td><span class="badge soon">مجدول</span></td></tr>
+              <tbody id="postsBody">
+                <tr><td colspan="5" class="muted">يجري التحميل…</td></tr>
               </tbody>
             </table>
           </div>
 
-          <div class="notice">
-            يتطلّب النشر التلقائي ربط حساب كل قناة عبر واجهتها البرمجية في مرحلة الربط (Integration).
+          <div class="notice" id="channelsNote">
+            تيليجرام يُنشَر تلقائياً عند ضبط أسراره (راجِع README). بقيّة القنوات تُحفَظ في قائمة الإصدار ويُربط تسليمها التلقائي تباعاً.
           </div>
         </section>
       </div>
@@ -84,11 +84,126 @@
   <div data-footer></div>
   <script src="/layout.js"></script>
   <script src="/teacher/nav.js"></script>
+  <script src="/content.js"></script>
   <script>
-    document.getElementById("publishForm").addEventListener("submit", function (e) {
-      e.preventDefault();
-      document.getElementById("pubNotice").hidden = false;
-    });
+    (function () {
+      var esc = RM.esc;
+      var form = document.getElementById("publishForm");
+      var notice = document.getElementById("pubNotice");
+
+      var CH = { youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك", x: "إكس", telegram: "تيليجرام" };
+      var STATUS = {
+        draft: ["مسودة", "soon"], scheduled: ["مجدول", "soon"],
+        queued: ["في قائمة الإصدار", "soon"],
+        published: ["منشور", ""], failed: ["فشل", "live"],
+      };
+
+      // الزرّ المضغوط يحدّد الإجراء (now/schedule)
+      var pendingAction = "now";
+      form.querySelectorAll("button[type=submit]").forEach(function (b) {
+        b.addEventListener("click", function () { pendingAction = b.getAttribute("data-action"); });
+      });
+
+      function show(msg) { notice.textContent = msg; notice.hidden = false; }
+
+      // رفع صورة البطاقة إلى R2 وإرجاع رابطها (أو null إن لم تُرفَق). يرمي خطأً عند فشل الرفع
+      // حتى لا يُنشَر المنشور بصورةٍ مفقودةٍ دون علم المستخدم.
+      function uploadMedia() {
+        var input = document.getElementById("media");
+        if (!input.files || !input.files[0]) return Promise.resolve(null);
+        var fd = new FormData();
+        fd.append("file", input.files[0]);
+        fd.append("kind", "image");
+        return fetch("/api/teacher/media", { method: "POST", body: fd })
+          .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+          .then(function (d) {
+            if (!d.ok) throw new Error(d.error || "تعذّر رفع الصورة.");
+            return d.url;
+          });
+      }
+
+      form.addEventListener("submit", function (e) {
+        e.preventDefault();
+        var channels = Array.prototype.slice
+          .call(form.querySelectorAll('input[type=checkbox]:checked'))
+          .map(function (c) { return c.value; });
+        if (!channels.length) { show("اختَر قناةً واحدةً على الأقل."); return; }
+
+        var content = document.getElementById("content").value.trim();
+        var hasMedia = document.getElementById("media").files.length > 0;
+        if (!content && !hasMedia) { show("اكتب محتوى أو أرفِق وسائط."); return; }
+
+        var action = pendingAction;
+        var scheduledAt = document.getElementById("scheduleAt").value || null;
+        if (action === "schedule" && !scheduledAt) { show("حدّد موعد الجدولة في حقل «جدولة النشر»."); return; }
+
+        show("جارٍ المعالجة…");
+        uploadMedia().then(function (mediaUrl) {
+          return RM.api("/api/teacher/posts", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              content: content, media_url: mediaUrl, channels: channels,
+              action: action, scheduled_at: scheduledAt,
+            }),
+          });
+        }).then(function (res) {
+          var d = res.d || {};
+          if (!res.ok || !d.ok) { show(d.error || "تعذّر النشر."); return; }
+          var tg = (d.delivered || []).filter(function (x) { return x.channel === "telegram"; })[0];
+          if (action === "schedule") show("تمّت الجدولة ✓");
+          else if (tg && tg.ok) show("نُشِر على تيليجرام ✓ وحُفِظ للقنوات الأخرى.");
+          else if (tg && !tg.ok) show("تعذّر النشر على تيليجرام: " + (tg.error || "") + " — حُفِظ المنشور.");
+          else show("حُفِظ المنشور ✓ (يُربط تسليم القنوات تباعاً).");
+          form.reset();
+          loadPosts();
+        }).catch(function (err) { show(err && err.message ? err.message : "حدث خطأ في الاتصال."); });
+      });
+
+      function loadPosts() {
+        var body = document.getElementById("postsBody");
+        RM.api("/api/teacher/posts").then(function (res) {
+          var d = res.d || {};
+          if (!res.ok || !d.ok) {
+            body.innerHTML = '<tr><td colspan="5" class="muted">تعذّر تحميل المنشورات. سجّل الدخول ثم أعِد المحاولة.</td></tr>';
+            return;
+          }
+          if (!d.telegram) {
+            document.getElementById("channelsNote").textContent =
+              "تيليجرام غير مُعَدّ بعد. أضِف TELEGRAM_BOT_TOKEN وTELEGRAM_CHAT_ID كأسرار لتفعيل النشر التلقائي عليه (راجِع README). القنوات الأخرى تُحفَظ في قائمة الإصدار.";
+          }
+          var list = d.posts || [];
+          if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا توجد منشورات بعد.</td></tr>'; return; }
+          body.innerHTML = list.map(function (p) {
+            var chans = [];
+            try { chans = JSON.parse(p.channels || "[]"); } catch (e) { chans = []; }
+            var chLabel = chans.map(function (c) { return CH[c] || c; }).join(" · ");
+            var st = STATUS[p.status] || [p.status, ""];
+            var when = p.scheduled_at || p.created_at || "—";
+            return '<tr data-id="' + p.id + '">' +
+              "<td>" + (p.content ? esc(p.content) : '<span class="muted">— وسائط —</span>') + "</td>" +
+              "<td>" + esc(chLabel) + "</td>" +
+              "<td>" + esc(when) + "</td>" +
+              '<td><span class="badge ' + st[1] + '">' + st[0] + "</span></td>" +
+              '<td><a href="#" class="gold rm-del" data-id="' + p.id + '">حذف</a></td>' +
+              "</tr>";
+          }).join("");
+        }).catch(function () {
+          body.innerHTML = '<tr><td colspan="5" class="muted">تعذّر الاتصال بالخادم.</td></tr>';
+        });
+      }
+
+      document.getElementById("postsBody").addEventListener("click", function (e) {
+        var del = e.target.closest(".rm-del");
+        if (!del) return;
+        e.preventDefault();
+        if (!confirm("حذف هذا المنشور؟")) return;
+        RM.api("/api/teacher/posts/" + del.getAttribute("data-id"), { method: "DELETE" })
+          .then(function () { loadPosts(); });
+      });
+
+      loadPosts();
+    })();
   </script>
 </body>
 </html>

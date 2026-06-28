@@ -3,6 +3,13 @@ main = "src/index.ts"
 compatibility_date = "2025-01-01"
 compatibility_flags = ["nodejs_compat"]
 
+# ربط النطاق المخصّص. يتطلّب أن يكون riyadalmutaqin.com منطقةً (zone) فعّالة
+# داخل حساب Cloudflare نفسه؛ عندها يُنشئ wrangler سجلّ DNS والشهادة تلقائياً.
+routes = [
+  { pattern = "riyadalmutaqin.com", custom_domain = true },
+  { pattern = "www.riyadalmutaqin.com", custom_domain = true },
+]
+
 # الموقع العام يُقدَّم كأصول ثابتة (static assets)، والـ Worker يتولّى /api فقط.
 [assets]
 directory = "./public"
@@ -25,7 +32,12 @@ migrations_dir = "migrations"
 binding = "MEDIA"
 bucket_name = "riyad-media"
 
+# مُشغّل دوري: ينشر المنشورات المجدولة المستحقّة (كل ٥ دقائق).
+[triggers]
+crons = ["*/5 * * * *"]
+
 # متغيّرات عامة غير سرّية. الأسرار تُضاف عبر:  wrangler secret put <NAME>
 [vars]
 ENVIRONMENT = "production"
 SITE_NAME = "رياض المتقين"
+SITE_URL = "https://riyadalmutaqin.com"

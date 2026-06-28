@@ -29,9 +29,14 @@ export interface Env {
   /** متغيّرات عامة. */
   ENVIRONMENT: string;
   SITE_NAME: string;
+  /** الأصل العام للموقع (لبناء روابط الوسائط المطلقة في النشر المجدول). */
+  SITE_URL?: string;
   /** أسرار تكامل يوتيوب (تُضاف عبر wrangler secret put). */
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /** تكامل تيليجرام للنشر التلقائي (اختياري — يُضاف عبر wrangler secret put). */
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
 }
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -315,6 +320,60 @@ async function audit(env: Env, email: string, action: string, target: string): P
     .run();
 }
 
+/** القنوات المدعومة للنشر. */
+const CHANNELS = ["youtube", "tiktok", "facebook", "x", "telegram"] as const;
+type Channel = (typeof CHANNELS)[number];
+
+/** هل تكامل تيليجرام مُعَدّ (أسرار موجودة)؟ */
+const telegramConfigured = (env: Env): boolean =>
+  Boolean(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID);
+
+/** الرابط الأساس المطلق لبناء روابط الوسائط العامة (لتيليجرام). */
+function siteBase(env: Env, fallbackOrigin = ""): string {
+  return (env.SITE_URL || fallbackOrigin).replace(/\/+$/, "");
+}
+
+/** نداء عامّ لواجهة Bot API. */
+async function tgCall(
+  env: Env,
+  method: string,
+  payload: Record<string, unknown>,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const res = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/${method}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, ...payload }),
+    });
+    const data = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+    if (res.ok && data.ok) return { ok: true };
+    return { ok: false, error: data.description || `HTTP ${res.status}` };
+  } catch (err) {
+    return { ok: false, error: String((err as Error).message) };
+  }
+}
+
+/** ينشر منشوراً (نصّ + وسائط اختيارية) إلى قناة تيليجرام عبر الطريقة المناسبة. */
+async function sendTelegramPost(
+  env: Env,
+  content: string | null,
+  mediaUrl: string | null,
+  baseOrigin: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!telegramConfigured(env)) return { ok: false, error: "تيليجرام غير مُعَدّ." };
+  const caption = content || undefined;
+  if (mediaUrl) {
+    const abs = /^https?:\/\//.test(mediaUrl) ? mediaUrl : `${siteBase(env, baseOrigin)}${mediaUrl}`;
+    // روابط الوسائط النسبية تحتاج أصلاً عاماً ليجلبها تيليجرام؛ بدونه نرسل الرابط كنصّ.
+    if (!/^https?:\/\//.test(abs)) {
+      return tgCall(env, "sendMessage", { text: `${content ? content + "\n" : ""}${mediaUrl}` });
+    }
+    const isVideo = mediaUrl.includes("/video/") || /\.(mp4|mov|webm|m4v)$/i.test(mediaUrl);
+    return tgCall(env, isVideo ? "sendVideo" : "sendPhoto", isVideo ? { video: abs, caption } : { photo: abs, caption });
+  }
+  return tgCall(env, "sendMessage", { text: content || "📎 منشور جديد", disable_web_page_preview: false });
+}
+
 /** يستخرج معرّف فيديو يوتيوب من رابط أو معرّف خام. */
 function extractYouTubeId(input: string): string | null {
   const s = input.trim();
@@ -332,21 +391,22 @@ async function uploadMedia(request: Request, env: Env): Promise<Response> {
     size: number;
     type: string;
     name: string;
-    arrayBuffer(): Promise<ArrayBuffer>;
+    stream(): ReadableStream;
   };
 
+  // الفيديو لا يُخزَّن في R2 (يُرفع إلى يوتيوب)، فالرفع هنا للصور والصوت فقط.
   const kind = String(form.get("kind") ?? "image") === "audio" ? "audio" : "image";
-  const maxBytes = kind === "audio" ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+  const limits = { audio: 50, image: 10 } as const;
+  const maxBytes = limits[kind] * 1024 * 1024;
   if (file.size > maxBytes) return json({ ok: false, error: "حجم الملف كبير جداً." }, 413);
-  if (!(file.type || "").startsWith(kind === "audio" ? "audio/" : "image/")) {
+  if (!(file.type || "").startsWith(`${kind}/`)) {
     return json({ ok: false, error: "نوع الملف غير مدعوم." }, 415);
   }
 
   const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5);
   const key = `${kind}/${crypto.randomUUID()}.${ext}`;
-  await env.MEDIA.put(key, await file.arrayBuffer(), {
-    httpMetadata: { contentType: file.type },
-  });
+  // البثّ مباشرةً إلى R2 (لا arrayBuffer) لتفادي تجاوز حدّ ذاكرة الـ isolate مع الفيديو.
+  await env.MEDIA.put(key, file.stream(), { httpMetadata: { contentType: file.type } });
   return json({ ok: true, key, url: `/api/media/${key}` }, 201);
 }
 
@@ -516,12 +576,101 @@ async function handleTeacher(
     return json({ ok: true });
   }
 
+  // ===== تحليل البيانات (إحصاءات حقيقية من D1) =====
+  if (route === "GET /api/teacher/analytics") {
+    const overview = await env.DB.prepare(
+      `SELECT
+         (SELECT COUNT(*) FROM lessons)                           AS lessons,
+         (SELECT COUNT(*) FROM users WHERE role = 'student')      AS students,
+         (SELECT COUNT(*) FROM bookmarks)                         AS saves,
+         (SELECT COUNT(*) FROM progress WHERE completed = 1)      AS completions`,
+    ).first();
+
+    const { results: lessons } = await env.DB.prepare(
+      `SELECT l.id, l.title, l.doctor_name,
+              (SELECT COUNT(*) FROM bookmarks b WHERE b.lesson_id = l.id)                       AS saves,
+              (SELECT COUNT(*) FROM progress  p WHERE p.lesson_id = l.id)                       AS starts,
+              (SELECT COUNT(*) FROM progress  p WHERE p.lesson_id = l.id AND p.completed = 1)   AS completions
+         FROM lessons l
+        ORDER BY saves DESC, starts DESC, l.created_at DESC
+        LIMIT 20`,
+    ).all();
+
+    const { results: signups } = await env.DB.prepare(
+      `SELECT date(created_at) AS day, COUNT(*) AS count
+         FROM users
+        WHERE role = 'student' AND created_at >= date('now', '-6 days')
+        GROUP BY date(created_at)`,
+    ).all();
+
+    return json({ ok: true, overview, lessons, signups });
+  }
+
+  // ===== النشر على القنوات (channel_posts) =====
+  if (route === "GET /api/teacher/posts") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, content, media_url, channels, scheduled_at, status, created_at
+         FROM channel_posts ORDER BY created_at DESC LIMIT 100`,
+    ).all();
+    return json({ ok: true, posts: results, telegram: telegramConfigured(env) });
+  }
+
+  if (route === "POST /api/teacher/posts") {
+    const b = await readJson(request);
+    const content = String(b.content ?? "").trim();
+    const mediaUrl = b.media_url ? String(b.media_url) : null;
+    const channels = Array.isArray(b.channels)
+      ? (b.channels.map(String).filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c)))
+      : [];
+    if (!content && !mediaUrl) return json({ ok: false, error: "اكتب محتوى أو أرفِق وسائط." }, 400);
+    if (!channels.length) return json({ ok: false, error: "اختَر قناةً واحدةً على الأقل." }, 400);
+
+    const schedule = b.action === "schedule";
+    const scheduledAt = schedule && b.scheduled_at ? String(b.scheduled_at) : null;
+    if (schedule && !scheduledAt) return json({ ok: false, error: "حدّد موعد الجدولة." }, 400);
+
+    // نُدرج الصفّ أولاً (queued/scheduled) قبل أيّ تسليم خارجي — حتى لو فشل لاحقاً يبقى سجلٌّ
+    // ولا يتكرّر الإرسال عند إعادة المحاولة. القنوات غير المُسلَّمة فعلياً تبقى في قائمة الإصدار.
+    const initial = schedule ? "scheduled" : "queued";
+    const res = await env.DB.prepare(
+      `INSERT INTO channel_posts (author_id, content, media_url, channels, scheduled_at, status)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(user.id, content || null, mediaUrl, JSON.stringify(channels), scheduledAt, initial)
+      .run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "post.create", `post:${id}`);
+
+    // التسليم الفعلي (تيليجرام فقط حالياً) عند «النشر الآن».
+    const delivered: { channel: Channel; ok: boolean; error?: string }[] = [];
+    let status = initial;
+    if (!schedule && channels.includes("telegram") && telegramConfigured(env)) {
+      const origin = new URL(request.url).origin;
+      const r = await sendTelegramPost(env, content || null, mediaUrl, origin);
+      delivered.push({ channel: "telegram", ok: r.ok, error: r.error });
+      // published إن نجح تسليمٌ فعلي؛ failed إن كانت تيليجرام القناة الوحيدة وفشلت؛ وإلّا تبقى queued.
+      status = r.ok ? "published" : channels.length === 1 ? "failed" : "queued";
+      await env.DB.prepare("UPDATE channel_posts SET status = ? WHERE id = ?").bind(status, id).run();
+    }
+    return json({ ok: true, id, status, delivered }, 201);
+  }
+
+  const mp = path.match(/^\/api\/teacher\/posts\/(\d+)$/);
+  if (mp && request.method === "DELETE") {
+    // مُقيَّد بمالك المنشور (منع حذف منشورات معلّمٍ آخر).
+    await env.DB.prepare("DELETE FROM channel_posts WHERE id = ? AND author_id = ?")
+      .bind(Number(mp[1]), user.id)
+      .run();
+    await audit(env, user.email, "post.delete", `post:${mp[1]}`);
+    return json({ ok: true });
+  }
+
   // ===== تكامل يوتيوب =====
   if (path.startsWith("/api/teacher/youtube/")) {
     return handleYouTube(request, env, user, route);
   }
 
-  // بقيّة واجهات المعلّم تُربط لاحقاً (تحليلات/نشر).
+  // بقيّة واجهات المعلّم تُربط لاحقاً.
   return notReady("teacher." + path.slice("/api/teacher/".length));
 }
 
@@ -656,6 +805,31 @@ function harden(res: Response): Response {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
+/** يعالج المنشورات المجدولة المستحقّة (يُستدعى من مُشغّل cron). */
+async function processScheduledPosts(env: Env): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, content, media_url, channels FROM channel_posts
+      WHERE status = 'scheduled' AND scheduled_at IS NOT NULL AND scheduled_at <= datetime('now')
+      ORDER BY scheduled_at ASC LIMIT 25`,
+  ).all<{ id: number; content: string | null; media_url: string | null; channels: string | null }>();
+
+  for (const p of results) {
+    let channels: string[] = [];
+    try {
+      channels = JSON.parse(p.channels || "[]");
+    } catch {
+      channels = [];
+    }
+    // التسليم الفعلي (تيليجرام فقط حالياً)؛ بقيّة القنوات تنتقل إلى قائمة الإصدار.
+    let status = "queued";
+    if (channels.includes("telegram") && telegramConfigured(env)) {
+      const r = await sendTelegramPost(env, p.content, p.media_url, "");
+      status = r.ok ? "published" : channels.length === 1 ? "failed" : "queued";
+    }
+    await env.DB.prepare("UPDATE channel_posts SET status = ? WHERE id = ?").bind(status, p.id).run();
+  }
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -666,5 +840,10 @@ export default {
         : await env.ASSETS.fetch(request); // الموقع العام (أصول ثابتة)
 
     return harden(res);
+  },
+
+  // مُشغّل دوري: ينشر المنشورات المجدولة المستحقّة (انظر crons في wrangler.toml).
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(processScheduledPosts(env));
   },
 } satisfies ExportedHandler<Env>;

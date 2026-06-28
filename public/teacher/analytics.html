@@ -25,64 +25,32 @@
             <p>تابِع أداء محتواك وتفاعل المتعلّمين.</p>
           </div>
 
-          <div class="stats">
-            <div class="stat"><div class="num">٨٦ ألف</div><div class="lbl">المشاهدات</div></div>
-            <div class="stat"><div class="num">٤٫٢ ألف</div><div class="lbl">المشتركون</div></div>
-            <div class="stat"><div class="num">١٢:٣٤</div><div class="lbl">متوسّط مدة المشاهدة</div></div>
-            <div class="stat"><div class="num">٧٫٨٪</div><div class="lbl">التفاعل</div></div>
+          <div class="stats" id="overview">
+            <div class="stat"><div class="num">…</div><div class="lbl">الدروس</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">المتعلّمون</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">مرّات الحفظ</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">إكمالات</div></div>
           </div>
 
           <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">أداء الدروس</h2>
           <div class="card" style="padding:0;overflow:hidden">
             <table class="t">
               <thead>
-                <tr><th>الدرس</th><th>المشاهدات</th><th>الإعجابات</th><th>التعليقات</th><th>نسبة الإكمال</th></tr>
+                <tr><th>الدرس</th><th>الحفظ</th><th>بدؤوا</th><th>أكملوا</th><th>نسبة الإكمال</th></tr>
               </thead>
-              <tbody>
-                <tr><td>شرح كتاب التوحيد — ١٢</td><td>١٢٬٤٠٠</td><td>٩٨٠</td><td>١٤٢</td><td>٦٨٪</td></tr>
-                <tr><td>تفسير سورة الكهف — ١</td><td>٨٬٧٥٠</td><td>٧١٠</td><td>٩٦</td><td>٥٤٪</td></tr>
-                <tr><td>آداب طالب العلم</td><td>١٥٬٢٠٠</td><td>١٬٣٤٠</td><td>٢٠٨</td><td>٧٢٪</td></tr>
-                <tr><td>الأربعون النووية — ٤</td><td>٦٬٣٠٠</td><td>٥٢٠</td><td>٦٣</td><td>٤٩٪</td></tr>
+              <tbody id="lessonsBody">
+                <tr><td colspan="5" class="muted">يجري التحميل…</td></tr>
               </tbody>
             </table>
           </div>
 
-          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">المشاهدات آخر ٧ أيام</h2>
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">تسجيلات المتعلّمين — آخر ٧ أيام</h2>
           <div class="card">
-            <div style="display:flex;align-items:flex-end;gap:.8rem;height:180px">
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">
-                <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:55%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>
-                <span class="muted" style="font-size:.8rem">السبت</span>
-              </div>
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">
-                <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:70%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>
-                <span class="muted" style="font-size:.8rem">الأحد</span>
-              </div>
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">
-                <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:45%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>
-                <span class="muted" style="font-size:.8rem">الإثنين</span>
-              </div>
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">
-                <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:85%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>
-                <span class="muted" style="font-size:.8rem">الثلاثاء</span>
-              </div>
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">
-                <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:60%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>
-                <span class="muted" style="font-size:.8rem">الأربعاء</span>
-              </div>
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">
-                <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:100%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>
-                <span class="muted" style="font-size:.8rem">الخميس</span>
-              </div>
-              <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">
-                <div style="flex:1;display:flex;align-items:flex-end;width:100%"><div style="width:100%;height:78%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>
-                <span class="muted" style="font-size:.8rem">الجمعة</span>
-              </div>
-            </div>
+            <div id="signupsChart" style="display:flex;align-items:flex-end;gap:.8rem;height:180px"></div>
           </div>
 
           <div class="notice">
-            ستتم مزامنة البيانات من YouTube Analytics بعد مرحلة الربط (Integration). الأرقام أعلاه نموذجٌ توضيحيٌّ.
+            هذه الأرقام حقيقية من قاعدة البيانات (الحفظ، التقدّم، التسجيلات). تُضاف مقاييس يوتيوب (المشاهدات/الإعجابات) عند ربط YouTube Analytics.
           </div>
         </section>
       </div>
@@ -92,5 +60,83 @@
   <div data-footer></div>
   <script src="/layout.js"></script>
   <script src="/teacher/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar, esc = RM.esc;
+
+      // أسماء الأيام بالعربية حسب رقم اليوم (0=الأحد).
+      var DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+      function pct(part, whole) {
+        if (!whole) return "٠٪";
+        return ar(Math.round((part / whole) * 100)) + "٪";
+      }
+
+      function fail(msg) {
+        document.getElementById("lessonsBody").innerHTML =
+          '<tr><td colspan="5" class="muted">' + msg + "</td></tr>";
+      }
+
+      RM.api("/api/teacher/analytics").then(function (res) {
+        var d = res.d || {};
+        if (!res.ok || !d.ok) { fail("تعذّر تحميل التحليلات. سجّل الدخول ثم أعِد المحاولة."); return; }
+        var ov = d.overview || {};
+
+        // النظرة العامة
+        var cards = [
+          [ov.lessons, "الدروس"],
+          [ov.students, "المتعلّمون"],
+          [ov.saves, "مرّات الحفظ"],
+          [ov.completions, "إكمالات"],
+        ];
+        document.getElementById("overview").innerHTML = cards.map(function (c) {
+          return '<div class="stat"><div class="num">' + ar(c[0] || 0) + '</div><div class="lbl">' + c[1] + "</div></div>";
+        }).join("");
+
+        // أداء الدروس
+        var lessons = d.lessons || [];
+        var body = document.getElementById("lessonsBody");
+        if (!lessons.length) {
+          body.innerHTML = '<tr><td colspan="5" class="muted">لا توجد دروس بعد.</td></tr>';
+        } else {
+          body.innerHTML = lessons.map(function (l) {
+            return "<tr>" +
+              "<td>" + esc(l.title) + "</td>" +
+              "<td>" + ar(l.saves) + "</td>" +
+              "<td>" + ar(l.starts) + "</td>" +
+              "<td>" + ar(l.completions) + "</td>" +
+              "<td>" + pct(l.completions, l.starts) + "</td>" +
+              "</tr>";
+          }).join("");
+        }
+
+        // سلسلة آخر ٧ أيام (نملأ الأيام الفارغة بصفر).
+        // المفاتيح بتوقيت UTC لتطابق تجميع SQL (date(created_at)/date('now') بالـUTC).
+        var counts = {};
+        (d.signups || []).forEach(function (s) { counts[s.day] = s.count; });
+        var series = [];
+        var max = 0;
+        var now = new Date();
+        for (var i = 6; i >= 0; i--) {
+          var dt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+          var key = dt.getUTCFullYear() + "-" +
+            String(dt.getUTCMonth() + 1).padStart(2, "0") + "-" +
+            String(dt.getUTCDate()).padStart(2, "0");
+          var c = counts[key] || 0;
+          if (c > max) max = c;
+          series.push({ label: DAYS[dt.getUTCDay()], count: c });
+        }
+        document.getElementById("signupsChart").innerHTML = series.map(function (s) {
+          var h = max ? Math.max(4, Math.round((s.count / max) * 100)) : 4;
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">' +
+            '<div style="flex:1;display:flex;align-items:flex-end;width:100%" title="' + ar(s.count) + '">' +
+            '<div style="width:100%;height:' + h + '%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>' +
+            '<span class="muted" style="font-size:.8rem">' + s.label + " · " + ar(s.count) + "</span>" +
+            "</div>";
+        }).join("");
+      }).catch(function () { fail("تعذّر الاتصال بالخادم."); });
+    })();
+  </script>
 </body>
 </html>
