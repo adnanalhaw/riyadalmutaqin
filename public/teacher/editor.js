@@ -13,7 +13,7 @@
   var video = $("src"), canvas = $("stage"), ctx = canvas.getContext("2d");
   var startR = $("start"), endR = $("end");
   var logoImg = new Image();
-  logoImg.src = "/assets/logo.svg";
+  logoImg.src = "/assets/logo.png";
   var customLogo = null;
   var rafId = null, duration = 0, ready = false;
 

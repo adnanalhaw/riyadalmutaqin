@@ -10,8 +10,8 @@
   if (!document.querySelector('link[rel="icon"]')) {
     var fav = document.createElement("link");
     fav.rel = "icon";
-    fav.type = "image/svg+xml";
-    fav.href = "/assets/logo.svg";
+    fav.type = "image/png";
+    fav.href = "/assets/logo.png";
     document.head.appendChild(fav);
   }
 
@@ -42,7 +42,7 @@
   function render(user) {
     var navHtml =
       '<header class="site-header"><nav class="container nav">' +
-      '<a class="brand" href="/"><img class="logo" src="/assets/logo.svg" alt=""><span>' + SITE + "</span></a>" +
+      '<a class="brand" href="/"><img class="logo" src="/assets/logo.png" alt=""><span>' + SITE + "</span></a>" +
       '<ul class="nav-links">' +
       links
         .map(function (l) {
