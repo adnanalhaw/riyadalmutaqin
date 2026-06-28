@@ -83,8 +83,17 @@
                 <label for="upDoctor">اسم الدكتور</label>
                 <input type="text" id="upDoctor" placeholder="اسم الدكتور" />
               </div>
+              <div class="field">
+                <label for="upPrivacy">خصوصية النشر على يوتيوب</label>
+                <select id="upPrivacy">
+                  <option value="public">عام</option>
+                  <option value="unlisted">غير مُدرَج</option>
+                  <option value="private">خاص</option>
+                </select>
+              </div>
               <button class="btn btn-primary" type="submit">رفع الدرس</button>
-              <div class="notice" data-formnotice hidden>سيُحفظ بعد ربط الواجهة الخلفية.</div>
+              <div class="notice" data-formnotice hidden></div>
+              <p class="muted" id="upHint" style="margin:.6rem 0 0;font-size:.88rem">يُرفع الفيديو تلقائياً إلى قناتك على يوتيوب عند ربط الحساب.</p>
             </form>
 
             <form id="ytForm" data-panel="youtube" hidden>
@@ -112,16 +121,12 @@
             </form>
           </div>
 
-          <!-- النشر التلقائي -->
+          <!-- ربط يوتيوب والنشر التلقائي -->
           <div class="card" style="margin-bottom:1.5rem">
-            <h3 style="color:var(--gold);margin-top:0">النشر التلقائي على يوتيوب</h3>
-            <label style="display:flex;align-items:center;gap:.6rem;margin-bottom:1rem">
-              <input type="checkbox" style="width:auto" /> نشرٌ تلقائيٌّ على قناة يوتيوب عند انتهاء البث
-            </label>
-            <div class="notice" style="margin-top:0">
-              يتطلّب النشر التلقائي ربط حساب يوتيوب عبر تفويض (OAuth) في مرحلة الربط (Integration).
-            </div>
-            <button class="btn btn-ghost" type="button" disabled style="opacity:.6;cursor:not-allowed">ربط حساب يوتيوب</button>
+            <h3 style="color:var(--gold);margin-top:0">يوتيوب — الربط والنشر التلقائي</h3>
+            <p class="muted" id="ytState" style="margin-top:0">جارٍ التحقّق من حالة الربط…</p>
+            <div id="ytActions"></div>
+            <div class="notice" id="ytNotice" hidden></div>
           </div>
 
           <!-- الدروس الموجودة -->
@@ -232,19 +237,68 @@
         });
       });
 
-      // رفع ملف مسجّل — يُحفظ كمسودّة حتى يُربط الرفع التلقائي إلى يوتيوب
+      // رفع ملف مسجّل — يُرفع تلقائياً إلى يوتيوب عند ربط الحساب، وإلا يُحفظ كمسودّة
+      var ytConnected = false;
       document.getElementById('uploadForm').addEventListener('submit', function (e) {
         e.preventDefault();
         var form = e.target;
+        var fileInput = document.getElementById('upFile');
+        var title = document.getElementById('upTitle').value.trim();
+        var doctor = document.getElementById('upDoctor').value.trim();
+
+        if (ytConnected && fileInput.files && fileInput.files[0]) {
+          notify(form, 'جارٍ الرفع إلى يوتيوب… قد يستغرق حسب حجم الفيديو.');
+          var fd = new FormData();
+          fd.append('file', fileInput.files[0]);
+          fd.append('title', title);
+          fd.append('doctor_name', doctor);
+          fd.append('privacy', document.getElementById('upPrivacy').value);
+          fetch('/api/teacher/youtube/upload', { method: 'POST', body: fd })
+            .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+            .then(function (res) {
+              if (res.ok && res.d.ok) { notify(form, 'تمّ الرفع والنشر على يوتيوب ✓'); form.reset(); loadLessons(); }
+              else { notify(form, res.d.error || 'تعذّر الرفع إلى يوتيوب.'); }
+            })
+            .catch(function () { notify(form, 'حدث خطأ في الاتصال.'); });
+          return;
+        }
+
+        // غير مربوط: حفظ كمسودّة
         createLesson({
-          type: 'recorded',
-          status: 'draft',
-          title: document.getElementById('upTitle').value.trim(),
-          doctor_name: document.getElementById('upDoctor').value.trim(),
+          type: 'recorded', status: 'draft', title: title, doctor_name: doctor,
         }, form).then(function () {
-          notify(form, 'حُفظ كمسودّة. يُربط رفع الفيديو تلقائياً إلى يوتيوب في مرحلة الربط.');
+          notify(form, ytConnected ? 'اختر ملف فيديو للرفع.' : 'حُفظ كمسودّة. اربط حساب يوتيوب للرفع التلقائي.');
         });
       });
+
+      // ===== حالة يوتيوب =====
+      function loadYouTube() {
+        RM.api('/api/teacher/youtube/status').then(function (res) {
+          var d = res.d || {};
+          ytConnected = !!d.connected;
+          var state = document.getElementById('ytState');
+          var actions = document.getElementById('ytActions');
+          var notice = document.getElementById('ytNotice');
+          if (!d.configured) {
+            state.innerHTML = 'لم تُضبَط مفاتيح Google بعد.';
+            actions.innerHTML = '';
+            notice.hidden = false;
+            notice.textContent = 'لتفعيل يوتيوب: أنشئ مشروع Google Cloud، فعّل YouTube Data API v3، وأضِف GOOGLE_CLIENT_ID وGOOGLE_CLIENT_SECRET كأسرار. التفاصيل في ملف README.';
+          } else if (d.connected) {
+            state.innerHTML = 'مربوط بقناة: <span class="gold">' + RM.esc(d.channel || '—') + '</span>';
+            actions.innerHTML = '<button class="btn btn-ghost" id="ytDisconnect" type="button">فكّ الربط</button>';
+            notice.hidden = true;
+            document.getElementById('ytDisconnect').addEventListener('click', function () {
+              RM.api('/api/teacher/youtube/disconnect', { method: 'POST' }).then(loadYouTube);
+            });
+          } else {
+            state.innerHTML = 'غير مربوط. اربط حسابك لتفعيل الرفع التلقائي.';
+            actions.innerHTML = '<a class="btn btn-primary" href="/api/teacher/youtube/connect">ربط حساب يوتيوب</a>';
+            notice.hidden = true;
+          }
+        });
+      }
+
 
       // جدول الدروس
       var TYPE = { live: 'مباشر', recorded: 'مسجّل', youtube: 'يوتيوب' };
@@ -278,6 +332,7 @@
       });
 
       loadLessons();
+      loadYouTube();
     })();
   </script>
 </body>

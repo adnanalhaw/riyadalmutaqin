@@ -17,6 +17,7 @@ import {
   isValidEmail,
   type AuthUser,
 } from "./auth";
+import * as yt from "./youtube";
 
 export interface Env {
   /** أصول الموقع العام (Static Assets). */
@@ -28,6 +29,9 @@ export interface Env {
   /** متغيّرات عامة. */
   ENVIRONMENT: string;
   SITE_NAME: string;
+  /** أسرار تكامل يوتيوب (تُضاف عبر wrangler secret put). */
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
 }
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -47,6 +51,22 @@ async function readJson(request: Request): Promise<Record<string, unknown>> {
 }
 
 const clientIp = (request: Request): string => request.headers.get("CF-Connecting-IP") ?? "unknown";
+
+function readCookie(request: Request, name: string): string | null {
+  const header = request.headers.get("Cookie");
+  if (!header) return null;
+  for (const part of header.split(";")) {
+    const [k, ...v] = part.trim().split("=");
+    if (k === name) return v.join("=");
+  }
+  return null;
+}
+
+const redirect = (location: string, setCookie?: string): Response => {
+  const headers: Record<string, string> = { Location: location };
+  if (setCookie) headers["Set-Cookie"] = setCookie;
+  return new Response(null, { status: 302, headers });
+};
 
 /** ردّ موحّد للنقاط غير المُفعّلة بعد. */
 const notReady = (feature: string): Response =>
@@ -496,8 +516,115 @@ async function handleTeacher(
     return json({ ok: true });
   }
 
-  // بقيّة واجهات المعلّم تُربط لاحقاً (يوتيوب/تحليلات/نشر).
+  // ===== تكامل يوتيوب =====
+  if (path.startsWith("/api/teacher/youtube/")) {
+    return handleYouTube(request, env, user, route);
+  }
+
+  // بقيّة واجهات المعلّم تُربط لاحقاً (تحليلات/نشر).
   return notReady("teacher." + path.slice("/api/teacher/".length));
+}
+
+async function handleYouTube(
+  request: Request,
+  env: Env,
+  user: AuthUser,
+  route: string,
+): Promise<Response> {
+  const origin = new URL(request.url).origin;
+  const redirectUri = `${origin}/api/teacher/youtube/callback`;
+
+  // حالة الربط
+  if (route === "GET /api/teacher/youtube/status") {
+    const acc = await env.DB.prepare(
+      "SELECT channel_title, refresh_token FROM youtube_accounts WHERE teacher_id = ?",
+    )
+      .bind(user.id)
+      .first<{ channel_title: string | null; refresh_token: string | null }>();
+    return json({
+      ok: true,
+      configured: yt.isConfigured(env),
+      connected: Boolean(acc && acc.refresh_token),
+      channel: acc?.channel_title ?? null,
+    });
+  }
+
+  // بدء الربط
+  if (route === "GET /api/teacher/youtube/connect") {
+    if (!yt.isConfigured(env)) {
+      return json({ ok: false, error: "لم تُضبَط مفاتيح Google بعد. راجِع دليل الإعداد." }, 503);
+    }
+    const state = crypto.randomUUID();
+    const cookie = `yt_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`;
+    return redirect(yt.buildAuthUrl(env, redirectUri, state), cookie);
+  }
+
+  // عودة Google
+  if (route === "GET /api/teacher/youtube/callback") {
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const saved = readCookie(request, "yt_state");
+    if (!code || !state || !saved || state !== saved) {
+      return redirect(`${origin}/teacher/lessons?yt=error`);
+    }
+    try {
+      const tokens = await yt.exchangeCode(env, code, redirectUri);
+      const channel = await yt.getChannel(tokens.access_token);
+      await yt.saveAccount(env, user.id, tokens, channel);
+      await audit(env, user.email, "youtube.connect", channel?.id ?? "");
+      return redirect(`${origin}/teacher/lessons?yt=connected`, "yt_state=; Path=/; Max-Age=0");
+    } catch {
+      return redirect(`${origin}/teacher/lessons?yt=error`);
+    }
+  }
+
+  // فكّ الربط
+  if (route === "POST /api/teacher/youtube/disconnect") {
+    await env.DB.prepare("DELETE FROM youtube_accounts WHERE teacher_id = ?").bind(user.id).run();
+    await audit(env, user.email, "youtube.disconnect", "");
+    return json({ ok: true });
+  }
+
+  // الرفع التلقائي إلى يوتيوب + إنشاء درس
+  if (route === "POST /api/teacher/youtube/upload") {
+    if (!yt.isConfigured(env)) return json({ ok: false, error: "تكامل يوتيوب غير مُعَدّ." }, 503);
+    const accessToken = await yt.getValidAccessToken(env, user.id);
+    if (!accessToken) return json({ ok: false, error: "اربط حساب يوتيوب أولاً." }, 400);
+
+    const form = await request.formData();
+    const fileEntry = form.get("file");
+    if (fileEntry == null || typeof fileEntry === "string") return json({ ok: false, error: "لم يُرفَق ملف فيديو." }, 400);
+    const file = fileEntry as unknown as { size: number; type: string; arrayBuffer(): Promise<ArrayBuffer> };
+    if (file.size > 256 * 1024 * 1024) {
+      return json({ ok: false, error: "حجم الفيديو يتجاوز الحدّ الحالي (256MB)." }, 413);
+    }
+    const title = String(form.get("title") ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "العنوان مطلوب." }, 400);
+    const doctor = String(form.get("doctor_name") ?? "").trim();
+    const privacy = ["public", "unlisted", "private"].includes(String(form.get("privacy")))
+      ? String(form.get("privacy"))
+      : "public";
+    const description = doctor ? `المحاضر: ${doctor}` : "";
+
+    try {
+      const bytes = await file.arrayBuffer();
+      const video = await yt.uploadVideo(accessToken, bytes, file.type || "video/*", { title, description, privacy });
+      const res = await env.DB.prepare(
+        `INSERT INTO lessons (title, description, doctor_name, type, youtube_id, status, is_published)
+         VALUES (?, ?, ?, 'youtube', ?, 'published', 1)`,
+      )
+        .bind(title, description || null, doctor || null, video.id)
+        .run();
+      const lessonId = Number(res.meta.last_row_id);
+      await audit(env, user.email, "youtube.upload", `video:${video.id}`);
+      return json({ ok: true, youtube_id: video.id, lesson_id: lessonId }, 201);
+    } catch (err) {
+      return json({ ok: false, error: "تعذّر الرفع إلى يوتيوب: " + String((err as Error).message) }, 502);
+    }
+  }
+
+  return notReady("teacher.youtube");
 }
 
 const CONTENT_SECURITY_POLICY = [
