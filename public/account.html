@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>حسابي — رياض المتقين</title>
-  <meta name="description" content="حسابك في رياض المتقين: بياناتك ومكتبتك ومتابعة تقدّمك." />
-  <meta name="theme-color" content="#0b1430" />
+  <title>لوحتي — رياض المتقين</title>
+  <meta name="description" content="لوحة المتعلّم: تابِع ما بدأت، مكتبتك المحفوظة، تقدّمك، والدروس القادمة والموصى بها." />
+  <meta name="theme-color" content="#03130b" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
@@ -17,45 +17,175 @@
   <main>
     <div class="container">
       <div class="page-head">
-        <h1>حسابي</h1>
+        <h1>لوحتي</h1>
         <p id="welcome">مرحباً بك في رياض المتقين.</p>
       </div>
 
-      <div class="grid" style="margin-bottom:1.5rem">
-        <div class="card">
-          <div class="ic">👤</div>
-          <h3>بياناتي</h3>
+      <!-- إحصاءات المتعلّم -->
+      <div class="stats" id="statsRow" style="margin-bottom:2rem">
+        <div class="stat"><div class="num">…</div><div class="lbl">محفوظاتي</div></div>
+        <div class="stat"><div class="num">…</div><div class="lbl">قيد المتابعة</div></div>
+        <div class="stat"><div class="num">…</div><div class="lbl">دروس أكملتها</div></div>
+        <div class="stat"><div class="num">…</div><div class="lbl">نسبة الإنجاز</div></div>
+      </div>
+
+      <!-- أكمِل ما بدأت -->
+      <section id="continueSec" hidden>
+        <h2 style="color:var(--gold);text-align:start;margin:0 0 1rem">أكمِل ما بدأت</h2>
+        <div class="video-grid" id="continueGrid" style="margin-bottom:2.2rem"></div>
+      </section>
+
+      <!-- مكتبتي المحفوظة -->
+      <section>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin:0 0 1rem">
+          <h2 style="color:var(--gold);text-align:start;margin:0">مكتبتي المحفوظة</h2>
+          <a class="gold" href="/library" style="font-size:.95rem">عرض الكل ‹</a>
+        </div>
+        <div class="video-grid" id="savedGrid" style="margin-bottom:2.2rem"></div>
+      </section>
+
+      <!-- الدروس القادمة -->
+      <section id="upcomingSec" hidden>
+        <h2 style="color:var(--gold);text-align:start;margin:0 0 1rem">الدروس المباشرة القادمة</h2>
+        <div class="card" style="padding:0;overflow:hidden;margin-bottom:2.2rem">
+          <table class="t">
+            <thead><tr><th>الدرس</th><th>الدكتور</th><th>الموعد</th></tr></thead>
+            <tbody id="upcomingBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- موصى لك -->
+      <section id="recoSec" hidden>
+        <h2 style="color:var(--gold);text-align:start;margin:0 0 1rem">موصى لك</h2>
+        <div class="video-grid" id="recoGrid" style="margin-bottom:2.2rem"></div>
+      </section>
+
+      <!-- بياناتي -->
+      <section>
+        <h2 style="color:var(--gold);text-align:start;margin:0 0 1rem">بياناتي</h2>
+        <div class="card" style="max-width:520px">
           <p>الاسم: <span class="gold" id="uName">—</span></p>
           <p>البريد: <span class="gold" id="uEmail">—</span></p>
           <p>النوع: <span class="gold" id="uRole">متعلّم</span></p>
+          <button class="btn btn-outline" id="logout2" style="margin-top:.6rem">تسجيل الخروج</button>
         </div>
-        <a class="card link" href="/library"><div class="ic">📚</div><h3>مكتبة الحفظ</h3><p>الدروس والمقاطع التي حفظتها.</p></a>
-        <a class="card link" href="/live"><div class="ic">🔴</div><h3>الدروس المباشرة</h3><p>تابِع البثّ والدروس القادمة.</p></a>
-      </div>
-
-      <button class="btn btn-outline" id="logout2">تسجيل الخروج</button>
+      </section>
     </div>
   </main>
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/content.js"></script>
   <script>
-    var ROLES = { student: "متعلّم", teacher: "معلّم", admin: "مدير" };
-    fetch("/api/auth/me", { headers: { accept: "application/json" } })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        var user = data && data.user;
+    (function () {
+      var ar = RM.ar, esc = RM.esc;
+      var ROLES = { student: "متعلّم", teacher: "معلّم", admin: "مدير" };
+
+      // بطاقة «متابعة» مع شريط تقدّم
+      function continueCard(l, percent) {
+        var thumb = RM.ytThumb(l.youtube_id) || l.thumbnail;
+        var bg = thumb ? 'style="background-image:url(' + esc(thumb) + ');background-size:cover;background-position:center"' : "";
+        var link = l.youtube_id ? "https://www.youtube.com/watch?v=" + encodeURIComponent(l.youtube_id) : "#";
+        return "<div>" +
+          '<a href="' + link + '" target="_blank" rel="noopener" class="vthumb" ' + bg + '>' +
+          '<div class="play">▶</div>' +
+          '<span class="badge" style="position:absolute;top:.6rem;inset-inline-start:.6rem">متابعة</span>' +
+          '<div style="position:absolute;bottom:0;inset-inline:0;height:5px;background:rgba(0,0,0,.4)">' +
+          '<div style="height:100%;width:' + percent + '%;background:linear-gradient(90deg,var(--pistachio),var(--gold))"></div></div>' +
+          "</a>" +
+          '<div class="vmeta"><div class="vtitle">' + esc(l.title) + "</div>" +
+          (l.doctor_name ? '<div class="vdoc">' + esc(l.doctor_name) + "</div>" : "") +
+          '<div class="muted" style="font-size:.8rem">' + ar(percent) + "٪ مكتمل</div></div></div>";
+      }
+
+      Promise.all([
+        RM.getMe(),
+        RM.api("/api/lessons"),
+        RM.api("/api/library"),
+        RM.api("/api/progress"),
+      ]).then(function (res) {
+        var user = res[0];
         if (!user) { location.href = "/login"; return; }
         document.getElementById("uName").textContent = user.name;
         document.getElementById("uEmail").textContent = user.email;
         document.getElementById("uRole").textContent = ROLES[user.role] || user.role;
         document.getElementById("welcome").textContent = "مرحباً " + user.name + "، نسأل الله لك العلم النافع.";
-      })
-      .catch(function () { location.href = "/login"; });
 
-    document.getElementById("logout2").addEventListener("click", function () {
-      fetch("/api/auth/logout", { method: "POST" }).then(function () { location.href = "/"; });
-    });
+        var lessons = (res[1].d && res[1].d.lessons) || [];
+        var saved = (res[2].d && res[2].d.items) || [];
+        var progress = (res[3].d && res[3].d.progress) || [];
+
+        var lessonById = {};
+        lessons.forEach(function (l) { lessonById[l.id] = l; });
+        var progById = {};
+        progress.forEach(function (p) { progById[p.lesson_id] = p; });
+
+        // ===== الإحصاءات =====
+        var completed = progress.filter(function (p) { return p.completed; }).length;
+        var started = progress.length;
+        var inProgress = started - completed;
+        var publishedCount = lessons.filter(function (l) { return l.status === "published"; }).length;
+        var rate = publishedCount ? Math.round((completed / publishedCount) * 100) : 0;
+        var stats = [
+          [saved.length, "محفوظاتي"],
+          [inProgress, "قيد المتابعة"],
+          [completed, "دروس أكملتها"],
+          [ar(rate) + "٪", "نسبة الإنجاز"],
+        ];
+        document.getElementById("statsRow").innerHTML = stats.map(function (s) {
+          var v = typeof s[0] === "number" ? ar(s[0]) : s[0];
+          return '<div class="stat"><div class="num">' + v + '</div><div class="lbl">' + s[1] + "</div></div>";
+        }).join("");
+
+        // ===== أكمِل ما بدأت =====
+        var cont = progress
+          .filter(function (p) { return !p.completed && p.last_position > 0 && lessonById[p.lesson_id]; })
+          .sort(function (a, b) { return (b.updated_at || "").localeCompare(a.updated_at || ""); })
+          .slice(0, 4);
+        if (cont.length) {
+          document.getElementById("continueSec").hidden = false;
+          document.getElementById("continueGrid").innerHTML = cont.map(function (p) {
+            var l = lessonById[p.lesson_id];
+            var pct = l.duration ? Math.min(99, Math.max(1, Math.round((p.last_position / l.duration) * 100))) : 5;
+            return continueCard(l, pct);
+          }).join("");
+        }
+
+        // ===== مكتبتي المحفوظة =====
+        var savedGrid = document.getElementById("savedGrid");
+        if (saved.length) {
+          savedGrid.innerHTML = saved.slice(0, 4).map(function (l) { return RM.videoCard(l, {}); }).join("");
+        } else {
+          savedGrid.innerHTML = '<p class="muted">لم تحفظ أيّ درس بعد. تصفّح <a class="gold" href="/live">الدروس</a> واحفظ ما يعجبك.</p>';
+        }
+
+        // ===== الدروس القادمة (مجدولة) =====
+        var upcoming = lessons.filter(function (l) { return l.status === "scheduled"; });
+        if (upcoming.length) {
+          document.getElementById("upcomingSec").hidden = false;
+          document.getElementById("upcomingBody").innerHTML = upcoming.map(function (l) {
+            return "<tr><td>" + esc(l.title) + "</td><td>" + esc(l.doctor_name || "—") +
+              "</td><td>" + esc(l.scheduled_at || "—") + "</td></tr>";
+          }).join("");
+        }
+
+        // ===== موصى لك (دروس منشورة لم يبدأها) =====
+        var reco = lessons.filter(function (l) {
+          return l.status === "published" && !progById[l.id];
+        }).slice(0, 4);
+        if (reco.length) {
+          document.getElementById("recoSec").hidden = false;
+          var grid = document.getElementById("recoGrid");
+          grid.innerHTML = reco.map(function (l) { return RM.videoCard(l, { save: true }); }).join("");
+          RM.bindSave(grid);
+        }
+      }).catch(function () { location.href = "/login"; });
+
+      document.getElementById("logout2").addEventListener("click", function () {
+        fetch("/api/auth/logout", { method: "POST" }).then(function () { location.href = "/"; });
+      });
+    })();
   </script>
 </body>
 </html>
