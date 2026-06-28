@@ -56,10 +56,34 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   if (path === "/api/auth/logout") return notReady("auth.logout");
   if (path === "/api/auth/me") return notReady("auth.me");
 
-  // ===== المحتوى العام =====
-  if (path === "/api/lessons") return notReady("lessons.list");
-  if (path === "/api/clips") return notReady("clips.list");
-  if (path === "/api/audio") return notReady("audio.list");
+  // ===== المحتوى العام (قراءة من D1) =====
+  if (route === "GET /api/lessons") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, course_id, title, description, doctor_name, type, youtube_id,
+              duration, status, scheduled_at
+         FROM lessons
+        WHERE is_published = 1
+        ORDER BY status = 'live' DESC, sort_order ASC, created_at DESC`,
+    ).all();
+    return json({ ok: true, lessons: results });
+  }
+  if (route === "GET /api/clips") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, doctor_name, youtube_id, thumbnail, duration
+         FROM clips
+        WHERE is_published = 1
+        ORDER BY created_at DESC`,
+    ).all();
+    return json({ ok: true, clips: results });
+  }
+  if (route === "GET /api/audio") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, description, doctor_name, audio_url, background_image, duration
+         FROM audio_posts
+        ORDER BY created_at DESC`,
+    ).all();
+    return json({ ok: true, audio: results });
+  }
 
   // ===== المتعلّم =====
   if (path === "/api/library") return notReady("library.saved");
