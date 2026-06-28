@@ -138,22 +138,8 @@
               <thead>
                 <tr><th>العنوان</th><th>الدكتور</th><th>النوع</th><th>الحالة</th><th>إجراءات</th></tr>
               </thead>
-              <tbody>
-                <tr>
-                  <td>شرح كتاب التوحيد — الدرس الثاني عشر</td><td>د. عبد الله الراشد</td>
-                  <td><span class="badge live">مباشر</span></td><td><span class="badge">منشور</span></td>
-                  <td><a class="gold" href="#">تعديل</a> · <a href="#">حذف</a></td>
-                </tr>
-                <tr>
-                  <td>تفسير سورة الكهف — الجزء الأول</td><td>د. محمد العمري</td>
-                  <td><span class="badge soon">مسجّل</span></td><td><span class="badge soon">مسودة</span></td>
-                  <td><a class="gold" href="#">تعديل</a> · <a href="#">حذف</a></td>
-                </tr>
-                <tr>
-                  <td>آداب طالب العلم</td><td>د. سالم القحطاني</td>
-                  <td><span class="badge">يوتيوب</span></td><td><span class="badge">منشور</span></td>
-                  <td><a class="gold" href="#">تعديل</a> · <a href="#">حذف</a></td>
-                </tr>
+              <tbody id="lessonsBody">
+                <tr><td colspan="5" class="muted">يجري التحميل…</td></tr>
               </tbody>
             </table>
           </div>
@@ -164,8 +150,11 @@
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/content.js"></script>
   <script>
     (function () {
+      var ar = RM.ar, esc = RM.esc;
+
       // تبويبات الرفع/الاستيراد
       var tabBtns = document.querySelectorAll('.tabs [data-tab]');
       tabBtns.forEach(function (b) {
@@ -181,18 +170,120 @@
       // إظهار حقل الجدولة
       document.querySelectorAll('input[name="liveMode"]').forEach(function (r) {
         r.addEventListener('change', function () {
-          document.getElementById('scheduleField').hidden = (document.querySelector('input[name="liveMode"]:checked').value !== 'schedule');
+          document.getElementById('scheduleField').hidden =
+            (document.querySelector('input[name="liveMode"]:checked').value !== 'schedule');
         });
       });
 
-      // إشعار الحفظ عند الإرسال
-      ['liveForm', 'uploadForm', 'ytForm'].forEach(function (id) {
-        var f = document.getElementById(id);
-        f.addEventListener('submit', function (e) {
-          e.preventDefault();
-          f.querySelector('[data-formnotice]').hidden = false;
+      function notify(form, msg) {
+        var n = form.querySelector('[data-formnotice]');
+        n.textContent = msg; n.hidden = false;
+      }
+
+      // رفع صورة الغلاف إلى R2 وإرجاع الرابط (أو null)
+      function uploadCover(input) {
+        if (!input || !input.files || !input.files[0]) return Promise.resolve(null);
+        var fd = new FormData();
+        fd.append('file', input.files[0]);
+        fd.append('kind', 'image');
+        return fetch('/api/teacher/media', { method: 'POST', body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (d) { return d.ok ? d.url : null; });
+      }
+
+      function createLesson(payload, form) {
+        notify(form, 'جارٍ الحفظ…');
+        return RM.api('/api/teacher/lessons', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) { notify(form, 'تمّ الحفظ ✓'); form.reset(); loadLessons(); }
+          else { notify(form, res.d.error || 'تعذّر الحفظ.'); }
+        }).catch(function () { notify(form, 'حدث خطأ في الاتصال.'); });
+      }
+
+      // بثّ مباشر / جدولة
+      document.getElementById('liveForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var form = e.target;
+        var mode = (document.querySelector('input[name="liveMode"]:checked') || {}).value || 'now';
+        notify(form, 'جارٍ الحفظ…');
+        uploadCover(document.getElementById('liveCover')).then(function (cover) {
+          createLesson({
+            type: 'live',
+            mode: mode,
+            title: document.getElementById('liveTitle').value.trim(),
+            doctor_name: document.getElementById('liveDoctor').value.trim(),
+            description: document.getElementById('liveDesc').value.trim(),
+            scheduled_at: document.getElementById('liveWhen').value || null,
+            cover_image: cover,
+          }, form);
         });
       });
+
+      // استيراد من يوتيوب (بصورتك وعنوانك واسم الدكتور)
+      document.getElementById('ytForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var form = e.target;
+        notify(form, 'جارٍ الحفظ…');
+        uploadCover(document.getElementById('ytCover')).then(function (cover) {
+          createLesson({
+            type: 'youtube',
+            youtube_id: document.getElementById('ytUrl').value.trim(),
+            title: document.getElementById('ytTitle').value.trim(),
+            doctor_name: document.getElementById('ytDoctor').value.trim(),
+            cover_image: cover,
+          }, form);
+        });
+      });
+
+      // رفع ملف مسجّل — يُحفظ كمسودّة حتى يُربط الرفع التلقائي إلى يوتيوب
+      document.getElementById('uploadForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var form = e.target;
+        createLesson({
+          type: 'recorded',
+          status: 'draft',
+          title: document.getElementById('upTitle').value.trim(),
+          doctor_name: document.getElementById('upDoctor').value.trim(),
+        }, form).then(function () {
+          notify(form, 'حُفظ كمسودّة. يُربط رفع الفيديو تلقائياً إلى يوتيوب في مرحلة الربط.');
+        });
+      });
+
+      // جدول الدروس
+      var TYPE = { live: 'مباشر', recorded: 'مسجّل', youtube: 'يوتيوب' };
+      var STATUS = { draft: 'مسودة', scheduled: 'مجدول', live: 'مباشر', published: 'منشور' };
+      function loadLessons() {
+        RM.api('/api/teacher/lessons').then(function (res) {
+          var list = (res.d && res.d.lessons) || [];
+          var body = document.getElementById('lessonsBody');
+          if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا توجد دروس بعد.</td></tr>'; return; }
+          body.innerHTML = list.map(function (l) {
+            var tCls = l.type === 'live' ? 'badge live' : (l.status === 'draft' ? 'badge soon' : 'badge');
+            var sCls = (l.status === 'draft' || l.status === 'scheduled') ? 'badge soon' : (l.status === 'live' ? 'badge live' : 'badge');
+            return '<tr data-id="' + l.id + '">' +
+              '<td>' + esc(l.title) + '</td>' +
+              '<td>' + esc(l.doctor_name || '—') + '</td>' +
+              '<td><span class="' + tCls + '">' + (TYPE[l.type] || l.type) + '</span></td>' +
+              '<td><span class="' + sCls + '">' + (STATUS[l.status] || l.status) + '</span></td>' +
+              '<td><a href="#" class="gold rm-del" data-id="' + l.id + '">حذف</a></td>' +
+              '</tr>';
+          }).join('');
+        });
+      }
+
+      document.getElementById('lessonsBody').addEventListener('click', function (e) {
+        var del = e.target.closest('.rm-del');
+        if (!del) return;
+        e.preventDefault();
+        if (!confirm('حذف هذا الدرس؟')) return;
+        RM.api('/api/teacher/lessons/' + del.getAttribute('data-id'), { method: 'DELETE' })
+          .then(function () { loadLessons(); });
+      });
+
+      loadLessons();
     })();
   </script>
 </body>

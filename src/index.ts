@@ -192,6 +192,18 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     }
   }
 
+  // ===== خدمة الوسائط من R2 (عام للقراءة) =====
+  if (method === "GET" && path.startsWith("/api/media/")) {
+    const key = decodeURIComponent(path.slice("/api/media/".length));
+    const obj = await env.MEDIA.get(key);
+    if (!obj) return json({ ok: false, error: "Not Found" }, 404);
+    const headers = new Headers();
+    obj.writeHttpMetadata(headers);
+    headers.set("etag", obj.httpEtag);
+    headers.set("cache-control", "public, max-age=86400");
+    return new Response(obj.body, { headers });
+  }
+
   // ===== المعلّم (يتطلّب دور teacher/admin) =====
   if (path.startsWith("/api/teacher/")) {
     const user = await getSessionUser(request, env.DB);
@@ -199,7 +211,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     if (user.role !== "teacher" && user.role !== "admin") {
       return json({ ok: false, error: "forbidden" }, 403);
     }
-    return notReady("teacher." + path.slice("/api/teacher/".length));
+    return handleTeacher(request, env, user, path, route);
   }
 
   return json({ ok: false, error: "Not Found" }, 404);
@@ -273,6 +285,146 @@ async function login(request: Request, env: Env): Promise<Response> {
 async function logout(request: Request, env: Env): Promise<Response> {
   const setCookie = await destroySession(request, env.DB);
   return json({ ok: true }, 200, { "Set-Cookie": setCookie });
+}
+
+/* ===== أدوات المعلّم ===== */
+
+async function audit(env: Env, email: string, action: string, target: string): Promise<void> {
+  await env.DB.prepare("INSERT INTO audit_log (actor_email, action, target) VALUES (?, ?, ?)")
+    .bind(email, action, target)
+    .run();
+}
+
+/** يستخرج معرّف فيديو يوتيوب من رابط أو معرّف خام. */
+function extractYouTubeId(input: string): string | null {
+  const s = input.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+/** رفع صورة/صوت إلى R2 وإرجاع رابطه. */
+async function uploadMedia(request: Request, env: Env): Promise<Response> {
+  const form = await request.formData();
+  const entry = form.get("file");
+  if (entry == null || typeof entry === "string") return json({ ok: false, error: "لم يُرفَق ملف." }, 400);
+  const file = entry as unknown as {
+    size: number;
+    type: string;
+    name: string;
+    arrayBuffer(): Promise<ArrayBuffer>;
+  };
+
+  const kind = String(form.get("kind") ?? "image") === "audio" ? "audio" : "image";
+  const maxBytes = kind === "audio" ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > maxBytes) return json({ ok: false, error: "حجم الملف كبير جداً." }, 413);
+  if (!(file.type || "").startsWith(kind === "audio" ? "audio/" : "image/")) {
+    return json({ ok: false, error: "نوع الملف غير مدعوم." }, 415);
+  }
+
+  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5);
+  const key = `${kind}/${crypto.randomUUID()}.${ext}`;
+  await env.MEDIA.put(key, await file.arrayBuffer(), {
+    httpMetadata: { contentType: file.type },
+  });
+  return json({ ok: true, key, url: `/api/media/${key}` }, 201);
+}
+
+async function handleTeacher(
+  request: Request,
+  env: Env,
+  user: AuthUser,
+  path: string,
+  route: string,
+): Promise<Response> {
+  // رفع الوسائط
+  if (route === "POST /api/teacher/media") return uploadMedia(request, env);
+
+  // قائمة الدروس (تشمل المسودّات)
+  if (route === "GET /api/teacher/lessons") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, doctor_name, type, youtube_id, cover_image, status,
+              scheduled_at, is_published, is_members_only, created_at
+         FROM lessons ORDER BY created_at DESC`,
+    ).all();
+    return json({ ok: true, lessons: results });
+  }
+
+  // إنشاء درس
+  if (route === "POST /api/teacher/lessons") {
+    const b = await readJson(request);
+    const title = String(b.title ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "العنوان مطلوب." }, 400);
+
+    let type = String(b.type ?? "recorded");
+    if (!["live", "recorded", "youtube"].includes(type)) type = "recorded";
+    const doctor = String(b.doctor_name ?? "").trim() || null;
+    const description = String(b.description ?? "").trim() || null;
+    const youtubeId = b.youtube_id ? extractYouTubeId(String(b.youtube_id)) : null;
+    if (type === "youtube" && !youtubeId) {
+      return json({ ok: false, error: "رابط يوتيوب غير صالح." }, 400);
+    }
+    const cover = b.cover_image ? String(b.cover_image) : null;
+    const scheduledAt = b.scheduled_at ? String(b.scheduled_at) : null;
+    const membersOnly = b.is_members_only ? 1 : 0;
+
+    let status = "published";
+    if (type === "live") status = b.mode === "schedule" ? "scheduled" : "live";
+    else if (b.status === "draft") status = "draft";
+    const isPublished = status === "draft" ? 0 : 1;
+
+    const res = await env.DB.prepare(
+      `INSERT INTO lessons (title, description, doctor_name, type, youtube_id, cover_image,
+                            status, scheduled_at, is_published, is_members_only)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(title, description, doctor, type, youtubeId, cover, status, scheduledAt, isPublished, membersOnly)
+      .run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "lesson.create", `lesson:${id}`);
+    return json({ ok: true, id }, 201);
+  }
+
+  // عمليات على درس بعينه
+  const m = path.match(/^\/api\/teacher\/lessons\/(\d+)$/);
+  if (m) {
+    const id = Number(m[1]);
+    if (request.method === "DELETE") {
+      await env.DB.prepare("DELETE FROM lessons WHERE id = ?").bind(id).run();
+      await audit(env, user.email, "lesson.delete", `lesson:${id}`);
+      return json({ ok: true });
+    }
+    if (request.method === "PATCH") {
+      const b = await readJson(request);
+      const fields: string[] = [];
+      const vals: (string | number | null)[] = [];
+      const allowed = ["title", "description", "doctor_name", "youtube_id", "cover_image", "status", "scheduled_at"];
+      for (const k of allowed) {
+        if (k in b) {
+          fields.push(`${k} = ?`);
+          vals.push(b[k] === null ? null : String(b[k]));
+        }
+      }
+      if ("is_members_only" in b) {
+        fields.push("is_members_only = ?");
+        vals.push(b.is_members_only ? 1 : 0);
+      }
+      if ("status" in b) {
+        fields.push("is_published = ?");
+        vals.push(String(b.status) === "draft" ? 0 : 1);
+      }
+      if (!fields.length) return json({ ok: false, error: "لا تغييرات." }, 400);
+      vals.push(id);
+      await env.DB.prepare(`UPDATE lessons SET ${fields.join(", ")} WHERE id = ?`)
+        .bind(...vals)
+        .run();
+      await audit(env, user.email, "lesson.update", `lesson:${id}`);
+      return json({ ok: true });
+    }
+  }
+
+  // بقيّة واجهات المعلّم تُربط لاحقاً (يوتيوب/تحليلات/نشر).
+  return notReady("teacher." + path.slice("/api/teacher/".length));
 }
 
 export default {
