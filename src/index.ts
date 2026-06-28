@@ -110,11 +110,86 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return json({ ok: true, audio: results });
   }
 
-  // ===== المتعلّم (يتطلّب تسجيل دخول) =====
-  if (path === "/api/library") {
+  // ===== المتعلّم: مكتبة الحفظ (يتطلّب تسجيل دخول) =====
+  if (path === "/api/library" || path === "/api/library/remove") {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
-    return notReady("library.saved");
+
+    // قائمة المحفوظات
+    if (route === "GET /api/library") {
+      const { results } = await env.DB.prepare(
+        `SELECT l.id, l.title, l.description, l.doctor_name, l.type, l.youtube_id, l.duration,
+                b.created_at AS saved_at
+           FROM bookmarks b JOIN lessons l ON l.id = b.lesson_id
+          WHERE b.user_id = ?
+          ORDER BY b.created_at DESC`,
+      )
+        .bind(user.id)
+        .all();
+      return json({ ok: true, items: results });
+    }
+
+    // حفظ درس — يُقيَّد دائماً بمستخدم الجلسة (منع IDOR).
+    if (route === "POST /api/library") {
+      const body = await readJson(request);
+      const lessonId = Number(body.lesson_id);
+      if (!Number.isInteger(lessonId)) return json({ ok: false, error: "lesson_id غير صالح." }, 400);
+      const lesson = await env.DB.prepare("SELECT id FROM lessons WHERE id = ? AND is_published = 1")
+        .bind(lessonId)
+        .first();
+      if (!lesson) return json({ ok: false, error: "الدرس غير موجود." }, 404);
+      await env.DB.prepare(
+        "INSERT OR IGNORE INTO bookmarks (user_id, lesson_id) VALUES (?, ?)",
+      )
+        .bind(user.id, lessonId)
+        .run();
+      return json({ ok: true, saved: true });
+    }
+
+    // إزالة من المحفوظات
+    if (route === "POST /api/library/remove") {
+      const body = await readJson(request);
+      const lessonId = Number(body.lesson_id);
+      if (!Number.isInteger(lessonId)) return json({ ok: false, error: "lesson_id غير صالح." }, 400);
+      await env.DB.prepare("DELETE FROM bookmarks WHERE user_id = ? AND lesson_id = ?")
+        .bind(user.id, lessonId)
+        .run();
+      return json({ ok: true, saved: false });
+    }
+  }
+
+  // ===== المتعلّم: متابعة التقدّم (يتطلّب تسجيل دخول) =====
+  if (path === "/api/progress") {
+    const user = await getSessionUser(request, env.DB);
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+
+    if (route === "GET /api/progress") {
+      const { results } = await env.DB.prepare(
+        "SELECT lesson_id, completed, last_position, updated_at FROM progress WHERE user_id = ?",
+      )
+        .bind(user.id)
+        .all();
+      return json({ ok: true, progress: results });
+    }
+
+    if (route === "POST /api/progress") {
+      const body = await readJson(request);
+      const lessonId = Number(body.lesson_id);
+      if (!Number.isInteger(lessonId)) return json({ ok: false, error: "lesson_id غير صالح." }, 400);
+      const completed = body.completed ? 1 : 0;
+      const lastPosition = Number.isFinite(Number(body.last_position)) ? Math.max(0, Math.floor(Number(body.last_position))) : 0;
+      await env.DB.prepare(
+        `INSERT INTO progress (user_id, lesson_id, completed, last_position, updated_at)
+         VALUES (?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(user_id, lesson_id)
+         DO UPDATE SET completed = excluded.completed,
+                       last_position = excluded.last_position,
+                       updated_at = datetime('now')`,
+      )
+        .bind(user.id, lessonId, completed, lastPosition)
+        .run();
+      return json({ ok: true });
+    }
   }
 
   // ===== المعلّم (يتطلّب دور teacher/admin) =====

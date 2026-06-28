@@ -21,51 +21,17 @@
         <p>الفيديوهات والدروس التي حفظتها لمتابعتها لاحقاً.</p>
       </div>
 
-      <div class="notice">
-        تتطلّب مكتبة الحفظ تسجيل الدخول لعرض موادّك المحفوظة. <a class="gold" href="/login">سجّل الدخول</a> للمتابعة.
-        المحتوى الظاهر أدناه نموذجٌ توضيحيٌّ فقط.
-      </div>
+      <div class="notice" id="libNotice" hidden></div>
 
       <section class="section" style="padding-top:1rem">
-        <div class="video-grid">
-          <div>
-            <div class="vthumb"><div class="play">▶</div></div>
-            <div class="vmeta">
-              <div class="vtitle">شرح كتاب التوحيد — الدرس العاشر</div>
-              <div class="vdoc">د. عبد الله الراشد</div>
-              <button class="btn btn-ghost" style="margin-top:.5rem;padding:.35rem .9rem;font-size:.85rem">إزالة</button>
-            </div>
-          </div>
-          <div>
-            <div class="vthumb"><div class="play">▶</div></div>
-            <div class="vmeta">
-              <div class="vtitle">تفسير سورة الكهف — مقدمة</div>
-              <div class="vdoc">د. محمد العمري</div>
-              <button class="btn btn-ghost" style="margin-top:.5rem;padding:.35rem .9rem;font-size:.85rem">إزالة</button>
-            </div>
-          </div>
-          <div>
-            <div class="vthumb"><div class="play">▶</div></div>
-            <div class="vmeta">
-              <div class="vtitle">آداب طالب العلم</div>
-              <div class="vdoc">د. سالم القحطاني</div>
-              <button class="btn btn-ghost" style="margin-top:.5rem;padding:.35rem .9rem;font-size:.85rem">إزالة</button>
-            </div>
-          </div>
-          <div>
-            <div class="vthumb"><div class="play">▶</div></div>
-            <div class="vmeta">
-              <div class="vtitle">الأربعون النووية — الحديث الأول</div>
-              <div class="vdoc">د. عبد الله الراشد</div>
-              <button class="btn btn-ghost" style="margin-top:.5rem;padding:.35rem .9rem;font-size:.85rem">إزالة</button>
-            </div>
-          </div>
-        </div>
+        <div class="video-grid" id="libraryGrid"><p class="muted">يجري التحميل…</p></div>
       </section>
     </div>
   </main>
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>RM.loadLibrary("#libraryGrid", "#libNotice");</script>
 </body>
 </html>
