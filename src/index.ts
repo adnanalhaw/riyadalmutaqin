@@ -608,10 +608,13 @@ async function handleTeacher(
 
   // ===== النشر على القنوات (channel_posts) =====
   if (route === "GET /api/teacher/posts") {
+    // مُقيَّد بمالك المنشورات (اتّساقاً مع الحذف؛ كلٌّ يدير منشوراته).
     const { results } = await env.DB.prepare(
       `SELECT id, content, media_url, channels, scheduled_at, status, created_at
-         FROM channel_posts ORDER BY created_at DESC LIMIT 100`,
-    ).all();
+         FROM channel_posts WHERE author_id = ? ORDER BY created_at DESC LIMIT 100`,
+    )
+      .bind(user.id)
+      .all();
     return json({ ok: true, posts: results, telegram: telegramConfigured(env) });
   }
 
