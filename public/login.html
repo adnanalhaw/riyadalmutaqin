@@ -95,7 +95,10 @@
             if (res.ok && res.d.ok) {
               if (res.d.must_change_password) { location.href = "/change-password"; return; }
               var role = res.d.user && res.d.user.role;
-              location.href = (role === "teacher" || role === "admin") ? "/teacher" : "/account";
+              location.href = role === "admin" ? "/admin"
+                : role === "manager" ? "/manager"
+                : role === "teacher" ? "/teacher"
+                : "/account";
             } else {
               show(res.d.error || "تعذّر تسجيل الدخول.");
             }
