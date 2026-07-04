@@ -6,3 +6,7 @@ dist/
 .DS_Store
 worker-configuration.d.ts
 .playwright-mcp/
+
+# credential bootstrap — never commit (contains startup password)
+create_manager.sql
+*.secret.sql
