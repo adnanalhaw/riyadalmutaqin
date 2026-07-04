@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>التدريس معنا — رياض المتقين</title>
+  <meta name="description" content="قدّم طلباً للانضمام معلّماً في رياض المتقين. يُراجَع الطلب وتُجرى مقابلة قبل القبول." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container" style="max-width:680px">
+      <div class="page-head">
+        <h1>التدريس معنا</h1>
+        <p>للانضمام معلّماً في رياض المتقين، قدّم طلباً. يراجعه مدير الموقع وتُجرى مقابلة، وعند القبول يُنشأ حسابك وتصلك بياناته بالبريد.</p>
+      </div>
+
+      <div class="card">
+        <form id="form">
+          <div class="field">
+            <label for="full_name">الاسم الكامل *</label>
+            <input type="text" id="full_name" required placeholder="مثال: عبد الله بن محمد الراشد" />
+          </div>
+          <div class="field">
+            <label for="email">البريد الإلكتروني *</label>
+            <input type="email" id="email" required placeholder="you@example.com" />
+          </div>
+          <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+            <div class="field" style="flex:1;min-width:160px">
+              <label for="phone">رقم الهاتف</label>
+              <input type="text" id="phone" placeholder="مع رمز الدولة" />
+            </div>
+            <div class="field" style="flex:1;min-width:160px">
+              <label for="country">بلد الإقامة</label>
+              <select id="country" data-list="countries" data-placeholder="اختر بلد إقامتك…"></select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="nationality">الجنسيّة (الدولة)</label>
+            <select id="nationality" data-list="countries" data-placeholder="اختر جنسيّتك…"></select>
+          </div>
+          <div class="field">
+            <label for="qualifications">المؤهّلات والخبرة العلمية *</label>
+            <textarea id="qualifications" rows="4" required placeholder="إجازاتك، شهاداتك، خبرتك في التدريس والدعوة…"></textarea>
+          </div>
+          <div class="field">
+            <label for="bio">نبذة تعريفية</label>
+            <textarea id="bio" rows="3" placeholder="عرّف بنفسك ومجال تخصّصك"></textarea>
+          </div>
+          <div class="field">
+            <label for="sample_url">رابط عيّنة محتوى (اختياري)</label>
+            <input type="url" id="sample_url" placeholder="https://…" />
+          </div>
+          <button class="btn btn-primary" type="submit">إرسال الطلب</button>
+          <div class="notice" id="msg" hidden></div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script src="/lists.js"></script>
+  <script>
+    (function () {
+      var api = RM.api;
+      function msg(text, ok) {
+        var n = document.getElementById("msg");
+        n.hidden = false; n.textContent = text;
+        n.style.borderColor = ok ? "var(--gold)" : "";
+      }
+      function val(id) { return document.getElementById(id).value.trim(); }
+
+      document.getElementById("form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        msg("جارٍ الإرسال…", true);
+        api("/api/teacher-applications", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            full_name: val("full_name"), email: val("email"), phone: val("phone"),
+            country: val("country"), nationality: val("nationality"),
+            qualifications: val("qualifications"), bio: val("bio"), sample_url: val("sample_url"),
+          }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) {
+            document.getElementById("form").reset();
+            msg("تمّ استلام طلبك ✓ سيتواصل معك مدير الموقع لإجراء المقابلة. بارك الله فيك.", true);
+          } else { msg(res.d.error || "تعذّر الإرسال.", false); }
+        }).catch(function () { msg("حدث خطأ في الاتصال.", false); });
+      });
+    })();
+  </script>
+</body>
+</html>

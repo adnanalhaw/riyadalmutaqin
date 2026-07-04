@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>المتابعون والأداء — رياض المتقين</title>
+  <meta name="description" content="عدد متابعيك وأداء مقاطعك: أكثرها مشاهدةً وتحميلاً، ومشاهدات كل مقطع." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-teacher-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>المتابعون والأداء</h1>
+            <p>تابِع نموّ جمهورك وأداء مقاطعك ليساعدك في صناعة محتوى أقرب لمتابعيك.</p>
+          </div>
+
+          <div class="stats" id="totals">
+            <div class="stat"><div class="num">…</div><div class="lbl">المتابعون</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">المقاطع</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">مشاهدون مختلفون</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">مرّات التحميل</div></div>
+          </div>
+          <p class="muted" style="font-size:.85rem;margin:.7rem 2px 0;line-height:1.8">
+            <strong>مشاهدون مختلفون</strong>: عدد الأشخاص الذين شاهدوا مقاطعك (الشخص نفسه يُحسب مرّةً واحدة لكل مقطع).
+            &nbsp;•&nbsp;
+            <strong>مرّات التحميل</strong>: مجموع مرّات تنزيل مقاطعك.
+          </p>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">متابعون جدد — آخر ٧ أيام</h2>
+          <div class="card">
+            <div id="followChart" style="display:flex;align-items:flex-end;gap:.8rem;height:160px"></div>
+          </div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">أداء المقاطع</h2>
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="t">
+              <thead>
+                <tr><th>المقطع</th><th>المُلقي</th><th>مشاهدون</th><th>تحميلات</th></tr>
+              </thead>
+              <tbody id="clipsBody">
+                <tr><td colspan="4" class="muted">يجري التحميل…</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="notice" style="margin-top:1.5rem">
+            ينمو هذا القسم كلّما زار الناسُ مقاطعك في الموقع. شارِك صفحتك مع طلّابك وادعُهم لمتابعتك من
+            <a class="gold" href="/teachers">دليل المعلّمين</a>.
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/teacher/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar, esc = RM.esc;
+      var DAYS = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+
+      RM.api("/api/teacher/dashboard").then(function (res) {
+        var d = res.d || {};
+        if (!res.ok || !d.ok) {
+          document.getElementById("clipsBody").innerHTML =
+            '<tr><td colspan="4" class="muted">تعذّر التحميل. سجّل الدخول كمعلّم وأعِد المحاولة.</td></tr>';
+          return;
+        }
+        var t = d.totals || {};
+        document.getElementById("totals").innerHTML =
+          '<div class="stat"><div class="num">' + ar(d.followers || 0) + '</div><div class="lbl">المتابعون</div></div>' +
+          '<div class="stat"><div class="num">' + ar(t.clips || 0) + '</div><div class="lbl">المقاطع</div></div>' +
+          '<div class="stat"><div class="num">' + ar(t.views || 0) + '</div><div class="lbl">مشاهدون مختلفون</div></div>' +
+          '<div class="stat"><div class="num">' + ar(t.downloads || 0) + '</div><div class="lbl">مرّات التحميل</div></div>';
+
+        // مخطّط المتابعين الجدد — آخر ٧ أيام (بتوقيت UTC ليطابق SQL).
+        var counts = {};
+        (d.followersByDay || []).forEach(function (s) { counts[s.day] = s.count; });
+        var series = [], max = 0, now = new Date();
+        for (var i = 6; i >= 0; i--) {
+          var dt = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - i));
+          var key = dt.getUTCFullYear() + "-" + String(dt.getUTCMonth() + 1).padStart(2, "0") + "-" + String(dt.getUTCDate()).padStart(2, "0");
+          var c = counts[key] || 0; if (c > max) max = c;
+          series.push({ label: DAYS[dt.getUTCDay()], count: c });
+        }
+        document.getElementById("followChart").innerHTML = series.map(function (s) {
+          var h = max ? Math.max(4, Math.round((s.count / max) * 100)) : 4;
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">' +
+            '<div style="flex:1;display:flex;align-items:flex-end;width:100%" title="' + ar(s.count) + '">' +
+            '<div style="width:100%;height:' + h + '%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>' +
+            '<span class="muted" style="font-size:.8rem">' + s.label + " · " + ar(s.count) + "</span></div>";
+        }).join("");
+
+        // جدول أداء المقاطع.
+        var clips = d.clips || [];
+        var body = document.getElementById("clipsBody");
+        if (!clips.length) {
+          body.innerHTML = '<tr><td colspan="4" class="muted">لا توجد مقاطع بعد. أنشئ مقطعاً من <a class="gold" href="/teacher/editor">المونتاج</a>.</td></tr>';
+        } else {
+          body.innerHTML = clips.map(function (c) {
+            return "<tr>" +
+              "<td>" + esc(c.title) + "</td>" +
+              "<td>" + esc(c.doctor_name || "—") + "</td>" +
+              "<td>" + ar(c.views || 0) + "</td>" +
+              "<td>" + ar(c.downloads || 0) + "</td>" +
+              "</tr>";
+          }).join("");
+        }
+      }).catch(function () {
+        document.getElementById("clipsBody").innerHTML =
+          '<tr><td colspan="4" class="muted">تعذّر الاتصال بالخادم.</td></tr>';
+      });
+    })();
+  </script>
+</body>
+</html>

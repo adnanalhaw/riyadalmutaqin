@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الموافقة على المحتوى — مدير الموقع</title>
+  <meta name="description" content="اعتمِد المقاطع والدروس والمنشورات قبل نشرها." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>الموافقة على المحتوى</h1>
+            <p>لا يُنشَر محتوى المعلّمين حتى تعتمده. وافِق ليظهر للجمهور، أو ارفض.</p>
+          </div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:1rem 0">المقاطع <span id="cClips" class="muted"></span></h2>
+          <div id="clips"><p class="muted">يجري التحميل…</p></div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">الدروس <span id="cLessons" class="muted"></span></h2>
+          <div id="lessons"><p class="muted">يجري التحميل…</p></div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">منشورات القنوات <span id="cPosts" class="muted"></span></h2>
+          <div id="posts"><p class="muted">يجري التحميل…</p></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var esc = RM.esc, api = RM.api;
+
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "manager" && u.role !== "admin") { location.href = "/"; return; }
+        load();
+      });
+
+      function actions(kind, id) {
+        return '<div style="display:flex;gap:.6rem;margin-top:.6rem">' +
+          '<button class="btn btn-primary rm-act" data-kind="' + kind + '" data-id="' + id + '" data-action="approve">✓ موافقة ونشر</button>' +
+          '<button class="btn btn-outline rm-act" data-kind="' + kind + '" data-id="' + id + '" data-action="reject">✗ رفض</button></div>';
+      }
+
+      function load() {
+        api("/api/manager/pending").then(function (res) {
+          var d = res.d || {};
+          renderClips(d.clips || []);
+          renderLessons(d.lessons || []);
+          renderPosts(d.posts || []);
+        });
+      }
+
+      function meta(name, by) {
+        return '<div class="muted" style="font-size:.88rem">' +
+          (by ? "المعلّم: " + esc(by) : "") + (name ? " · " + esc(name) : "") + "</div>";
+      }
+
+      function renderClips(list) {
+        document.getElementById("cClips").textContent = list.length ? "(" + RM.ar(list.length) + ")" : "";
+        var el = document.getElementById("clips");
+        if (!list.length) { el.innerHTML = '<p class="muted">لا مقاطع بانتظار الموافقة.</p>'; return; }
+        el.innerHTML = list.map(function (c) {
+          var preview = c.video_url
+            ? '<video src="' + esc(c.video_url) + '" controls preload="metadata" style="width:100%;max-width:360px;aspect-ratio:16/9;background:#000;border-radius:10px;margin-top:.5rem"></video>'
+            : (c.youtube_id ? '<div class="muted" style="margin-top:.3rem">يوتيوب: ' + esc(c.youtube_id) + "</div>" : "");
+          return '<div class="card" style="margin-bottom:1rem"><strong>' + esc(c.title) + "</strong>" +
+            meta(c.doctor_name, c.author_name) + preview + actions("clips", c.id) + "</div>";
+        }).join("");
+      }
+
+      function renderLessons(list) {
+        document.getElementById("cLessons").textContent = list.length ? "(" + RM.ar(list.length) + ")" : "";
+        var el = document.getElementById("lessons");
+        if (!list.length) { el.innerHTML = '<p class="muted">لا دروس بانتظار الموافقة.</p>'; return; }
+        el.innerHTML = list.map(function (l) {
+          return '<div class="card" style="margin-bottom:1rem"><strong>' + esc(l.title) + "</strong>" +
+            meta(l.doctor_name, l.author_name) + actions("lessons", l.id) + "</div>";
+        }).join("");
+      }
+
+      function renderPosts(list) {
+        document.getElementById("cPosts").textContent = list.length ? "(" + RM.ar(list.length) + ")" : "";
+        var el = document.getElementById("posts");
+        if (!list.length) { el.innerHTML = '<p class="muted">لا منشورات بانتظار الموافقة.</p>'; return; }
+        el.innerHTML = list.map(function (p) {
+          return '<div class="card" style="margin-bottom:1rem">' +
+            '<div>' + esc(p.content || "(وسائط بلا نصّ)") + "</div>" +
+            meta("", p.author_name) + actions("posts", p.id) + "</div>";
+        }).join("");
+      }
+
+      document.querySelector("section").addEventListener("click", function (e) {
+        var btn = e.target.closest(".rm-act");
+        if (!btn) return;
+        btn.disabled = true;
+        api("/api/manager/" + btn.getAttribute("data-kind") + "/" + btn.getAttribute("data-id"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: btn.getAttribute("data-action") }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) { load(); }
+          else { alert(res.d.error || "تعذّر الإجراء."); btn.disabled = false; }
+        }).catch(function () { btn.disabled = false; });
+      });
+    })();
+  </script>
+</body>
+</html>

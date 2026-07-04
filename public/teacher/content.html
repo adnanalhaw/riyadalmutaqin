@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>المقاطع والصوتيات — رياض المتقين</title>
-  <meta name="description" content="إدارة مكتبة المقاطع والمكتبة الصوتية في رياض المتقين." />
+  <title>مكتبة المقاطع — رياض المتقين</title>
+  <meta name="description" content="إدارة مكتبة المقاطع في رياض المتقين: المقاطع المنشورة من المونتاج ومقاطع يوتيوب." />
   <meta name="theme-color" content="#0b1430" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,13 +21,13 @@
 
         <section>
           <div class="page-head" style="padding-top:0">
-            <h1>المقاطع والصوتيات</h1>
-            <p>أضِف وأدِر مكتبة المقاطع والمكتبة الصوتية الظاهرتين للجمهور.</p>
+            <h1>مكتبة المقاطع</h1>
+            <p>المقاطع التي تنشرها من المونتاج تظهر هنا. يمكنك حذف أيّ مقطع، أو إضافة مقطع يوتيوب.</p>
           </div>
 
-          <!-- المقاطع -->
+          <!-- إضافة مقطع يوتيوب (اختياري) -->
           <div class="card" style="margin-bottom:1.5rem">
-            <h3 style="color:var(--gold);margin-top:0">إضافة مقطع</h3>
+            <h3 style="color:var(--gold);margin-top:0">إضافة مقطع يوتيوب</h3>
             <form id="clipForm">
               <div class="field">
                 <label for="clipTitle">العنوان</label>
@@ -38,7 +38,7 @@
                 <input type="text" id="clipDoctor" placeholder="مثال: د. عبد الله الراشد" />
               </div>
               <div class="field">
-                <label for="clipUrl">رابط يوتيوب (اختياري)</label>
+                <label for="clipUrl">رابط يوتيوب</label>
                 <input type="url" id="clipUrl" placeholder="https://www.youtube.com/watch?v=..." />
               </div>
               <div class="field">
@@ -50,42 +50,10 @@
             </form>
           </div>
 
-          <div class="card" style="padding:0;overflow:hidden;margin-bottom:2.5rem">
-            <table class="t">
-              <thead><tr><th>العنوان</th><th>الدكتور</th><th>المدة</th><th>إجراءات</th></tr></thead>
-              <tbody id="clipsBody"><tr><td colspan="4" class="muted">يجري التحميل…</td></tr></tbody>
-            </table>
-          </div>
-
-          <!-- الصوتيات -->
-          <div class="card" style="margin-bottom:1.5rem">
-            <h3 style="color:var(--gold);margin-top:0">إضافة مادّة صوتية</h3>
-            <form id="audioForm">
-              <div class="field">
-                <label for="audTitle">العنوان</label>
-                <input type="text" id="audTitle" placeholder="مثال: خطبة: تقوى الله" />
-              </div>
-              <div class="field">
-                <label for="audDoctor">اسم الدكتور</label>
-                <input type="text" id="audDoctor" placeholder="مثال: د. سالم القحطاني" />
-              </div>
-              <div class="field">
-                <label for="audDesc">الوصف (اختياري)</label>
-                <textarea id="audDesc" rows="2" placeholder="نبذة مختصرة"></textarea>
-              </div>
-              <div class="field">
-                <label for="audFile">ملف الصوت (يُرفع إلى التخزين)</label>
-                <input type="file" id="audFile" accept="audio/*" />
-              </div>
-              <button class="btn btn-primary" type="submit">رفع وإضافة</button>
-              <div class="notice" data-formnotice hidden></div>
-            </form>
-          </div>
-
           <div class="card" style="padding:0;overflow:hidden">
             <table class="t">
-              <thead><tr><th>العنوان</th><th>الدكتور</th><th>الصوت</th><th>إجراءات</th></tr></thead>
-              <tbody id="audioBody"><tr><td colspan="4" class="muted">يجري التحميل…</td></tr></tbody>
+              <thead><tr><th>العنوان</th><th>الدكتور</th><th>النوع</th><th>المدة</th><th>إجراءات</th></tr></thead>
+              <tbody id="clipsBody"><tr><td colspan="5" class="muted">يجري التحميل…</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -102,7 +70,6 @@
       var esc = RM.esc, fmtDur = RM.fmtDur;
       function notify(form, msg) { var n = form.querySelector('[data-formnotice]'); n.textContent = msg; n.hidden = false; }
 
-      // ---- المقاطع ----
       document.getElementById('clipForm').addEventListener('submit', function (e) {
         e.preventDefault();
         var form = e.target;
@@ -125,9 +92,13 @@
         RM.api('/api/teacher/clips').then(function (res) {
           var list = (res.d && res.d.clips) || [];
           var body = document.getElementById('clipsBody');
-          if (!list.length) { body.innerHTML = '<tr><td colspan="4" class="muted">لا توجد مقاطع بعد.</td></tr>'; return; }
+          if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا توجد مقاطع بعد.</td></tr>'; return; }
           body.innerHTML = list.map(function (c) {
+            var kind = c.video_url && !c.youtube_id
+              ? '<span class="badge">مونتاج</span>'
+              : (c.youtube_id ? '<span class="badge soon">يوتيوب</span>' : '<span class="badge soon">—</span>');
             return '<tr><td>' + esc(c.title) + '</td><td>' + esc(c.doctor_name || '—') +
+              '</td><td>' + kind +
               '</td><td>' + (c.duration ? fmtDur(c.duration) : '—') +
               '</td><td><a href="#" class="gold rm-del" data-id="' + c.id + '">حذف</a></td></tr>';
           }).join('');
@@ -139,57 +110,7 @@
         RM.api('/api/teacher/clips/' + d.getAttribute('data-id'), { method: 'DELETE' }).then(loadClips);
       });
 
-      // ---- الصوتيات ----
-      document.getElementById('audioForm').addEventListener('submit', function (e) {
-        e.preventDefault();
-        var form = e.target;
-        var fileInput = document.getElementById('audFile');
-        notify(form, 'جارٍ الرفع…');
-        var p = Promise.resolve(null);
-        if (fileInput.files && fileInput.files[0]) {
-          var fd = new FormData();
-          fd.append('file', fileInput.files[0]);
-          fd.append('kind', 'audio');
-          p = fetch('/api/teacher/media', { method: 'POST', body: fd })
-            .then(function (r) { return r.json(); })
-            .then(function (d) { return d.ok ? d.url : null; });
-        }
-        p.then(function (audioUrl) {
-          RM.api('/api/teacher/audio', {
-            method: 'POST', headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({
-              title: document.getElementById('audTitle').value.trim(),
-              doctor_name: document.getElementById('audDoctor').value.trim(),
-              description: document.getElementById('audDesc').value.trim(),
-              audio_url: audioUrl,
-            }),
-          }).then(function (res) {
-            if (res.ok && res.d.ok) { notify(form, 'تمّت الإضافة ✓'); form.reset(); loadAudio(); }
-            else { notify(form, res.d.error || 'تعذّرت الإضافة.'); }
-          });
-        });
-      });
-
-      function loadAudio() {
-        RM.api('/api/teacher/audio').then(function (res) {
-          var list = (res.d && res.d.audio) || [];
-          var body = document.getElementById('audioBody');
-          if (!list.length) { body.innerHTML = '<tr><td colspan="4" class="muted">لا توجد موادّ صوتية بعد.</td></tr>'; return; }
-          body.innerHTML = list.map(function (a) {
-            return '<tr><td>' + esc(a.title) + '</td><td>' + esc(a.doctor_name || '—') +
-              '</td><td>' + (a.audio_url ? '<span class="badge">مرفوع</span>' : '<span class="badge soon">—</span>') +
-              '</td><td><a href="#" class="gold rm-del" data-id="' + a.id + '">حذف</a></td></tr>';
-          }).join('');
-        });
-      }
-      document.getElementById('audioBody').addEventListener('click', function (e) {
-        var d = e.target.closest('.rm-del'); if (!d) return; e.preventDefault();
-        if (!confirm('حذف هذه المادّة؟')) return;
-        RM.api('/api/teacher/audio/' + d.getAttribute('data-id'), { method: 'DELETE' }).then(loadAudio);
-      });
-
       loadClips();
-      loadAudio();
     })();
   </script>
 </body>

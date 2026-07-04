@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>خريطة المساجد — رياض المتقين</title>
+  <meta name="description" content="أقرب المساجد إليك حسب موقعك، من بيانات OpenStreetMap." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container" style="max-width:680px">
+      <div class="page-head center">
+        <h1>خريطة المساجد</h1>
+        <p id="loc">جارٍ تحديد موقعك للبحث عن أقرب المساجد…</p>
+      </div>
+
+      <div style="display:flex;gap:.6rem;justify-content:center;margin-bottom:1.2rem;flex-wrap:wrap">
+        <button class="btn btn-outline" data-r="2000">٢ كم</button>
+        <button class="btn btn-primary" data-r="5000">٥ كم</button>
+        <button class="btn btn-outline" data-r="10000">١٠ كم</button>
+      </div>
+
+      <div id="status" class="muted" style="text-align:center"></div>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
+      function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+      var here = null, radius = 5000;
+
+      function dist(a, b, c, d) {
+        var R = 6371, p = Math.PI / 180;
+        var x = (c - a) * p, y = (d - b) * p;
+        var t = Math.sin(x / 2) * Math.sin(x / 2) +
+          Math.cos(a * p) * Math.cos(c * p) * Math.sin(y / 2) * Math.sin(y / 2);
+        return R * 2 * Math.atan2(Math.sqrt(t), Math.sqrt(1 - t));
+      }
+      function fmtDist(km) { return km < 1 ? ar(Math.round(km * 1000)) + " م" : ar((Math.round(km * 10) / 10)) + " كم"; }
+
+      function search() {
+        if (!here) return;
+        document.getElementById("status").textContent = "جارٍ البحث…";
+        document.getElementById("list").innerHTML = "";
+        var q = "[out:json][timeout:25];(" +
+          'node["amenity"="place_of_worship"]["religion"="muslim"](around:' + radius + "," + here.lat + "," + here.lng + ");" +
+          'way["amenity"="place_of_worship"]["religion"="muslim"](around:' + radius + "," + here.lat + "," + here.lng + ");" +
+          ");out center;";
+        fetch("https://overpass-api.de/api/interpreter", {
+          method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: "data=" + encodeURIComponent(q),
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          var els = (d.elements || []).map(function (e) {
+            var lat = e.lat || (e.center && e.center.lat), lng = e.lon || (e.center && e.center.lon);
+            return { name: (e.tags && (e.tags["name:ar"] || e.tags.name)) || "مسجد", lat: lat, lng: lng, dKm: dist(here.lat, here.lng, lat, lng) };
+          }).filter(function (e) { return e.lat && e.lng; }).sort(function (a, b) { return a.dKm - b.dKm; }).slice(0, 40);
+          if (!els.length) { document.getElementById("status").textContent = "لم نجد مساجد في هذا النطاق. جرّب نطاقاً أوسع."; return; }
+          document.getElementById("status").textContent = "أقرب " + ar(els.length) + " مسجداً:";
+          document.getElementById("list").innerHTML = els.map(function (e) {
+            var gmap = "https://www.google.com/maps/search/?api=1&query=" + e.lat + "," + e.lng;
+            var osm = "https://www.openstreetmap.org/?mlat=" + e.lat + "&mlon=" + e.lng + "#map=17/" + e.lat + "/" + e.lng;
+            return '<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;margin-bottom:.8rem">' +
+              '<div><div style="font-weight:700">🕌 ' + esc(e.name) + "</div>" +
+              '<div class="muted" style="font-size:.85rem">يبعد ' + fmtDist(e.dKm) + "</div></div>" +
+              '<div style="display:flex;gap:.4rem;flex:none">' +
+              '<a class="btn btn-ghost" href="' + esc(gmap) + '" target="_blank" rel="noopener">خرائط جوجل</a>' +
+              '<a class="btn btn-ghost" href="' + esc(osm) + '" target="_blank" rel="noopener">الخريطة</a></div></div>';
+          }).join("");
+        }).catch(function () { document.getElementById("status").textContent = "تعذّر جلب المساجد. حاوِل لاحقاً."; });
+      }
+
+      document.querySelectorAll("[data-r]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          radius = +b.getAttribute("data-r");
+          document.querySelectorAll("[data-r]").forEach(function (x) { x.className = "btn btn-outline"; });
+          b.className = "btn btn-primary";
+          search();
+        });
+      });
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function (pos) {
+          here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          document.getElementById("loc").textContent = "حسب موقعك الحالي";
+          search();
+        }, function () {
+          document.getElementById("loc").textContent = "تعذّر تحديد الموقع — فعّل صلاحية الموقع وأعِد المحاولة.";
+        }, { timeout: 8000 });
+      } else {
+        document.getElementById("loc").textContent = "المتصفّح لا يدعم تحديد الموقع.";
+      }
+    })();
+  </script>
+</body>
+</html>

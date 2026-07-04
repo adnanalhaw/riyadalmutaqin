@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>زكاة المال (النقد) — رياض المتقين</title>
+  <meta name="description" content="دفتر دخلك ومصروفك مع تتبّع الحَوْل وحساب زكاة النقد — محفوظ في حسابك." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .zrow{display:flex;justify-content:space-between;align-items:center;gap:.6rem;padding:.6rem .2rem;border-bottom:1px solid var(--border)}
+    .zrow:last-child{border-bottom:none}.zbig{font-size:1.6rem;font-weight:800;color:var(--gold)}
+    .pos{color:#5fd08a}.neg{color:#e98b8b}.zin{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}.zin .field{margin:0}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:680px">
+      <div class="page-head center">
+        <h1>زكاة المال (النقد)</h1>
+        <p>سجّل دخلك ومصروفك بتاريخه؛ نتتبّع رصيدك والحَوْل ونحسب زكاتك تلقائيّاً.</p>
+        <p><a class="gold" href="/zakat">‹ كلّ أنواع الزكاة</a></p>
+      </div>
+      <div class="notice" id="gate" hidden></div>
+      <div id="zkMain">
+        <div class="card" id="settingsBar" style="margin-bottom:1.2rem"></div>
+        <div class="card" style="margin-bottom:1.2rem">
+          <h3 style="color:var(--gold);margin-top:0">حركة جديدة</h3>
+          <div class="zin">
+            <div class="field" style="flex:1;min-width:120px"><label for="eDate">التاريخ</label><input type="date" id="eDate" /></div>
+            <div class="field" style="flex:1;min-width:110px"><label for="eType">النوع</label><select id="eType"><option value="income">دخل +</option><option value="expense">مصروف −</option></select></div>
+            <div class="field" style="flex:1;min-width:110px"><label for="eAmt">المبلغ</label><input type="number" step="any" id="eAmt" placeholder="0" /></div>
+            <div class="field" style="flex:2;min-width:140px"><label for="eNote">ملاحظة</label><input type="text" id="eNote" placeholder="راتب / إيجار" /></div>
+            <button class="btn btn-primary" id="addBtn" style="margin-bottom:.05rem">إضافة</button>
+          </div>
+          <div class="notice" id="msg" hidden style="margin-top:.8rem"></div>
+        </div>
+        <div class="stats" style="margin-bottom:1.2rem">
+          <div class="stat"><div class="num zbig" id="balance">٠</div><div class="lbl">الرصيد الحالي</div></div>
+          <div class="stat"><div class="num" id="hawlState">—</div><div class="lbl">حالة الحَوْل</div></div>
+          <div class="stat"><div class="num zbig" id="zakatDue">٠</div><div class="lbl">الزكاة المستحقّة</div></div>
+        </div>
+        <div class="card" style="margin-bottom:1.2rem"><div id="hawlInfo" class="muted">سجّل حركاتك لتتبّع الحَوْل.</div></div>
+        <h3 style="color:var(--gold);text-align:start">سجلّ الحركات</h3>
+        <div class="card" style="padding:.4rem 1rem"><div id="list"><p class="muted">لا حركات بعد.</p></div></div>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script src="/zakat/common.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      function el(id) { return document.getElementById(id); }
+      function msg(t) { var n = el("msg"); if (!n) return; n.hidden = !t; n.textContent = t || ""; }
+      // نضبط التاريخ أوّلاً دون أي اعتمادٍ على المكتبات (حتى لو فشل تحميلها).
+      if (el("eDate") && !el("eDate").value) el("eDate").value = new Date().toISOString().slice(0, 10);
+      // حارس: إن لم تُحمّل المكتبات (شبكة/حجب) نُبلّغ بوضوحٍ بدل صفحةٍ صامتة.
+      if (typeof window.RM === "undefined" || typeof window.ZK === "undefined") {
+        var g = el("gate"); if (g) { g.hidden = false; g.innerHTML = '<strong>تعذّر تحميل الصفحة بالكامل.</strong> حدّث الصفحة (Ctrl+Shift+R)، وإن استمرّت المشكلة تحقّق من اتصالك.'; }
+        return;
+      }
+      var ar = ZK.ar, esc = ZK.esc;
+
+      ZK.boot(function () {
+        window.__zkRecompute = compute;
+        ZK.pricesCard(el("settingsBar"));
+        compute();
+      });
+
+      el("addBtn").addEventListener("click", function () {
+        var amt = parseFloat(el("eAmt").value);
+        if (!isFinite(amt) || amt <= 0) { msg("أدخِل مبلغاً صحيحاً."); return; }
+        msg("");
+        ZK.addEntry({
+          entry_date: el("eDate").value || new Date().toISOString().slice(0, 10),
+          type: el("eType").value, amount: amt, note: el("eNote").value.trim(),
+        }).then(function (res) {
+          if (res.ok && res.d && res.d.ok) { el("eAmt").value = ""; el("eNote").value = ""; compute(); }
+          else if (res.status === 401) { msg("انتهت جلستك — سجّل الدخول من جديد ثم أعِد المحاولة."); }
+          else msg((res.d && res.d.error) || ("تعذّرت الإضافة (رمز " + res.status + ")."));
+        }).catch(function () { msg("تعذّر الاتصال بالخادم. تحقّق من اتصالك."); });
+      });
+
+      el("list").addEventListener("click", function (e) {
+        var b = e.target.closest(".zdel"); if (!b) return;
+        ZK.delEntry(+b.getAttribute("data-id")).then(compute);
+      });
+
+      function compute() {
+        var n = ZK.nisabCash();
+        var sorted = ZK.state.entries.slice().sort(function (a, b) {
+          return a.entry_date < b.entry_date ? -1 : a.entry_date > b.entry_date ? 1 : a.id - b.id;
+        });
+        var bal = 0, hawlStart = null;
+        sorted.forEach(function (e) {
+          bal += e.type === "income" ? e.amount : -e.amount;
+          if (n) { if (bal >= n && !hawlStart) hawlStart = e.entry_date; else if (bal < n) hawlStart = null; }
+        });
+        el("balance").textContent = ZK.money(bal);
+
+        var due = 0, stateTxt = "—", info = "";
+        if (!n) info = "جارٍ تحديد النِّصاب من أسعار السوق الحيّة…";
+        else if (bal < n) { stateTxt = "دون النِّصاب"; info = "رصيدك دون النِّصاب، فلا زكاة."; }
+        else {
+          var h = ZK.hawl(hawlStart);
+          stateTxt = h.complete ? "اكتمل ✓" : "باقٍ " + ar(h.remaining) + " يوماً";
+          info = ZK.dueText(h) + (h.complete ? " · زكاتك ٢٫٥٪ من رصيدك." : " · المتوقّعة ≈ " + ZK.money(bal * 0.025));
+          if (h.complete) due = bal * 0.025;
+        }
+        el("hawlState").textContent = stateTxt;
+        el("zakatDue").textContent = ZK.money(due);
+        el("hawlInfo").textContent = info;
+
+        var list = el("list");
+        if (!ZK.state.entries.length) { list.innerHTML = '<p class="muted">لا حركات بعد.</p>'; return; }
+        list.innerHTML = ZK.state.entries.slice().sort(function (a, b) {
+          return a.entry_date < b.entry_date ? 1 : a.entry_date > b.entry_date ? -1 : b.id - a.id;
+        }).map(function (e) {
+          var sign = e.type === "income" ? "+" : "−", cls = e.type === "income" ? "pos" : "neg";
+          return '<div class="zrow"><div><strong class="' + cls + '">' + sign + " " + ZK.money(e.amount) + "</strong>" +
+            (e.note ? ' <span class="muted">· ' + esc(e.note) + "</span>" : "") +
+            '<div class="muted" style="font-size:.8rem">' + esc(e.entry_date) + "</div></div>" +
+            '<a href="#" class="gold zdel" data-id="' + e.id + '">حذف</a></div>";
+        }).join("");
+      }
+    });
+  </script>
+</body>
+</html>

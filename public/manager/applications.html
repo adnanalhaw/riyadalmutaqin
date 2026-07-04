@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>طلبات التعليم — مدير الموقع</title>
+  <meta name="description" content="مراجعة طلبات الانضمام معلّمين والموافقة عليها أو رفضها." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>طلبات التعليم</h1>
+            <p>راجِع طلبات الانضمام معلّمين. عند الموافقة يُنشأ حساب معلّم وتصله كلمة مرورٍ مؤقّتة بالبريد.</p>
+          </div>
+
+          <div style="display:flex;gap:.6rem;margin-bottom:1rem">
+            <button class="btn btn-outline rm-tab active" data-status="pending">قيد المراجعة</button>
+            <button class="btn btn-outline rm-tab" data-status="approved">مقبولة</button>
+            <button class="btn btn-outline rm-tab" data-status="rejected">مرفوضة</button>
+          </div>
+
+          <div id="list"><p class="muted">يجري التحميل…</p></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar, esc = RM.esc, api = RM.api;
+      var current = "pending";
+
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "manager" && u.role !== "admin") { location.href = "/"; return; }
+        load();
+      });
+
+      function card(a) {
+        var actions = current === "pending"
+          ? '<div style="display:flex;gap:.6rem;margin-top:.8rem">' +
+            '<button class="btn btn-primary rm-approve" data-id="' + a.id + '">✓ موافقة وإنشاء حساب</button>' +
+            '<button class="btn btn-outline rm-reject" data-id="' + a.id + '">✗ رفض</button></div>'
+          : (a.notes ? '<p class="muted" style="margin-top:.6rem">ملاحظة: ' + esc(a.notes) + "</p>" : "");
+        function row(lbl, val) {
+          return val ? '<div style="margin-top:.3rem"><span class="muted">' + lbl + ":</span> " + esc(val) + "</div>" : "";
+        }
+        var sample = a.sample_url
+          ? '<div style="margin-top:.3rem"><span class="muted">عيّنة:</span> <a class="gold" href="' + esc(a.sample_url) + '" target="_blank" rel="noopener">رابط</a></div>'
+          : "";
+        return '<div class="card" style="margin-bottom:1rem">' +
+          '<h3 style="margin:0 0 .2rem">' + esc(a.full_name) + "</h3>" +
+          '<div class="muted" style="font-size:.9rem">' + esc(a.email) + (a.phone ? " · " + esc(a.phone) : "") + "</div>" +
+          row("البلد", a.country) + row("الجنسية", a.nationality) +
+          row("المؤهّلات والخبرة", a.qualifications) + row("نبذة", a.bio) + sample +
+          actions + "</div>";
+      }
+
+      function load() {
+        api("/api/manager/applications?status=" + current).then(function (res) {
+          var list = (res.d && res.d.applications) || [];
+          var el = document.getElementById("list");
+          if (!list.length) { el.innerHTML = '<p class="muted">لا طلبات في هذه القائمة.</p>'; return; }
+          el.innerHTML = list.map(card).join("");
+        });
+      }
+
+      document.querySelector(".rm-tab").parentNode.addEventListener("click", function (e) {
+        var t = e.target.closest(".rm-tab");
+        if (!t) return;
+        document.querySelectorAll(".rm-tab").forEach(function (b) { b.classList.remove("active"); });
+        t.classList.add("active");
+        current = t.getAttribute("data-status");
+        load();
+      });
+
+      document.getElementById("list").addEventListener("click", function (e) {
+        var ap = e.target.closest(".rm-approve"), rj = e.target.closest(".rm-reject");
+        if (!ap && !rj) return;
+        var id = (ap || rj).getAttribute("data-id");
+        var action = ap ? "approve" : "reject";
+        var notes = "";
+        if (rj) { notes = prompt("سبب الرفض (اختياري):") || ""; }
+        (ap || rj).disabled = true;
+        api("/api/manager/applications/" + id, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: action, notes: notes }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) { load(); }
+          else { alert(res.d.error || "تعذّر الإجراء."); (ap || rj).disabled = false; }
+        }).catch(function () { (ap || rj).disabled = false; });
+      });
+    })();
+  </script>
+</body>
+</html>

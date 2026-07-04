@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>متتبّع الختمة — رياض المتقين</title>
+  <meta name="description" content="تابع تقدّمك في ختم القرآن الكريم صفحةً صفحة، وحدّد هدفاً يوميّاً وموعداً للختم — محفوظ في حسابك." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .kbar{height:16px;border-radius:999px;background:var(--gold-faint);overflow:hidden;margin:.6rem 0}
+    .kbar > i{display:block;height:100%;background:linear-gradient(90deg,#0c8a4d,var(--gold));width:0;transition:width .4s}
+    .kgrid{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end}
+    .kgrid .field{margin:0;flex:1;min-width:130px}
+    .kbig{font-size:2rem;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:680px">
+      <div class="page-head center">
+        <h1>متتبّع الختمة</h1>
+        <p>تابع ختمتك صفحةً صفحة، وحدّد موعد ختمك، نحسب لك وردك اليوميّ — محفوظ في حسابك.</p>
+        <p><a class="gold" href="/tools">‹ كلّ أدوات المسلم</a></p>
+      </div>
+      <div class="notice" id="gate" hidden></div>
+      <div id="kMain" hidden>
+        <div class="card" style="margin-bottom:1.2rem">
+          <div style="display:flex;justify-content:space-between;align-items:baseline">
+            <strong style="color:var(--gold)">تقدّم الختمة الحاليّة</strong>
+            <span class="muted" id="kPct">٠٪</span>
+          </div>
+          <div class="kbar"><i id="kFill"></i></div>
+          <div class="muted" id="kMeta" style="font-size:.9rem"></div>
+        </div>
+
+        <div class="card" style="margin-bottom:1.2rem">
+          <h3 style="color:var(--gold);margin-top:0">أين وصلت؟</h3>
+          <div class="kgrid">
+            <div class="field"><label for="page">الصفحة الحاليّة (من ٦٠٤)</label><input type="number" id="page" min="0" max="604" step="1" placeholder="0" /></div>
+            <div class="field"><label for="target">موعد الختم (اختياريّ)</label><input type="date" id="target" /></div>
+            <button class="btn btn-primary" id="saveBtn" style="margin-bottom:.05rem">حفظ</button>
+          </div>
+          <div style="display:flex;gap:.5rem;margin-top:.7rem;flex-wrap:wrap">
+            <button class="btn btn-outline" id="plus1">+ صفحة</button>
+            <button class="btn btn-outline" id="plus5">+ ٥ صفحات</button>
+            <button class="btn btn-ghost" id="plusJuz">+ جزء (٢٠ ص)</button>
+          </div>
+          <div class="notice" id="msg" hidden style="margin-top:.8rem"></div>
+        </div>
+
+        <div class="stats" style="margin-bottom:1.2rem">
+          <div class="stat"><div class="num kbig" id="juz">٠</div><div class="lbl">الجزء</div></div>
+          <div class="stat"><div class="num kbig" id="daily">—</div><div class="lbl">وردك اليوميّ</div></div>
+          <div class="stat"><div class="num kbig" id="done">٠</div><div class="lbl">ختمات أتممتها</div></div>
+        </div>
+
+        <div class="card" style="text-align:center">
+          <p class="muted" style="margin:.2rem 0 .8rem">إذا أتممت الختمة كاملةً، سجّلها وابدأ ختمةً جديدة.</p>
+          <button class="btn btn-primary" id="completeBtn">🎉 أتممتُ الختمة — ختمة جديدة</button>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      function el(id) { return document.getElementById(id); }
+      function ar(n) { return RM ? RM.ar(n) : String(n); }
+      function msg(t) { var n = el("msg"); if (!n) return; n.hidden = !t; n.textContent = t || ""; }
+      var TOTAL = 604;
+      var state = { current_page: 0, target_date: null, khatmat_done: 0 };
+
+      if (typeof window.RM === "undefined") {
+        var g = el("gate"); if (g) { g.hidden = false; g.innerHTML = '<strong>تعذّر تحميل الصفحة.</strong> حدّثها (Ctrl+Shift+R).'; }
+        return;
+      }
+
+      RM.getMe().then(function (u) {
+        if (!u) {
+          var g = el("gate");
+          g.hidden = false;
+          g.innerHTML = '<strong>متتبّع الختمة للمتعلّمين المسجّلين.</strong><br>نحفظ تقدّمك في حسابك ليتابعك عبر أجهزتك. ' +
+            '<a class="gold" href="/login">سجّل الدخول</a> أو <a class="gold" href="/register">أنشئ حساباً</a>.';
+          return;
+        }
+        el("gate").hidden = true;
+        el("kMain").hidden = false;
+        RM.api("/api/khatma").then(function (res) {
+          if (res.ok && res.d.ok && res.d.khatma) {
+            state.current_page = res.d.khatma.current_page || 0;
+            state.target_date = res.d.khatma.target_date || null;
+            state.khatmat_done = res.d.khatma.khatmat_done || 0;
+          }
+          el("page").value = state.current_page || "";
+          if (state.target_date) el("target").value = state.target_date;
+          render();
+        });
+      });
+
+      function render() {
+        var p = state.current_page || 0;
+        var pct = Math.round((p / TOTAL) * 100);
+        el("kPct").textContent = ar(pct) + "٪";
+        el("kFill").style.width = pct + "%";
+        el("kMeta").textContent = "صفحة " + ar(p) + " من " + ar(TOTAL) + " · باقٍ " + ar(TOTAL - p) + " صفحة";
+        el("juz").textContent = ar(Math.min(30, Math.max(0, Math.ceil(p / 20.133))));
+        el("done").textContent = ar(state.khatmat_done);
+        // الورد اليوميّ حتى الموعد.
+        if (state.target_date) {
+          var today = new Date(); today.setHours(0, 0, 0, 0);
+          var tgt = new Date(state.target_date + "T00:00:00");
+          var days = Math.max(1, Math.ceil((tgt - today) / 86400000));
+          var remain = TOTAL - p;
+          el("daily").textContent = remain <= 0 ? "تمّت ✓" : ar(Math.ceil(remain / days)) + " ص";
+        } else { el("daily").textContent = "—"; }
+      }
+
+      function save(showMsg) {
+        var p = Math.max(0, Math.min(TOTAL, parseInt(el("page").value, 10) || 0));
+        state.current_page = p;
+        state.target_date = el("target").value || null;
+        return RM.api("/api/khatma", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ current_page: p, target_date: state.target_date }),
+        }).then(function (res) {
+          if (res.ok && res.d && res.d.ok) { if (showMsg) msg("حُفظ في حسابك ✓"); render(); }
+          else if (res.status === 401) msg("انتهت جلستك — سجّل الدخول من جديد.");
+          else msg("تعذّر الحفظ.");
+        }).catch(function () { msg("تعذّر الاتصال."); });
+      }
+
+      el("saveBtn").addEventListener("click", function () { save(true); });
+      function bump(n) { el("page").value = Math.max(0, Math.min(TOTAL, (parseInt(el("page").value, 10) || 0) + n)); save(false); }
+      el("plus1").addEventListener("click", function () { bump(1); });
+      el("plus5").addEventListener("click", function () { bump(5); });
+      el("plusJuz").addEventListener("click", function () { bump(20); });
+
+      el("completeBtn").addEventListener("click", function () {
+        RM.api("/api/khatma/complete", { method: "POST" }).then(function (res) {
+          if (res.ok && res.d && res.d.ok) {
+            state.khatmat_done = res.d.khatmat_done; state.current_page = 0; state.target_date = null;
+            el("page").value = ""; el("target").value = "";
+            msg("تقبّل الله منك! بدأت ختمةً جديدة 🤍"); render();
+          } else if (res.status === 401) msg("انتهت جلستك — سجّل الدخول من جديد.");
+          else msg("تعذّر التسجيل.");
+        });
+      });
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>القرآن الكريم — رياض المتقين</title>
+  <meta name="description" content="اقرأ القرآن الكريم بالرسم العثماني واستمع إلى التلاوة بأصوات مشاهير القرّاء." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&family=Amiri+Quran&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .qbar{display:flex;gap:.6rem;flex-wrap:wrap;align-items:flex-end;margin-bottom:1.2rem}
+    .qbar .field{margin:0;flex:1;min-width:160px}
+    .qhead{text-align:center;margin:1rem 0 1.4rem}
+    .qhead h2{font-family:"Amiri",serif;color:var(--gold);font-size:2rem;margin:.2rem 0}
+    .bism{font-family:"Amiri Quran","Amiri",serif;text-align:center;font-size:1.7rem;color:var(--text);margin:1rem 0 1.6rem}
+    .ayat{font-family:"Amiri Quran","Amiri",serif;font-size:1.7rem;line-height:2.6;text-align:justify;color:var(--text)}
+    .ayah{cursor:default}
+    .averse{margin-bottom:1.2rem}
+    .atrans{font-family:"Tajawal",sans-serif;font-size:1.05rem;line-height:1.9;color:var(--muted);
+      border-inline-start:2px solid var(--gold);padding-inline-start:.8rem;margin-top:.5rem}
+    .atafsir{font-family:"Tajawal",sans-serif;font-size:1.02rem;line-height:1.95;color:var(--text);
+      background:var(--gold-faint,rgba(201,162,75,.08));border-inline-start:2px solid var(--gold);
+      border-radius:8px;padding:.6rem .8rem;margin-top:.5rem}
+    .atafsir .lbl{display:block;font-size:.8rem;color:var(--gold);font-weight:700;margin-bottom:.25rem}
+    .anum{display:inline-block;font-family:"Tajawal";font-size:.95rem;color:var(--gold);
+      border:1px solid var(--gold);border-radius:50%;min-width:1.8em;height:1.8em;line-height:1.7em;text-align:center;margin:0 .3rem;vertical-align:middle}
+    .qaudio{position:sticky;bottom:0;background:var(--card,#0b2117);border-top:1px solid var(--border);padding:.7rem 0;margin-top:1.4rem}
+    .qaudio audio{width:100%}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:760px">
+      <div class="page-head center">
+        <h1>القرآن الكريم</h1>
+        <p>اقرأ بالرسم العثماني واستمع إلى التلاوة. اختَر السورة والقارئ.</p>
+      </div>
+
+      <div class="qbar">
+        <div class="field"><label for="surah">السورة</label><select id="surah"><option>… تحميل</option></select></div>
+        <div class="field"><label for="reciter">القارئ</label>
+          <select id="reciter">
+            <option value="ar.alafasy">مشاري العفاسي</option>
+            <option value="ar.husary">محمود الحصري</option>
+            <option value="ar.abdulbasitmurattal">عبد الباسط (مرتّل)</option>
+            <option value="ar.minshawi">المنشاوي</option>
+            <option value="ar.hudhaify">علي الحذيفي</option>
+          </select>
+        </div>
+        <div class="field"><label for="trans">الترجمة</label>
+          <select id="trans"><option value="">بدون ترجمة</option></select>
+        </div>
+        <div class="field"><label for="tafsir">التفسير</label>
+          <select id="tafsir"><option value="">بدون تفسير</option></select>
+        </div>
+      </div>
+
+      <div id="status" class="muted" style="text-align:center"></div>
+      <div class="qhead" id="qhead" hidden><h2 id="qname"></h2><div class="muted" id="qmeta"></div></div>
+      <div class="bism" id="bism" hidden>بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ</div>
+      <div class="ayat" id="ayat"></div>
+
+      <div class="qaudio" id="qaudioWrap" hidden>
+        <div class="container" style="padding:0">
+          <span class="muted" style="font-size:.85rem" id="audioLbl"></span>
+          <audio id="audio" controls preload="none"></audio>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
+      var API = "https://api.alquran.cloud/v1";
+      var surahEl = document.getElementById("surah"), reciterEl = document.getElementById("reciter");
+      var transEl = document.getElementById("trans");
+      var tafsirEl = document.getElementById("tafsir");
+      var current = 1, surahMeta = {};
+      function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+
+      function status(t) { document.getElementById("status").textContent = t || ""; }
+
+      // قائمة السور.
+      fetch(API + "/surah").then(function (r) { return r.json(); }).then(function (d) {
+        var list = (d.data || []);
+        surahEl.innerHTML = list.map(function (s) {
+          surahMeta[s.number] = s;
+          return '<option value="' + s.number + '">' + ar(s.number) + ". " + s.name + "</option>";
+        }).join("");
+        load(1);
+      }).catch(function () { status("تعذّر تحميل قائمة السور. تحقّق من اتصالك."); });
+
+      // ترجمات بكلّ اللغات.
+      fetch(API + "/edition/type/translation").then(function (r) { return r.json(); }).then(function (d) {
+        var eds = (d.data || []).slice().sort(function (a, b) { return a.language < b.language ? -1 : 1; });
+        var groups = {};
+        eds.forEach(function (e) { (groups[e.language] = groups[e.language] || []).push(e); });
+        var html = '<option value="">بدون ترجمة</option>';
+        Object.keys(groups).sort().forEach(function (lang) {
+          html += '<optgroup label="' + esc(lang.toUpperCase()) + '">';
+          groups[lang].forEach(function (e) {
+            html += '<option value="' + esc(e.identifier) + '">' + esc(e.englishName || e.name) + "</option>";
+          });
+          html += "</optgroup>";
+        });
+        transEl.innerHTML = html;
+      }).catch(function () { /* الترجمة اختياريّة */ });
+
+      // التفاسير (عربيّة).
+      fetch(API + "/edition/type/tafsir").then(function (r) { return r.json(); }).then(function (d) {
+        var eds = (d.data || []);
+        var html = '<option value="">بدون تفسير</option>';
+        eds.forEach(function (e) {
+          html += '<option value="' + esc(e.identifier) + '">' + esc(e.name || e.englishName) + "</option>";
+        });
+        tafsirEl.innerHTML = html;
+      }).catch(function () { /* التفسير اختياريّ */ });
+
+      function load(n) {
+        current = n;
+        status("جارٍ التحميل…");
+        document.getElementById("ayat").innerHTML = "";
+        var trans = transEl.value;
+        var tafsir = tafsirEl.value;
+        var reqs = [fetch(API + "/surah/" + n + "/quran-uthmani").then(function (r) { return r.json(); })];
+        reqs.push(trans ? fetch(API + "/surah/" + n + "/" + encodeURIComponent(trans)).then(function (r) { return r.json(); }).catch(function () { return null; }) : Promise.resolve(null));
+        reqs.push(tafsir ? fetch(API + "/surah/" + n + "/" + encodeURIComponent(tafsir)).then(function (r) { return r.json(); }).catch(function () { return null; }) : Promise.resolve(null));
+        Promise.all(reqs).then(function (rr) {
+          status("");
+          var s = rr[0] && rr[0].data; if (!s) { status("تعذّر تحميل السورة."); return; }
+          var tr = rr[1] && rr[1].data && rr[1].data.ayahs ? rr[1].data.ayahs : null;
+          var tf = rr[2] && rr[2].data && rr[2].data.ayahs ? rr[2].data.ayahs : null;
+          document.getElementById("qhead").hidden = false;
+          document.getElementById("qname").textContent = s.name;
+          document.getElementById("qmeta").textContent =
+            (s.revelationType === "Meccan" ? "مكّيّة" : "مدنيّة") + " · " + ar(s.numberOfAyahs) + " آية" +
+            (tr && rr[1].data.edition ? " · ترجمة: " + (rr[1].data.edition.englishName || "") : "") +
+            (tf && rr[2].data.edition ? " · تفسير: " + (rr[2].data.edition.name || rr[2].data.edition.englishName || "") : "");
+          document.getElementById("bism").hidden = (n === 1 || n === 9);
+          var rtl = tr && rr[1].data.edition && rr[1].data.edition.direction === "rtl";
+          var tafsirName = tf && rr[2].data.edition ? (rr[2].data.edition.name || "التفسير") : "التفسير";
+          document.getElementById("ayat").innerHTML = s.ayahs.map(function (a, i) {
+            var t = a.text;
+            if (a.numberInSurah === 1 && n !== 1 && n !== 9) {
+              t = t.replace(/^﻿?بِسْمِ\s+اللَّهِ\s+الرَّحْمَٰنِ\s+الرَّحِيمِ\s*/, "");
+            }
+            var arabic = '<span class="ayah">' + t + '<span class="anum">' + ar(a.numberInSurah) + "</span></span> ";
+            if (tr || tf) {
+              var block = '<div class="averse">' + arabic;
+              if (tr && tr[i]) block += '<div class="atrans"' + (rtl ? ' dir="rtl"' : ' dir="ltr"') + ">" + esc(tr[i].text) + "</div>";
+              if (tf && tf[i]) block += '<div class="atafsir" dir="rtl"><span class="lbl">' + esc(tafsirName) + "</span>" + esc(tf[i].text) + "</div>";
+              return block + "</div>";
+            }
+            return arabic;
+          }).join("");
+          setAudio();
+        }).catch(function () { status("تعذّر تحميل السورة."); });
+      }
+
+      transEl.addEventListener("change", function () { load(current); });
+      tafsirEl.addEventListener("change", function () { load(current); });
+
+      function setAudio() {
+        var rec = reciterEl.value;
+        var url = "https://cdn.islamic.network/quran/audio-surah/128/" + rec + "/" + current + ".mp3";
+        var a = document.getElementById("audio");
+        a.src = url;
+        document.getElementById("qaudioWrap").hidden = false;
+        document.getElementById("audioLbl").textContent = "تلاوة سورة " + (surahMeta[current] ? surahMeta[current].name : "");
+      }
+
+      surahEl.addEventListener("change", function () { load(+surahEl.value); });
+      reciterEl.addEventListener("change", setAudio);
+    })();
+  </script>
+</body>
+</html>

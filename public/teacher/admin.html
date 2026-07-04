@@ -25,9 +25,9 @@
             <p>المدير وحده يُنشئ حسابات المعلّمين ويحدّد الأدوار والحالة.</p>
           </div>
 
-          <!-- إنشاء معلّم -->
+          <!-- إنشاء حساب معلّم/مدير موقع -->
           <div class="card" style="margin-bottom:1.5rem">
-            <h3 style="color:var(--gold);margin-top:0">إنشاء حساب معلّم جديد</h3>
+            <h3 style="color:var(--gold);margin-top:0">إنشاء حساب جديد</h3>
             <form id="createForm">
               <div class="field">
                 <label for="name">الاسم</label>
@@ -35,14 +35,17 @@
               </div>
               <div class="field">
                 <label for="email">البريد الإلكتروني</label>
-                <input type="email" id="email" placeholder="teacher@example.com" />
+                <input type="email" id="email" placeholder="user@example.com" />
               </div>
               <div class="field">
-                <label for="password">كلمة المرور المبدئية</label>
-                <input type="text" id="password" placeholder="٨ أحرف فأكثر" />
-                <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">سلّمها للمعلّم؛ يمكنه تغييرها لاحقاً عبر «نسيت كلمة المرور».</p>
+                <label for="role">الدور</label>
+                <select id="role">
+                  <option value="teacher">معلّم</option>
+                  <option value="manager">مدير الموقع</option>
+                </select>
               </div>
-              <button class="btn btn-primary" type="submit">إنشاء المعلّم</button>
+              <button class="btn btn-primary" type="submit">إنشاء الحساب</button>
+              <p class="muted" style="margin:.7rem 0 0;font-size:.85rem">تصل كلمة مرورٍ مؤقّتة إلى بريد المستخدم، ويُطلب منه تغييرها عند أوّل دخول.</p>
               <div class="notice" id="createNotice" hidden></div>
             </form>
           </div>
@@ -71,7 +74,8 @@
   <script>
     (function () {
       var esc = RM.esc;
-      var ROLES = { student: "متعلّم", teacher: "معلّم", admin: "مدير" };
+      var ROLES = { student: "متعلّم", teacher: "معلّم", manager: "مدير الموقع", admin: "أدمن" };
+      var ROLE_KEYS = ["student", "teacher", "manager", "admin"];
 
       // المدير وحده
       RM.getMe().then(function (u) {
@@ -88,16 +92,16 @@
       document.getElementById("createForm").addEventListener("submit", function (e) {
         e.preventDefault();
         notify("جارٍ الإنشاء…");
-        RM.api("/api/admin/teachers", {
+        RM.api("/api/admin/accounts", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             name: document.getElementById("name").value.trim(),
             email: document.getElementById("email").value.trim(),
-            password: document.getElementById("password").value,
+            role: document.getElementById("role").value,
           }),
         }).then(function (res) {
-          if (res.ok && res.d.ok) { notify("تمّ إنشاء المعلّم ✓"); e.target.reset(); loadUsers(); }
+          if (res.ok && res.d.ok) { notify("تمّ إنشاء الحساب ✓ وصلت كلمة المرور المؤقّتة إلى بريده."); e.target.reset(); loadUsers(); }
           else { notify(res.d.error || "تعذّر الإنشاء."); }
         }).catch(function () { notify("حدث خطأ في الاتصال."); });
       });
@@ -109,7 +113,7 @@
           if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا مستخدمون.</td></tr>'; return; }
           body.innerHTML = list.map(function (u) {
             var roleSel = '<select class="rm-role" data-id="' + u.id + '">' +
-              ["student", "teacher", "admin"].map(function (r) {
+              ROLE_KEYS.map(function (r) {
                 return '<option value="' + r + '"' + (u.role === r ? " selected" : "") + ">" + ROLES[r] + "</option>";
               }).join("") + "</select>";
             var statusBadge = u.status === "active"

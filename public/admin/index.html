@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة الأدمن — رياض المتقين</title>
+  <meta name="description" content="لوحة الأدمن: نظرة شاملة على النظام، الدعم، وسجلّ الدخول." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-admin-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>لوحة الأدمن</h1>
+            <p>نظرةٌ شاملةٌ على النظام كاملاً.</p>
+          </div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:.5rem 0 1rem">المستخدمون</h2>
+          <div class="stats" id="users"></div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">يحتاج إجراءً</h2>
+          <div class="stats" id="pending"></div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">المحتوى والتفاعل</h2>
+          <div class="stats" id="content"></div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">إجراءات سريعة</h2>
+          <div class="grid">
+            <a class="card link" href="/admin/support"><div class="ic">🎫</div><h3>الدعم والطلبات</h3><p>رسائل المستخدمين وطلباتهم.</p></a>
+            <a class="card link" href="/admin/logins"><div class="ic">🕒</div><h3>سجلّ الدخول</h3><p>متى دخل كلّ مستخدم.</p></a>
+            <a class="card link" href="/admin/users"><div class="ic">👥</div><h3>المستخدمون والأدوار</h3><p>إنشاء الحسابات وتعيين الأدوار.</p></a>
+            <a class="card link" href="/manager"><div class="ic">🗂️</div><h3>طلبات وموافقات</h3><p>طلبات التعليم والموافقة على المحتوى.</p></a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/admin/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar;
+      function stat(n, lbl) {
+        return '<div class="stat"><div class="num">' + ar(n || 0) + '</div><div class="lbl">' + lbl + "</div></div>";
+      }
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "admin") { location.href = "/"; return; }
+        RM.api("/api/admin/overview").then(function (res) {
+          var s = (res.d && res.d.stats) || {};
+          document.getElementById("users").innerHTML =
+            stat(s.students, "المتعلّمون") + stat(s.teachers, "المعلّمون") +
+            stat(s.managers, "مديرو الموقع") + stat(s.suspended, "حسابات معطّلة");
+          document.getElementById("pending").innerHTML =
+            stat(s.open_tickets, "تذاكر دعم مفتوحة") + stat(s.pending_apps, "طلبات تعليم") +
+            stat(s.pending_clips, "مقاطع للموافقة") + stat(s.pending_lessons, "دروس للموافقة");
+          document.getElementById("content").innerHTML =
+            stat(s.lessons, "الدروس") + stat(s.clips, "المقاطع") +
+            stat(s.follows, "متابعات") + stat(s.views_30d, "مشاهدات صفحات (٣٠ي)");
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

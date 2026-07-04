@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>عدّاد التسبيح — رياض المتقين</title>
+  <meta name="description" content="سبحة إلكترونية مع أذكار جاهزة وحفظ تلقائي للعدّ." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .tcount { font-size:4.5rem; font-weight:800; color:var(--gold); line-height:1; margin:.4rem 0; font-variant-numeric:tabular-nums }
+    .tdhikr { font-family:"Amiri",serif; font-size:1.8rem; color:var(--text); margin:.3rem 0 1rem }
+    .tbtn { width:min(72vw,260px); height:min(72vw,260px); border-radius:50%; border:none; cursor:pointer;
+      background:radial-gradient(circle at 35% 30%, #1f6f43, #0c4d2c); color:#fff; font-size:1.3rem; font-weight:700;
+      box-shadow:0 14px 40px rgba(0,0,0,.35), inset 0 -8px 22px rgba(0,0,0,.35); transition:transform .08s; user-select:none }
+    .tbtn:active { transform:scale(.96) }
+    .tchip { padding:.4rem .9rem;border:1px solid var(--border);border-radius:999px;background:transparent;color:var(--text);cursor:pointer;font-size:.9rem }
+    .tchip.active { background:var(--gold);color:#2a1f04;border-color:var(--gold);font-weight:700 }
+  </style>
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container" style="max-width:560px;text-align:center">
+      <div class="page-head center">
+        <h1>عدّاد التسبيح</h1>
+        <p>اختر ذكراً ثمّ اضغط للعدّ. يُحفظ عددك تلقائيّاً على جهازك.</p>
+      </div>
+
+      <div id="chips" style="display:flex;gap:.5rem;flex-wrap:wrap;justify-content:center;margin-bottom:1.4rem"></div>
+
+      <div class="tdhikr" id="dhikr">سبحان الله</div>
+      <div class="tcount" id="count">٠</div>
+      <div class="muted" id="goalLine" style="margin-bottom:1.4rem">الهدف: ٣٣ · الدورات: ٠</div>
+
+      <button class="tbtn" id="tap">اضغط للتسبيح</button>
+
+      <div style="display:flex;gap:.6rem;justify-content:center;margin-top:1.6rem;flex-wrap:wrap">
+        <button class="btn btn-outline" id="reset">تصفير</button>
+        <button class="btn btn-ghost" id="vibrate">الاهتزاز: مُفعّل</button>
+      </div>
+
+      <p class="muted" style="margin-top:1.4rem;font-size:.85rem">يمكنك الضغط على زرّ المسافة في لوحة المفاتيح للعدّ.</p>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
+      var PRESETS = [
+        { t: "سبحان الله", g: 33 }, { t: "الحمد لله", g: 33 }, { t: "الله أكبر", g: 34 },
+        { t: "لا إله إلا الله", g: 100 }, { t: "أستغفر الله", g: 100 },
+        { t: "لا حول ولا قوة إلا بالله", g: 100 },
+        { t: "سبحان الله وبحمده", g: 100 }, { t: "اللهم صلّ على محمد", g: 100 },
+      ];
+      var KEY = "rm_tasbeeh_v1";
+      var state = load();
+      function load() {
+        try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; }
+      }
+      function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+      var idx = state.idx || 0;
+      var counts = state.counts || {};
+      var vibrate = state.vibrate !== false;
+
+      var chips = document.getElementById("chips");
+      PRESETS.forEach(function (p, i) {
+        var b = document.createElement("button");
+        b.className = "tchip" + (i === idx ? " active" : "");
+        b.textContent = p.t;
+        b.addEventListener("click", function () { idx = i; render(); persist(); });
+        chips.appendChild(b);
+      });
+
+      function cur() { return PRESETS[idx]; }
+      function curCount() { return counts[idx] || 0; }
+
+      function render() {
+        document.querySelectorAll(".tchip").forEach(function (c, i) {
+          c.classList.toggle("active", i === idx);
+        });
+        var c = curCount(), g = cur().g;
+        document.getElementById("dhikr").textContent = cur().t;
+        document.getElementById("count").textContent = ar(c);
+        document.getElementById("goalLine").textContent = "الهدف: " + ar(g) + " · الدورات: " + ar(Math.floor(c / g));
+        document.getElementById("vibrate").textContent = "الاهتزاز: " + (vibrate ? "مُفعّل" : "مُعطّل");
+      }
+
+      function persist() { state.idx = idx; state.counts = counts; state.vibrate = vibrate; save(); }
+
+      function tap() {
+        var g = cur().g;
+        counts[idx] = curCount() + 1;
+        if (vibrate && navigator.vibrate) {
+          navigator.vibrate(counts[idx] % g === 0 ? [60, 40, 60] : 25);
+        }
+        render(); persist();
+      }
+
+      document.getElementById("tap").addEventListener("click", tap);
+      document.addEventListener("keydown", function (e) {
+        if (e.code === "Space" || e.key === " ") { e.preventDefault(); tap(); }
+      });
+      document.getElementById("reset").addEventListener("click", function () {
+        counts[idx] = 0; render(); persist();
+      });
+      document.getElementById("vibrate").addEventListener("click", function () {
+        vibrate = !vibrate; render(); persist();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

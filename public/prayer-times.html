@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مواقيت الصلاة — رياض المتقين</title>
+  <meta name="description" content="مواقيت الصلاة حسب موقعك مع عدّاد للصلاة القادمة." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .pnext { background:linear-gradient(135deg,#0c4d2c,#093a22); border-radius:16px; padding:1.4rem; text-align:center; margin-bottom:1.4rem }
+    .pnext .lbl { color:var(--gold-soft); font-size:.95rem }
+    .pnext .name { font-size:1.8rem; font-weight:800; color:#fff; margin:.2rem 0 }
+    .pnext .cd { font-size:2.4rem; font-weight:800; color:var(--gold); font-variant-numeric:tabular-nums; letter-spacing:1px }
+    .prow { display:flex; justify-content:space-between; align-items:center; padding:.9rem 1.1rem; border-bottom:1px solid var(--border) }
+    .prow:last-child { border-bottom:none }
+    .prow.now { background:rgba(212,175,55,.08) }
+    .prow .pn { font-weight:700; font-size:1.05rem }
+    .prow .pt { font-variant-numeric:tabular-nums; color:var(--gold); font-weight:700 }
+  </style>
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container" style="max-width:560px">
+      <div class="page-head center">
+        <h1>مواقيت الصلاة</h1>
+        <p id="loc">جارٍ تحديد موقعك…</p>
+      </div>
+
+      <div class="pnext" id="next" hidden>
+        <div class="lbl">الصلاة القادمة</div>
+        <div class="name" id="nextName">—</div>
+        <div class="cd" id="cd">—</div>
+      </div>
+
+      <div class="card" id="card" style="padding:0;overflow:hidden">
+        <div style="padding:1rem" class="muted" id="status">يُرجى السماح بالوصول إلى الموقع لعرض المواقيت بدقّة.</div>
+      </div>
+
+      <div class="card" style="margin-top:1.2rem">
+        <h3 style="color:var(--gold);margin-top:0">تحديد يدويّ بالمدينة</h3>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <input type="text" id="city" placeholder="المدينة (مثال: الكويت)" style="flex:1;min-width:140px" />
+          <input type="text" id="country" placeholder="الدولة (مثال: Kuwait)" style="flex:1;min-width:140px" />
+        </div>
+        <div class="field" style="margin-top:.6rem">
+          <label for="method">طريقة الحساب</label>
+          <select id="method">
+            <option value="4">أمّ القرى — مكّة</option>
+            <option value="3">رابطة العالم الإسلامي</option>
+            <option value="5">الهيئة المصرية العامّة</option>
+            <option value="2">الجمعية الإسلامية لأمريكا الشمالية</option>
+            <option value="1">جامعة العلوم الإسلامية — كراتشي</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" id="go" style="margin-top:.6rem">عرض المواقيت</button>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
+      var NAMES = { Fajr: "الفجر", Sunrise: "الشروق", Dhuhr: "الظهر", Asr: "العصر", Maghrib: "المغرب", Isha: "العشاء" };
+      var ORDER = ["Fajr", "Sunrise", "Dhuhr", "Asr", "Maghrib", "Isha"];
+      var timings = null, cdTimer = null;
+
+      function method() { return document.getElementById("method").value; }
+      function status(msg) { document.getElementById("status").textContent = msg; }
+
+      function to12(hhmm) {
+        var p = hhmm.split(":"), h = +p[0], m = +p[1];
+        var mer = h < 12 ? "ص" : "م"; var h12 = h % 12; if (h12 === 0) h12 = 12;
+        return ar(h12) + ":" + ar(m < 10 ? "0" + m : m) + " " + mer;
+      }
+
+      function render() {
+        if (!timings) return;
+        var rows = ORDER.map(function (k) {
+          return '<div class="prow" data-k="' + k + '"><span class="pn">' + NAMES[k] + '</span><span class="pt">' + to12(timings[k]) + "</span></div>";
+        }).join("");
+        document.getElementById("card").innerHTML = rows;
+        tick();
+        if (cdTimer) clearInterval(cdTimer);
+        cdTimer = setInterval(tick, 1000);
+      }
+
+      function minutesNow() { var d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
+      function mins(hhmm) { var p = hhmm.split(":"); return (+p[0]) * 60 + (+p[1]); }
+
+      function tick() {
+        if (!timings) return;
+        var now = minutesNow();
+        var prayers = ["Fajr", "Dhuhr", "Asr", "Maghrib", "Isha"];
+        var nextK = null, nextM = null;
+        for (var i = 0; i < prayers.length; i++) {
+          if (mins(timings[prayers[i]]) > now) { nextK = prayers[i]; nextM = mins(timings[prayers[i]]); break; }
+        }
+        if (!nextK) { nextK = "Fajr"; nextM = mins(timings.Fajr) + 24 * 60; }
+        var diff = nextM - now;
+        var h = Math.floor(diff / 60), m = Math.floor(diff % 60), s = Math.floor((diff * 60) % 60);
+        document.getElementById("next").hidden = false;
+        document.getElementById("nextName").textContent = NAMES[nextK];
+        document.getElementById("cd").textContent =
+          ar((h < 10 ? "0" : "") + h) + ":" + ar((m < 10 ? "0" : "") + m) + ":" + ar((s < 10 ? "0" : "") + s);
+        document.querySelectorAll(".prow").forEach(function (r) {
+          r.classList.toggle("now", r.getAttribute("data-k") === nextK);
+        });
+      }
+
+      function fetchByCoords(lat, lng) {
+        status("جارٍ جلب المواقيت…");
+        fetch("https://api.aladhan.com/v1/timings?latitude=" + lat + "&longitude=" + lng + "&method=" + method())
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            timings = d.data.timings;
+            document.getElementById("loc").textContent = "حسب موقعك الحالي · " + (d.data.meta.timezone || "");
+            render();
+          })
+          .catch(function () { status("تعذّر جلب المواقيت. جرّب التحديد اليدويّ بالمدينة."); });
+      }
+
+      function fetchByCity(city, country) {
+        status("جارٍ جلب المواقيت…");
+        fetch("https://api.aladhan.com/v1/timingsByCity?city=" + encodeURIComponent(city) +
+          "&country=" + encodeURIComponent(country) + "&method=" + method())
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!d.data || !d.data.timings) { status("لم نجد هذه المدينة. تحقّق من الاسم."); return; }
+            timings = d.data.timings;
+            document.getElementById("loc").textContent = city + " · " + (d.data.meta.timezone || "");
+            render();
+          })
+          .catch(function () { status("تعذّر جلب المواقيت."); });
+      }
+
+      document.getElementById("go").addEventListener("click", function () {
+        var city = document.getElementById("city").value.trim();
+        var country = document.getElementById("country").value.trim();
+        if (!city) { status("اكتب اسم المدينة."); return; }
+        fetchByCity(city, country || "");
+      });
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function (pos) { fetchByCoords(pos.coords.latitude, pos.coords.longitude); },
+          function () {
+            document.getElementById("loc").textContent = "تعذّر تحديد الموقع تلقائيّاً.";
+            status("لم يُسمح بالوصول إلى الموقع. استخدم التحديد اليدويّ بالمدينة أدناه.");
+          }, { timeout: 8000 });
+      } else {
+        document.getElementById("loc").textContent = "المتصفّح لا يدعم تحديد الموقع.";
+        status("استخدم التحديد اليدويّ بالمدينة أدناه.");
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -23,12 +23,42 @@
 
       <form class="form-wrap" id="registerForm" action="/api/auth/register" method="post" novalidate>
         <div class="field">
-          <label for="name">الاسم</label>
-          <input type="text" id="name" name="name" placeholder="اسمك الكامل" required />
+          <label for="name">الاسم الكامل</label>
+          <input type="text" id="name" name="name" placeholder="اسمك الثلاثي" required />
         </div>
         <div class="field">
           <label for="email">البريد الإلكتروني</label>
           <input type="email" id="email" name="email" placeholder="name@example.com" required />
+        </div>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px">
+            <label for="birth_date">تاريخ الميلاد</label>
+            <input type="date" id="birth_date" name="birth_date" min="1920-01-01" max="2016-12-31" />
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label for="nationality">الجنسيّة (الدولة)</label>
+            <select id="nationality" name="nationality" data-list="countries" data-placeholder="اختر جنسيّتك…"></select>
+          </div>
+        </div>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px">
+            <label for="country">بلد الإقامة</label>
+            <select id="country" name="country" data-list="countries" data-placeholder="اختر بلد إقامتك…"></select>
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label for="city">المدينة</label>
+            <input type="text" id="city" name="city" placeholder="مثال: حولي" />
+          </div>
+        </div>
+        <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:150px">
+            <label for="education_stage">المرحلة الدراسية</label>
+            <select id="education_stage" name="education_stage" data-list="stages" data-placeholder="اختر المرحلة…"></select>
+          </div>
+          <div class="field" style="flex:1;min-width:150px">
+            <label for="occupation">الوظيفة</label>
+            <select id="occupation" name="occupation" data-list="occupations" data-placeholder="اختر وظيفتك…"></select>
+          </div>
         </div>
         <div class="field">
           <label for="password">كلمة المرور</label>
@@ -45,6 +75,8 @@
 
         <p class="muted center" style="margin-top:1.2rem">
           <a class="gold" href="/login">لديك حساب بالفعل؟ تسجيل الدخول</a>
+          &nbsp;·&nbsp;
+          <a class="gold" href="/teach">أنت معلّم؟ قدّم طلباً</a>
         </p>
       </form>
     </div>
@@ -52,6 +84,7 @@
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/lists.js"></script>
   <script>
     var form = document.getElementById("registerForm");
     var notice = document.getElementById("regNotice");
@@ -67,11 +100,17 @@
       if (password.length < 8) return show("كلمة المرور يجب أن تكون 8 أحرف فأكثر.");
       if (password !== confirm) return show("كلمتا المرور غير متطابقتين.");
 
+      function v(id) { return document.getElementById(id).value.trim(); }
       show("جارٍ إنشاء الحساب…");
       fetch("/api/auth/register", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name: name, email: email, password: password }),
+        body: JSON.stringify({
+          name: name, email: email, password: password,
+          birth_date: v("birth_date"), nationality: v("nationality"),
+          country: v("country"), city: v("city"),
+          education_stage: v("education_stage"), occupation: v("occupation"),
+        }),
       })
         .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
         .then(function (res) {

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>اتجاه القبلة — رياض المتقين</title>
+  <meta name="description" content="بوصلة تشير إلى الكعبة المشرّفة من موقعك." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .compass { width:min(80vw,320px); height:min(80vw,320px); border-radius:50%; margin:1rem auto;
+      border:3px solid var(--gold); position:relative;
+      background:radial-gradient(circle at 50% 40%, #0c4d2c, #062417); box-shadow:inset 0 0 40px rgba(0,0,0,.5) }
+    .mark { position:absolute; inset-inline-start:50%; top:8px; transform:translateX(-50%); color:var(--gold-soft); font-weight:700 }
+    .needle { position:absolute; inset:0; transition:transform .15s ease-out }
+    .needle .arrow { position:absolute; inset-inline-start:50%; top:6%; transform:translateX(-50%);
+      font-size:2.4rem; line-height:1 }
+    .kaaba { position:absolute; inset-inline-start:50%; top:2%; transform:translateX(-50%); font-size:1.8rem }
+    .deg { font-size:2rem;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums }
+  </style>
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container" style="max-width:520px;text-align:center">
+      <div class="page-head center">
+        <h1>اتجاه القبلة</h1>
+        <p id="loc">جارٍ تحديد موقعك…</p>
+      </div>
+
+      <div class="compass" id="compass">
+        <div class="mark">ش</div>
+        <div class="needle" id="needle">
+          <div class="kaaba">🕋</div>
+          <div class="arrow">⬆️</div>
+        </div>
+      </div>
+
+      <p>زاوية القبلة من الشمال: <span class="deg" id="deg">—</span></p>
+      <p class="muted" id="hint">على الهاتف: فعّل البوصلة لتدوير السهم مع اتجاهك. على الحاسوب: وجّه نفسك بزاوية القبلة من الشمال.</p>
+
+      <button class="btn btn-primary" id="enable" style="margin-top:.6rem" hidden>تفعيل البوصلة</button>
+
+      <div class="card" style="margin-top:1.4rem">
+        <h3 style="color:var(--gold);margin-top:0">تحديد يدويّ</h3>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <input type="number" step="any" id="lat" placeholder="خط العرض" style="flex:1;min-width:120px" />
+          <input type="number" step="any" id="lng" placeholder="خط الطول" style="flex:1;min-width:120px" />
+        </div>
+        <button class="btn btn-outline" id="calc" style="margin-top:.6rem">احسب القبلة</button>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
+      var KAABA_LAT = 21.4225, KAABA_LNG = 39.8262;
+      var qibla = null, heading = 0;
+
+      function rad(d) { return d * Math.PI / 180; }
+      function deg(r) { return r * 180 / Math.PI; }
+
+      function bearing(lat, lng) {
+        var dL = rad(KAABA_LNG - lng);
+        var y = Math.sin(dL) * Math.cos(rad(KAABA_LAT));
+        var x = Math.cos(rad(lat)) * Math.sin(rad(KAABA_LAT)) -
+          Math.sin(rad(lat)) * Math.cos(rad(KAABA_LAT)) * Math.cos(dL);
+        var b = deg(Math.atan2(y, x));
+        return (b + 360) % 360;
+      }
+
+      function setQibla(lat, lng, label) {
+        qibla = bearing(lat, lng);
+        document.getElementById("deg").textContent = ar(Math.round(qibla)) + "°";
+        if (label) document.getElementById("loc").textContent = label;
+        updateNeedle();
+      }
+
+      function updateNeedle() {
+        if (qibla == null) return;
+        // السهم يشير إلى (زاوية القبلة - اتجاه الجهاز) ليبقى مصوّباً نحو الكعبة.
+        var rot = qibla - heading;
+        document.getElementById("needle").style.transform = "rotate(" + rot + "deg)";
+      }
+
+      function onOrient(e) {
+        var h = (e.webkitCompassHeading != null) ? e.webkitCompassHeading
+          : (e.alpha != null ? 360 - e.alpha : null);
+        if (h == null) return;
+        heading = h; updateNeedle();
+      }
+
+      function startCompass() {
+        window.addEventListener("deviceorientationabsolute", onOrient, true);
+        window.addEventListener("deviceorientation", onOrient, true);
+      }
+
+      // iOS يحتاج إذناً صريحاً عبر تفاعل المستخدم.
+      var enableBtn = document.getElementById("enable");
+      if (typeof DeviceOrientationEvent !== "undefined" &&
+          typeof DeviceOrientationEvent.requestPermission === "function") {
+        enableBtn.hidden = false;
+        enableBtn.addEventListener("click", function () {
+          DeviceOrientationEvent.requestPermission().then(function (s) {
+            if (s === "granted") { startCompass(); enableBtn.hidden = true; }
+          }).catch(function () {});
+        });
+      } else {
+        startCompass();
+      }
+
+      document.getElementById("calc").addEventListener("click", function () {
+        var lat = parseFloat(document.getElementById("lat").value);
+        var lng = parseFloat(document.getElementById("lng").value);
+        if (isFinite(lat) && isFinite(lng)) setQibla(lat, lng, "إحداثيّات يدويّة");
+      });
+
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          function (pos) { setQibla(pos.coords.latitude, pos.coords.longitude, "حسب موقعك الحالي"); },
+          function () { document.getElementById("loc").textContent = "تعذّر تحديد الموقع — استخدم التحديد اليدويّ."; },
+          { timeout: 8000 });
+      } else {
+        document.getElementById("loc").textContent = "المتصفّح لا يدعم تحديد الموقع.";
+      }
+    })();
+  </script>
+</body>
+</html>

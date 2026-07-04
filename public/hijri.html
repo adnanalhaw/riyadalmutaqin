@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>التقويم الهجري — رياض المتقين</title>
+  <meta name="description" content="التاريخ الهجري اليوم (أمّ القرى) مع تقويم الشهر، وإبراز أيّام الصيام المستحبّة: الإثنين والخميس والأيّام البيض." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .htoday{background:linear-gradient(135deg,#0c4d2c,#062417);border-radius:16px;padding:1.4rem;text-align:center;margin-bottom:1.4rem}
+    .htoday .hbig{font-family:"Amiri",serif;font-size:2rem;color:var(--gold);margin:.2rem 0}
+    .hcal{display:grid;grid-template-columns:repeat(7,1fr);gap:.35rem}
+    .hcal .hh{font-size:.78rem;color:var(--muted);text-align:center;padding:.3rem 0}
+    .hcell{aspect-ratio:1;border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:.95rem;position:relative}
+    .hcell small{font-size:.6rem;color:var(--muted)}
+    .hcell.fast{border-color:var(--gold-dim);background:var(--gold-faint)}
+    .hcell.today{outline:2px solid var(--gold);font-weight:800;color:var(--gold)}
+    .hcell.empty{border:0}
+    .legend{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center;margin-top:1rem;font-size:.85rem;color:var(--muted)}
+    .legend span{display:inline-flex;align-items:center;gap:.4rem}
+    .dot{width:.8rem;height:.8rem;border-radius:4px;display:inline-block}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:560px">
+      <div class="page-head center">
+        <h1>التقويم الهجري</h1>
+        <p>حسب تقويم أمّ القرى. مُبرَزٌ فيه أيّام الصيام المستحبّة.</p>
+        <p><a class="gold" href="/tools">‹ كلّ أدوات المسلم</a></p>
+      </div>
+
+      <div class="htoday">
+        <div style="color:var(--gold-soft)">اليوم</div>
+        <div class="hbig" id="todayH">…</div>
+        <div class="muted" id="todayG"></div>
+        <div id="todayFast" style="color:#e9c46a;margin-top:.4rem"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.8rem">
+          <button class="btn btn-ghost" id="prev">‹ السابق</button>
+          <strong style="color:var(--gold)" id="monthLbl">…</strong>
+          <button class="btn btn-ghost" id="next">التالي ›</button>
+        </div>
+        <div class="hcal" id="cal"></div>
+        <div class="legend">
+          <span><i class="dot" style="background:var(--gold-faint);border:1px solid var(--gold-dim)"></i> أيّام الصيام (الإثنين/الخميس/البيض)</span>
+          <span><i class="dot" style="outline:2px solid var(--gold)"></i> اليوم</span>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      var AR = "٠١٢٣٤٥٦٧٨٩";
+      function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return AR[+d]; }); }
+      var fmt = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { day: "numeric", month: "long", year: "numeric", weekday: "long" });
+      function parts(date) {
+        var o = {};
+        new Intl.DateTimeFormat("en-u-ca-islamic-umalqura", { day: "numeric", month: "numeric", year: "numeric" })
+          .formatToParts(date).forEach(function (p) { if (p.type !== "literal") o[p.type] = parseInt(p.value, 10); });
+        return o; // {day, month, year}
+      }
+      function monthName(date) {
+        var s = new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { month: "long", year: "numeric" }).format(date);
+        return s;
+      }
+      function isFast(date) {
+        var dow = date.getDay(); // 1 إثنين، 4 خميس
+        if (dow === 1 || dow === 4) return true;
+        var hd = parts(date).day;
+        return hd === 13 || hd === 14 || hd === 15;
+      }
+      function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+
+      var today = new Date(); today.setHours(0, 0, 0, 0);
+      // اليوم
+      document.getElementById("todayH").textContent = fmt.format(today);
+      document.getElementById("todayG").textContent = new Intl.DateTimeFormat("ar", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(today) + " م";
+      var tf = document.getElementById("todayFast");
+      var dow = today.getDay(), hd = parts(today).day;
+      if (dow === 1) tf.textContent = "🌙 اليوم الإثنين — من السنّة صيامه.";
+      else if (dow === 4) tf.textContent = "🌙 اليوم الخميس — من السنّة صيامه.";
+      else if (hd === 13 || hd === 14 || hd === 15) tf.textContent = "🌙 اليوم من الأيّام البيض — من السنّة صيامها.";
+      else tf.textContent = "";
+
+      // المرجع: أوّل يومٍ معروضٍ من الشهر الهجري (انطلاقاً من اليوم).
+      var anchor = new Date(today);
+
+      function firstOfHijriMonth(ref) {
+        // نرجع للخلف حتى يصبح اليوم الهجري = ١.
+        var d = new Date(ref);
+        var guard = 0;
+        while (parts(d).day !== 1 && guard < 40) { d.setDate(d.getDate() - 1); guard++; }
+        return d;
+      }
+
+      function render(ref) {
+        var first = firstOfHijriMonth(ref);
+        document.getElementById("monthLbl").textContent = monthName(first);
+        var cal = document.getElementById("cal");
+        var days = ["الأحد", "الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت"];
+        var html = days.map(function (d) { return '<div class="hh">' + d + "</div>"; }).join("");
+        // خلايا فارغة قبل أوّل يوم (حسب يوم الأسبوع).
+        for (var i = 0; i < first.getDay(); i++) html += '<div class="hcell empty"></div>';
+        var hm = parts(first).month;
+        var cur = new Date(first), guard = 0;
+        while (parts(cur).month === hm && guard < 31) {
+          var p = parts(cur);
+          var cls = "hcell" + (isFast(cur) ? " fast" : "") + (sameDay(cur, today) ? " today" : "");
+          html += '<div class="' + cls + '">' + ar(p.day) +
+            '<small>' + ar(cur.getDate()) + "/" + ar(cur.getMonth() + 1) + "</small></div>";
+          cur.setDate(cur.getDate() + 1); guard++;
+        }
+        cal.innerHTML = html;
+      }
+
+      document.getElementById("prev").addEventListener("click", function () {
+        anchor = firstOfHijriMonth(anchor); anchor.setDate(anchor.getDate() - 1); render(anchor);
+      });
+      document.getElementById("next").addEventListener("click", function () {
+        var f = firstOfHijriMonth(anchor); f.setDate(f.getDate() + 32); anchor = f; render(anchor);
+      });
+      render(anchor);
+    })();
+  </script>
+</body>
+</html>

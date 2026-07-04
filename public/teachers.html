@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>المعلّمون — رياض المتقين</title>
+  <meta name="description" content="تابِع معلّمي رياض المتقين ليصلك جديدُ دروسهم ومقاطعهم." />
+  <meta name="theme-color" content="#0b1430" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="page-head">
+        <h1>المعلّمون</h1>
+        <p>تابِع معلّميك ليصلك جديدُ دروسهم ومقاطعهم، وادعمهم في نشر العلم النافع.</p>
+      </div>
+
+      <div id="notice" class="notice" hidden></div>
+      <div class="grid" id="list"><p class="muted">يجري التحميل…</p></div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar, esc = RM.esc, api = RM.api;
+      var list = document.getElementById("list");
+      var notice = document.getElementById("notice");
+      var state = { following: [], me: null };
+
+      function card(t) {
+        var isFollowing = state.following.indexOf(t.id) !== -1;
+        var isMe = state.me === t.id;
+        var btn = isMe
+          ? '<span class="badge" style="margin-top:.6rem">هذا أنت</span>'
+          : '<button class="btn ' + (isFollowing ? "btn-outline" : "btn-primary") + ' rm-follow" data-id="' + t.id + '" data-following="' + (isFollowing ? "1" : "0") + '" style="margin-top:.6rem;width:100%">' +
+            (isFollowing ? "✓ تتابعه" : "＋ متابعة") + "</button>";
+        return (
+          '<div class="card" style="text-align:center">' +
+          '<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--gold-soft),var(--gold));color:#2a1f04;display:grid;place-items:center;font-size:1.6rem;font-weight:800;margin:0 auto .6rem">' +
+          esc((t.name || "؟").charAt(0)) + "</div>" +
+          '<h3 style="margin:.2rem 0">' + esc(t.name) + "</h3>" +
+          '<div class="muted" style="font-size:.9rem">' +
+          ar(t.followers || 0) + " متابع · " + ar(t.clips || 0) + " مقطع</div>" +
+          btn + "</div>"
+        );
+      }
+
+      function render(teachers) {
+        if (!teachers.length) { RM.setHTML(list, '<p class="muted">لا يوجد معلّمون بعد.</p>'); return; }
+        RM.setHTML(list, teachers.map(card).join(""));
+      }
+
+      api("/api/teachers").then(function (res) {
+        var d = res.d || {};
+        state.following = d.following || [];
+        state.me = d.me;
+        if (!state.me) {
+          notice.hidden = false;
+          notice.innerHTML = 'لمتابعة معلّميك المفضّلين، <a class="gold" href="/login">سجّل الدخول</a> أو <a class="gold" href="/register">أنشئ حساباً</a>.';
+        }
+        render(d.teachers || []);
+      }).catch(function () { RM.setHTML(list, '<p class="muted">تعذّر التحميل.</p>'); });
+
+      list.addEventListener("click", function (e) {
+        var btn = e.target.closest(".rm-follow");
+        if (!btn) return;
+        if (!state.me) { location.href = "/login"; return; }
+        var id = +btn.getAttribute("data-id");
+        var following = btn.getAttribute("data-following") === "1";
+        btn.disabled = true;
+        api("/api/follow", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ teacher_id: id, action: following ? "unfollow" : "follow" }),
+        }).then(function (r) {
+          btn.disabled = false;
+          if (!r.ok || !r.d || !r.d.ok) return;
+          var nowFollowing = r.d.following;
+          btn.setAttribute("data-following", nowFollowing ? "1" : "0");
+          btn.textContent = nowFollowing ? "✓ تتابعه" : "＋ متابعة";
+          btn.className = "btn " + (nowFollowing ? "btn-outline" : "btn-primary") + " rm-follow";
+          btn.style.marginTop = ".6rem"; btn.style.width = "100%";
+        }).catch(function () { btn.disabled = false; });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -7,8 +7,9 @@
   var links = [
     { href: "/teacher", label: "📊 لوحة التحكم", exact: true },
     { href: "/teacher/lessons", label: "🔴 الدروس المباشرة" },
-    { href: "/teacher/content", label: "📚 المقاطع والصوتيات" },
     { href: "/teacher/editor", label: "✂ المونتاج" },
+    { href: "/teacher/content", label: "📚 مكتبة المقاطع" },
+    { href: "/teacher/audience", label: "👥 المتابعون والأداء" },
     { href: "/teacher/analytics", label: "📈 تحليل البيانات" },
     { href: "/teacher/publish", label: "📤 النشر على القنوات" },
   ];
@@ -30,13 +31,14 @@
     if (el) el.innerHTML = html;
   }
 
-  // رابط إدارة المعلّمين يظهر للمدير فقط.
+  // الأدمن له لوحته المستقلّة (/admin)؛ ومدير الموقع له لوحته (/manager).
+  // نعرض رابط العودة إلى لوحة الأدمن إن كان أدمن (لأنه قد يصل لصفحات المعلّم تقنيّاً).
   renderNav();
   fetch("/api/auth/me", { headers: { accept: "application/json" } })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
       if (d && d.user && d.user.role === "admin") {
-        renderNav([{ href: "/teacher/admin", label: "👑 إدارة المعلّمين" }]);
+        renderNav([{ href: "/admin", label: "↩ لوحة الأدمن" }]);
       }
     })
     .catch(function () {});

@@ -31,17 +31,17 @@
           </div>
 
           <div class="stats" style="margin-top:1.5rem">
+            <div class="stat"><div class="num" id="stFollowers">…</div><div class="lbl">متابعوك</div></div>
+            <div class="stat"><div class="num" id="stClips">…</div><div class="lbl">مقاطعك</div></div>
             <div class="stat"><div class="num" id="stLessons">…</div><div class="lbl">عدد الدروس</div></div>
             <div class="stat"><div class="num" id="stStudents">…</div><div class="lbl">المتعلّمون</div></div>
-            <div class="stat"><div class="num" id="stClips">…</div><div class="lbl">المقاطع</div></div>
-            <div class="stat"><div class="num" id="stAudio">…</div><div class="lbl">الموادّ الصوتية</div></div>
           </div>
 
           <h2 style="color:var(--gold);text-align:start;margin:2.2rem 0 1rem">إجراءات سريعة</h2>
           <div class="grid">
             <a class="card link" href="/teacher/lessons"><div class="ic">🔴</div><h3>درسٌ جديد</h3><p>ابدأ بثّاً مباشراً أو ارفع درساً مسجّلاً أو استورِد من يوتيوب.</p></a>
-            <a class="card link" href="/teacher/content"><div class="ic">📚</div><h3>المقاطع والصوتيات</h3><p>أضِف وأدِر مكتبة المقاطع والمكتبة الصوتية.</p></a>
             <a class="card link" href="/teacher/editor"><div class="ic">✂</div><h3>المونتاج</h3><p>قُصّ ودمّج وأضِف شعاراً وعنواناً قبل النشر.</p></a>
+            <a class="card link" href="/teacher/audience"><div class="ic">👥</div><h3>المتابعون والأداء</h3><p>عدد متابعيك، وأكثر مقاطعك مشاهدةً وتحميلاً.</p></a>
             <a class="card link" href="/teacher/analytics"><div class="ic">📈</div><h3>تحليل البيانات</h3><p>تابِع المشاهدات والتفاعل وأداء الدروس.</p></a>
             <a class="card link" href="/teacher/publish"><div class="ic">📤</div><h3>النشر على القنوات</h3><p>انشُر على يوتيوب وتيك توك وفيسبوك وإكس وتيليجرام.</p></a>
           </div>
@@ -57,10 +57,10 @@
   <script>
     RM.api('/api/teacher/stats').then(function (res) {
       var s = (res.d && res.d.stats) || {};
+      document.getElementById('stFollowers').textContent = RM.ar(s.followers || 0);
+      document.getElementById('stClips').textContent = RM.ar(s.clips || 0);
       document.getElementById('stLessons').textContent = RM.ar(s.lessons || 0);
       document.getElementById('stStudents').textContent = RM.ar(s.students || 0);
-      document.getElementById('stClips').textContent = RM.ar(s.clips || 0);
-      document.getElementById('stAudio').textContent = RM.ar(s.audio || 0);
     });
   </script>
 </body>

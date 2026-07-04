@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الأذكار — رياض المتقين</title>
+  <meta name="description" content="أذكار الصباح والمساء وبعد الصلاة والنوم، من حصن المسلم، مع عدّاد للتكرار." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .atabs { display:flex; gap:.5rem; flex-wrap:wrap; justify-content:center; margin-bottom:1.4rem }
+    .atab { padding:.5rem 1rem; border:1px solid var(--border); border-radius:999px; background:transparent; color:var(--text); cursor:pointer; font-size:.92rem }
+    .atab.active { background:var(--gold); color:#2a1f04; border-color:var(--gold); font-weight:700 }
+    .azkar { font-family:"Amiri",serif; font-size:1.3rem; line-height:2.2; color:var(--text) }
+    .acard { transition:opacity .2s }
+    .acard.done { opacity:.55 }
+    .acount { display:inline-flex; align-items:center; gap:.5rem; cursor:pointer; user-select:none;
+      background:rgba(212,175,55,.12); color:var(--gold); padding:.3rem .9rem; border-radius:999px; font-family:"Tajawal"; font-weight:700; font-size:.95rem }
+    .aref { color:var(--muted); font-size:.82rem; font-family:"Tajawal"; margin-top:.5rem }
+  </style>
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container" style="max-width:680px">
+      <div class="page-head center">
+        <h1>الأذكار</h1>
+        <p>من حصن المسلم — اضغط على العدّاد بعد كل تكرار.</p>
+      </div>
+
+      <div class="atabs" id="tabs"></div>
+      <div id="list"></div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script>
+    (function () {
+      function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
+      function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+
+      var DATA = {
+        morning: { label: "الصباح", items: [
+          { t: "أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ. اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ… (آية الكرسي)", n: 1, r: "من قالها حين يصبح أُجير من الجنّ حتى يمسي" },
+          { t: "قُلْ هُوَ اللَّهُ أَحَدٌ… والمعوّذتان (الإخلاص والفلق والناس)", n: 3, r: "كفته من كل شيء" },
+          { t: "أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 1, r: "" },
+          { t: "اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ… أَبُوءُ لَكَ بِنِعْمَتِكَ عَلَيَّ وَأَبُوءُ بِذَنْبِي فَاغْفِرْ لِي… (سيّد الاستغفار)", n: 1, r: "من قالها موقناً بها فمات دخل الجنّة" },
+          { t: "رَضِيتُ بِاللَّهِ رَبًّا، وَبِالْإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ ﷺ نَبِيًّا", n: 3, r: "كان حقًّا على الله أن يُرضيه" },
+          { t: "حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ", n: 7, r: "كفاه الله ما أهمّه" },
+          { t: "بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ", n: 3, r: "لم يضرّه شيء" },
+          { t: "اللَّهُمَّ عَافِنِي فِي بَدَنِي، اللَّهُمَّ عَافِنِي فِي سَمْعِي، اللَّهُمَّ عَافِنِي فِي بَصَرِي، لَا إِلَهَ إِلَّا أَنْتَ", n: 3, r: "" },
+          { t: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", n: 100, r: "حُطَّت خطاياه وإن كانت مثل زبد البحر" },
+          { t: "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 10, r: "" },
+        ]},
+        evening: { label: "المساء", items: [
+          { t: "أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ. اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ… (آية الكرسي)", n: 1, r: "" },
+          { t: "قُلْ هُوَ اللَّهُ أَحَدٌ… والمعوّذتان (الإخلاص والفلق والناس)", n: 3, r: "" },
+          { t: "أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 1, r: "" },
+          { t: "اللَّهُمَّ بِكَ أَمْسَيْنَا، وَبِكَ أَصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ الْمَصِيرُ", n: 1, r: "" },
+          { t: "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ", n: 3, r: "لم يضرّه شيء تلك الليلة" },
+          { t: "حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ", n: 7, r: "" },
+          { t: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", n: 100, r: "" },
+        ]},
+        prayer: { label: "بعد الصلاة", items: [
+          { t: "أَسْتَغْفِرُ اللَّهَ", n: 3, r: "" },
+          { t: "اللَّهُمَّ أَنْتَ السَّلَامُ وَمِنْكَ السَّلَامُ، تَبَارَكْتَ يَا ذَا الْجَلَالِ وَالْإِكْرَامِ", n: 1, r: "" },
+          { t: "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 1, r: "" },
+          { t: "سُبْحَانَ اللَّهِ", n: 33, r: "" },
+          { t: "الْحَمْدُ لِلَّهِ", n: 33, r: "" },
+          { t: "اللَّهُ أَكْبَرُ", n: 33, r: "وتمام المئة: لا إله إلا الله وحده لا شريك له…" },
+          { t: "آيَةُ الْكُرْسِيِّ", n: 1, r: "من قرأها دبر كل صلاة لم يمنعه من الجنّة إلا الموت" },
+        ]},
+        sleep: { label: "النوم", items: [
+          { t: "بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا", n: 1, r: "" },
+          { t: "آيَةُ الْكُرْسِيِّ ثمّ الإخلاص والمعوّذتان (يُنفث في الكفّين ويمسح بهما الجسد)", n: 1, r: "" },
+          { t: "اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ", n: 3, r: "" },
+          { t: "سُبْحَانَ اللَّهِ (33) وَالْحَمْدُ لِلَّهِ (33) وَاللَّهُ أَكْبَرُ (34)", n: 1, r: "خيرٌ لكما من خادم" },
+        ]},
+        wake: { label: "الاستيقاظ", items: [
+          { t: "الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ", n: 1, r: "" },
+          { t: "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ… ثمّ: رَبِّ اغْفِرْ لِي", n: 1, r: "غُفر له" },
+        ]},
+      };
+
+      var ORDER = ["morning", "evening", "prayer", "sleep", "wake"];
+      var current = "morning";
+      var progress = {};
+
+      var tabs = document.getElementById("tabs");
+      ORDER.forEach(function (k) {
+        var b = document.createElement("button");
+        b.className = "atab" + (k === current ? " active" : "");
+        b.textContent = DATA[k].label;
+        b.addEventListener("click", function () { current = k; renderTabs(); render(); });
+        tabs.appendChild(b);
+      });
+      function renderTabs() {
+        document.querySelectorAll(".atab").forEach(function (b, i) {
+          b.classList.toggle("active", ORDER[i] === current);
+        });
+      }
+
+      function render() {
+        var items = DATA[current].items;
+        var html = items.map(function (it, i) {
+          var key = current + ":" + i;
+          var left = progress[key] != null ? progress[key] : it.n;
+          var done = left <= 0;
+          return '<div class="card acard' + (done ? " done" : "") + '" data-key="' + key + '" data-total="' + it.n + '" style="margin-bottom:1rem">' +
+            '<div class="azkar">' + esc(it.t) + "</div>" +
+            (it.r ? '<div class="aref">' + esc(it.r) + "</div>" : "") +
+            '<div style="margin-top:.7rem"><span class="acount" data-key="' + key + '">' +
+            "<span>التكرار</span> <strong>" + ar(done ? it.n : left) + " / " + ar(it.n) + "</strong></span></div>" +
+            "</div>";
+        }).join("");
+        document.getElementById("list").innerHTML = html;
+      }
+
+      document.getElementById("list").addEventListener("click", function (e) {
+        var c = e.target.closest(".acount");
+        if (!c) return;
+        var card = c.closest(".acard");
+        var key = card.getAttribute("data-key");
+        var total = +card.getAttribute("data-total");
+        var left = progress[key] != null ? progress[key] : total;
+        if (left <= 0) { progress[key] = total; } // إعادة التعيين بالضغط بعد الإتمام
+        else { left -= 1; progress[key] = left; }
+        render();
+      });
+
+      render();
+    })();
+  </script>
+</body>
+</html>

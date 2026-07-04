@@ -14,7 +14,7 @@ export interface AuthUser {
   id: number;
   name: string;
   email: string;
-  role: "student" | "teacher" | "admin";
+  role: "student" | "teacher" | "admin" | "manager";
   /** يجب على المستخدم تعيين كلمة مرور جديدة قبل استخدام المنصّة. */
   mustChangePassword?: boolean;
 }

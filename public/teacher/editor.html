@@ -3,12 +3,12 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>المونتاج — رياض المتقين</title>
-  <meta name="description" content="محرّر المونتاج داخل المتصفّح: قص وإضافة شعار وعنوان وتصدير." />
+  <title>استوديو البوستات والمونتاج — رياض المتقين</title>
+  <meta name="description" content="استوديو رياض المتقين: أنشئ بوستات صور أو فيديو (صوت + خلفية موحّدة) بعدّة مقاسات للمنصّات، وانشُرها." />
   <meta name="theme-color" content="#0b1430" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
@@ -22,71 +22,105 @@
         <section>
           <div class="page-head" style="padding-top:0">
             <h1>المونتاج</h1>
-            <p>حمّل فيديو، قُصّ المقطع، أضِف شعاراً وعنواناً، ثم صدّره — كل ذلك داخل المتصفّح.</p>
+            <p>صمّم بطاقةً موحّدةً (شعار + اسم الملقي + عنوان الدرس) وأنتج منها <strong>فيديو</strong> (صوت + الخلفية المزخرفة) بعدّة مقاسات للمنصّات — كل ذلك داخل متصفّحك.</p>
           </div>
 
+          <!-- البيانات -->
           <div class="card" style="margin-bottom:1.2rem">
-            <div class="field" style="margin:0">
-              <label for="file">١) اختر ملف فيديو</label>
-              <input type="file" id="file" accept="video/*" />
+            <h3 style="color:var(--gold);margin-top:0">١) بيانات البطاقة</h3>
+            <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+              <div class="field" style="flex:0 0 38%;min-width:120px">
+                <label for="hon">اللقب</label>
+                <select id="hon">
+                  <option value="الشيخ">الشيخ</option>
+                  <option value="الدكتور">الدكتور</option>
+                  <option value="فضيلة الشيخ">فضيلة الشيخ</option>
+                  <option value="العلّامة">العلّامة</option>
+                  <option value="المحدّث">المحدّث</option>
+                  <option value="الحافظ">الحافظ</option>
+                  <option value="الإمام">الإمام</option>
+                  <option value="الأستاذ">الأستاذ</option>
+                  <option value="">بدون</option>
+                </select>
+              </div>
+              <div class="field" style="flex:1;min-width:160px">
+                <label for="name">اسم الملقي</label>
+                <input type="text" id="name" placeholder="مثال: محمد بن صالح العثيمين" />
+              </div>
             </div>
+            <div class="field">
+              <label for="topic">عنوان الدرس</label>
+              <input type="text" id="topic" placeholder="مثال: أجمل ما قيل في ذمّ التفاخر في الدنيا" />
+            </div>
+            <label style="display:flex;align-items:center;gap:.6rem;margin:0">
+              <input type="checkbox" id="audioTgl" style="width:auto" /> إظهار موجة صوتية على البطاقة
+            </label>
+          </div>
+
+          <!-- المقاسات -->
+          <div class="card" style="margin-bottom:1.2rem">
+            <h3 style="color:var(--gold);margin-top:0">٢) المقاسات</h3>
+            <p class="muted" style="font-size:.85rem;margin:.2rem 0 .8rem">تُنتَج المحدّدة دفعةً واحدة، كلٌّ يغطّي كامل إطار منصّته.</p>
+            <div style="display:flex;flex-direction:column;gap:.6rem">
+              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_square" checked style="width:auto" /> مربّع 1:1 — إنستغرام / فيسبوك / تيليجرام / X</label>
+              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_story" checked style="width:auto" /> ستوري 9:16 — تيك توك / ريلز / شورتس / ستوري</label>
+              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_wide" style="width:auto" /> أفقي 16:9 — يوتيوب / فيديو</label>
+            </div>
+          </div>
+
+          <!-- رفع الملف -->
+          <div class="card" style="margin-bottom:1.2rem">
+            <h3 style="color:var(--gold);margin-top:0">٣) ملفّ الصوت / الفيديو</h3>
+            <div class="field" style="margin:0">
+              <label for="file">ارفع مقطعاً صوتيّاً (مُستحسَن) أو فيديو — يُؤخَذ الصوت فقط</label>
+              <input type="file" id="file" accept="audio/*,video/*" />
+            </div>
+            <p class="muted" id="fileInfo" style="margin:.6rem 0 0;font-size:.88rem"></p>
           </div>
 
           <!-- المعاينة -->
-          <div style="position:relative;background:#000;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:1rem">
-            <canvas id="stage" style="width:100%;display:block;aspect-ratio:16/9;background:#000"></canvas>
-            <video id="src" playsinline style="display:none"></video>
-          </div>
-
-          <div style="display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.2rem">
-            <button class="btn btn-outline" id="play" type="button">▶ تشغيل المقطع</button>
-            <button class="btn btn-ghost" id="pause" type="button">⏸ إيقاف</button>
-            <span class="muted" id="timeLbl" style="align-self:center">٠:٠٠ / ٠:٠٠</span>
-          </div>
-
-          <!-- القص -->
           <div class="card" style="margin-bottom:1.2rem">
-            <h3 style="color:var(--gold);margin-top:0">٢) القص</h3>
-            <div class="field">
-              <label>بداية المقطع: <span class="gold" id="startLbl">٠:٠٠</span></label>
-              <input type="range" id="start" min="0" max="100" value="0" step="0.1" style="width:100%" />
-            </div>
-            <div class="field" style="margin:0">
-              <label>نهاية المقطع: <span class="gold" id="endLbl">٠:٠٠</span></label>
-              <input type="range" id="end" min="0" max="100" value="100" step="0.1" style="width:100%" />
+            <span class="muted" style="font-size:.85rem" id="previewLbl">معاينة</span>
+            <div style="text-align:center;margin-top:.6rem">
+              <canvas id="preview" width="1080" height="1080"
+                style="max-width:100%;max-height:480px;width:auto;display:inline-block;border:1px solid var(--border);border-radius:12px;background:#07182C"></canvas>
             </div>
           </div>
 
-          <!-- الشعار والعنوان -->
-          <div class="card" style="margin-bottom:1.2rem">
-            <h3 style="color:var(--gold);margin-top:0">٣) الشعار والعنوان</h3>
-            <div class="field" style="display:flex;align-items:center;gap:.6rem">
-              <input type="checkbox" id="logoToggle" checked style="width:auto" />
-              <label for="logoToggle" style="margin:0">إظهار شعار رياض المتقين</label>
-            </div>
-            <div class="field">
-              <label for="logoFile">شعار مخصّص (اختياري)</label>
-              <input type="file" id="logoFile" accept="image/*" />
-            </div>
-            <div class="field">
-              <label for="title">العنوان على الفيديو</label>
-              <input type="text" id="title" placeholder="مثال: شرح كتاب التوحيد — الدرس الأول" />
-            </div>
-            <div class="field" style="margin:0">
-              <label for="subtitle">سطر فرعي (اسم الدكتور — اختياري)</label>
-              <input type="text" id="subtitle" placeholder="مثال: د. عبد الله الراشد" />
-            </div>
-          </div>
-
-          <!-- التصدير -->
+          <!-- الإنتاج -->
           <div class="card">
-            <h3 style="color:var(--gold);margin-top:0">٤) التصدير</h3>
-            <button class="btn btn-primary" id="export" type="button">⤓ تصدير المقطع</button>
+            <button class="btn btn-primary" id="genBtn" type="button">▶ حوّل وأنتج الفيديو</button>
             <span id="status" class="muted" style="margin-inline-start:.8rem"></span>
+            <div style="margin-top:.9rem">
+              <div style="height:10px;background:var(--border);border-radius:999px;overflow:hidden">
+                <div id="bar" style="height:100%;width:0;background:var(--gold);transition:width .25s"></div>
+              </div>
+            </div>
             <div id="downloadWrap" style="margin-top:1rem"></div>
             <div class="notice" style="margin-top:1rem">
-              يعمل المحرّر بالكامل داخل متصفّحك (Canvas + MediaRecorder) — لا يُرفع فيديوك إلى أيّ خادم.
-              الناتج بصيغة WebM. دمج عدّة مقاطع سيُضاف لاحقاً.
+              المعالجة تجري بالكامل داخل متصفّحك — لا يُرفع شيء إلى خادم إلا عند الضغط على «نشر».
+              الفيديو يُحمّل محرّك ffmpeg لأوّل مرّة (~30MB) ثم يُحفظ بالكاش.
+            </div>
+
+            <!-- وجهات النشر -->
+            <div class="card" id="publishPanel" hidden style="margin-top:1.2rem">
+              <h3 style="color:var(--gold);margin-top:0">نشر</h3>
+              <div class="field">
+                <label>اختر وجهات النشر</label>
+                <div style="display:flex;flex-direction:column;gap:.6rem">
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="dest_site" value="site" checked style="width:auto" /> الموقع — مكتبة المقاطع</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" style="width:auto" /> تيليجرام</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" style="width:auto" /> يوتيوب</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="tiktok" style="width:auto" /> تيك توك</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> فيسبوك</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="x" style="width:auto" /> إكس / تويتر</label>
+                </div>
+              </div>
+              <button class="btn btn-primary" id="pubBtn" type="button">نشر إلى المحدّد</button>
+              <div class="notice" id="pubMsg" hidden style="margin-top:1rem"></div>
+              <p class="muted" style="font-size:.82rem;margin:.7rem 0 0;line-height:1.8">
+                <strong>الموقع</strong> و<strong>تيليجرام</strong> يُنشَران مباشرةً. يوتيوب/تيك توك/فيسبوك/إكس تُحفَظ في قائمة الإصدار حتى يُفعَّل ربط الحسابات.
+              </p>
             </div>
           </div>
         </section>
@@ -97,6 +131,8 @@
   <div data-footer></div>
   <script src="/layout.js"></script>
   <script src="/teacher/nav.js"></script>
+  <script src="/vendor/ffmpeg/util.js"></script>
+  <script src="/vendor/ffmpeg/ffmpeg.js"></script>
   <script src="/teacher/editor.js"></script>
 </body>
 </html>

@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>لوحة مدير الموقع — رياض المتقين</title>
+  <meta name="description" content="لوحة مدير الموقع: طلبات التعليم، الموافقة على المحتوى، والإشعارات." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>لوحة مدير الموقع</h1>
+            <p>راجِع طلبات التعليم ووافِق على المحتوى قبل نشره.</p>
+          </div>
+
+          <div class="stats" id="stats">
+            <div class="stat"><div class="num">…</div><div class="lbl">طلبات تعليم معلّقة</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">محتوى بانتظار الموافقة</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">المعلّمون</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">المتعلّمون</div></div>
+          </div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">الإشعارات</h2>
+          <div class="card" style="padding:0;overflow:hidden">
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border)">
+              <span class="muted" id="notifCount">…</span>
+              <a href="#" class="gold" id="markAll">تعليم الكلّ كمقروء</a>
+            </div>
+            <div id="notifList"><p class="muted" style="padding:1rem">يجري التحميل…</p></div>
+          </div>
+
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">إجراءات سريعة</h2>
+          <div class="grid">
+            <a class="card link" href="/manager/applications"><div class="ic">📝</div><h3>طلبات التعليم</h3><p>راجِع طلبات الانضمام معلّمين ووافِق أو ارفض.</p></a>
+            <a class="card link" href="/manager/approvals"><div class="ic">✅</div><h3>الموافقة على المحتوى</h3><p>اعتمِد المقاطع والدروس والمنشورات قبل نشرها.</p></a>
+            <a class="card link" href="/manager/analytics"><div class="ic">📈</div><h3>تحليل البيانات</h3><p>الزوّار، البلدان، أوقات الدخول، ووظائف المسجّلين.</p></a>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar, esc = RM.esc, api = RM.api;
+
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "manager" && u.role !== "admin") { location.href = "/"; return; }
+        loadStats();
+        loadNotifs();
+      });
+
+      function loadStats() {
+        api("/api/manager/dashboard").then(function (res) {
+          var s = (res.d && res.d.stats) || {};
+          var pendingContent = (s.pending_clips || 0) + (s.pending_lessons || 0) + (s.pending_posts || 0);
+          document.getElementById("stats").innerHTML =
+            stat(s.pending_apps, "طلبات تعليم معلّقة") +
+            stat(pendingContent, "محتوى بانتظار الموافقة") +
+            stat(s.teachers, "المعلّمون") +
+            stat(s.students, "المتعلّمون");
+        });
+      }
+      function stat(n, lbl) {
+        return '<div class="stat"><div class="num">' + ar(n || 0) + '</div><div class="lbl">' + lbl + "</div></div>";
+      }
+
+      function loadNotifs() {
+        api("/api/notifications").then(function (res) {
+          var d = res.d || {};
+          var list = d.notifications || [];
+          document.getElementById("notifCount").textContent =
+            "غير المقروء: " + ar(d.unread || 0) + " من " + ar(list.length);
+          var el = document.getElementById("notifList");
+          if (!list.length) { el.innerHTML = '<p class="muted" style="padding:1rem">لا إشعارات بعد.</p>'; return; }
+          el.innerHTML = list.map(function (n) {
+            var bg = n.is_read ? "" : "background:rgba(212,175,55,.06)";
+            var link = n.link ? '<a class="gold" href="' + esc(n.link) + '" style="font-size:.85rem">فتح</a>' : "";
+            return '<div style="padding:.8rem 1rem;border-bottom:1px solid var(--border);' + bg + '">' +
+              '<div style="display:flex;justify-content:space-between;gap:.6rem">' +
+              '<strong>' + esc(n.title) + "</strong>" + link + "</div>" +
+              (n.body ? '<div class="muted" style="font-size:.88rem;margin-top:.2rem">' + esc(n.body) + "</div>" : "") +
+              "</div>";
+          }).join("");
+        });
+      }
+
+      document.getElementById("markAll").addEventListener("click", function (e) {
+        e.preventDefault();
+        api("/api/notifications/read", { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+          .then(function () { loadNotifs(); });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>تواصل مع الدعم — رياض المتقين</title>
+  <meta name="description" content="أرسل رسالةً للدعم: مشكلة، اقتراح، أو استفسار. نردّ عليك بإذن الله." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container" style="max-width:620px">
+      <div class="page-head center">
+        <h1>تواصل مع الدعم</h1>
+        <p>عندك مشكلة أو اقتراح أو استفسار؟ اكتب لنا ونردّ عليك بإذن الله.</p>
+      </div>
+
+      <div class="card">
+        <form id="form">
+          <div id="guest">
+            <div style="display:flex;gap:.8rem;flex-wrap:wrap">
+              <div class="field" style="flex:1;min-width:150px">
+                <label for="name">الاسم</label>
+                <input type="text" id="name" placeholder="اسمك" />
+              </div>
+              <div class="field" style="flex:1;min-width:150px">
+                <label for="email">البريد الإلكتروني</label>
+                <input type="email" id="email" placeholder="للرد عليك" />
+              </div>
+            </div>
+          </div>
+          <div class="field">
+            <label for="category">نوع الطلب</label>
+            <select id="category">
+              <option value="مشكلة تقنية">مشكلة تقنية</option>
+              <option value="اقتراح">اقتراح</option>
+              <option value="استفسار">استفسار</option>
+              <option value="محتوى">ملاحظة على محتوى</option>
+              <option value="أخرى">أخرى</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="subject">الموضوع</label>
+            <input type="text" id="subject" placeholder="عنوان مختصر" />
+          </div>
+          <div class="field">
+            <label for="message">رسالتك *</label>
+            <textarea id="message" rows="6" required placeholder="اشرح طلبك بالتفصيل…"></textarea>
+          </div>
+          <button class="btn btn-primary" type="submit">إرسال</button>
+          <div class="notice" id="msg" hidden></div>
+        </form>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var api = RM.api;
+      function val(id) { return document.getElementById(id).value.trim(); }
+      function show(text, ok) {
+        var n = document.getElementById("msg");
+        n.hidden = false; n.textContent = text; n.style.borderColor = ok ? "var(--gold)" : "";
+      }
+
+      // إن كان مسجّلاً، نخفي حقلَي الاسم والبريد (يؤخذان من حسابه).
+      RM.getMe().then(function (u) {
+        if (u) {
+          document.getElementById("guest").style.display = "none";
+        }
+      });
+
+      document.getElementById("form").addEventListener("submit", function (e) {
+        e.preventDefault();
+        if (val("message").length < 5) { show("اكتب رسالتك أولاً.", false); return; }
+        show("جارٍ الإرسال…", true);
+        api("/api/support", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: val("name"), email: val("email"), category: val("category"),
+            subject: val("subject"), message: val("message"),
+          }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) {
+            document.getElementById("form").reset();
+            show("وصلت رسالتك ✓ سنردّ عليك بإذن الله. بارك الله فيك.", true);
+          } else { show(res.d.error || "تعذّر الإرسال.", false); }
+        }).catch(function () { show("حدث خطأ في الاتصال.", false); });
+      });
+    })();
+  </script>
+</body>
+</html>

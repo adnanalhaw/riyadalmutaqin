@@ -13,13 +13,18 @@ window.RM = (function () {
   function ytThumb(id) {
     return id ? "https://i.ytimg.com/vi/" + id + "/hqdefault.jpg" : null;
   }
+  // يُهرّب لكلٍّ من سياق النصّ والسمات (يشمل علامتَي الاقتباس لمنع كسر السمات/XSS).
+  var ESC_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
   function esc(s) {
-    var d = document.createElement("div");
-    d.textContent = s == null ? "" : String(s);
-    return d.innerHTML;
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return ESC_MAP[c]; });
   }
   function ytWatch(id) {
     return id ? "https://www.youtube.com/watch?v=" + encodeURIComponent(id) : "#";
+  }
+  // يسمح بمسارٍ نسبيّ (/...) أو http(s) فقط؛ يمنع javascript:/data: ونحوها.
+  function safeUrl(u) {
+    u = String(u == null ? "" : u);
+    return /^(https?:\/\/|\/(?!\/))/i.test(u) ? u : "#";
   }
 
   var meP;
@@ -33,9 +38,53 @@ window.RM = (function () {
     return meP;
   }
 
+  // تسجيل حدث محتوى (مشاهدة/تحميل مقطع) — لا يُعطّل العميل عند الفشل.
+  function trackClip(clipId, kind) {
+    try {
+      fetch("/api/clip-event", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clip_id: clipId, kind: kind }),
+        keepalive: true,
+      });
+    } catch (e) { /* تجاهل */ }
+  }
+
+  // سطر بيانات المقطع: اسم المُلقي/المُنشئ + عدد المشاهدين.
+  function clipMeta(item) {
+    var by = item.author_name && item.author_name !== item.doctor_name
+      ? '<span class="muted"> · ' + esc(item.author_name) + "</span>" : "";
+    var views = (item.views != null)
+      ? '<span class="muted" style="font-size:.82rem">👁 ' + ar(item.views) + " مشاهدة</span>" : "";
+    return (
+      (item.doctor_name ? '<div class="vdoc">' + esc(item.doctor_name) + by + "</div>" : "") +
+      (views ? '<div style="margin-top:.2rem">' + views + "</div>" : "")
+    );
+  }
+
   // بطاقة فيديو (درس/مقطع)
   function videoCard(item, opts) {
     opts = opts || {};
+    // مقطع بفيديو مُستضاف (ناتج المونتاج): يُشغَّل داخل الصفحة بدل رابط يوتيوب.
+    if (item.video_url && !item.youtube_id) {
+      var vurl = safeUrl(item.video_url);
+      var d0 = item.duration ? '<span class="badge" style="flex:none">' + fmtDur(item.duration) + "</span>" : "";
+      var dl = opts.clip
+        ? '<a class="btn btn-ghost rm-download" data-id="' + item.id + '" href="' + esc(vurl) +
+          '" download style="margin-top:.5rem;padding:.35rem .9rem;font-size:.85rem">⤓ تنزيل</a>'
+        : "";
+      return (
+        '<div' + (opts.clip ? ' data-clip-id="' + item.id + '"' : "") + ">" +
+        '<video src="' + esc(vurl) + '" controls preload="metadata"' +
+        (opts.clip ? ' class="rm-clipvid" data-id="' + item.id + '"' : "") +
+        ' style="width:100%;aspect-ratio:16/9;background:#000;border-radius:12px;display:block"></video>' +
+        '<div class="vmeta">' +
+        '<div class="vtitle">' + esc(item.title) + "</div>" +
+        (opts.clip ? clipMeta(item) : (item.doctor_name ? '<div class="vdoc">' + esc(item.doctor_name) + "</div>" : "")) +
+        d0 + dl +
+        "</div></div>"
+      );
+    }
     var thumb = ytThumb(item.youtube_id) || item.thumbnail;
     var bg = thumb
       ? 'style="background-image:url(' + esc(thumb) + ');background-size:cover;background-position:center"'
@@ -50,15 +99,32 @@ window.RM = (function () {
     }
     return (
       "<div>" +
-      '<a href="' + link + '" target="_blank" rel="noopener" class="vthumb" ' + bg + ">" +
+      '<a href="' + link + '" target="_blank" rel="noopener" class="vthumb' + (opts.clip ? " rm-cliplink" : "") + '" ' +
+      (opts.clip ? 'data-id="' + item.id + '" ' : "") + bg + ">" +
       '<div class="play">▶</div>' + dur +
       "</a>" +
       '<div class="vmeta">' +
       '<div class="vtitle">' + esc(item.title) + "</div>" +
-      (item.doctor_name ? '<div class="vdoc">' + esc(item.doctor_name) + "</div>" : "") +
+      (opts.clip ? clipMeta(item) : (item.doctor_name ? '<div class="vdoc">' + esc(item.doctor_name) + "</div>" : "")) +
       action +
       "</div></div>"
     );
+  }
+
+  // ربط تتبّع المقاطع داخل حاوية: مشاهدة عند التشغيل/النقر، وتحميل عند الزرّ.
+  function bindClips(container) {
+    var viewed = {};
+    function view(id) { if (id && !viewed[id]) { viewed[id] = 1; trackClip(id, "view"); } }
+    container.addEventListener("play", function (e) {
+      var v = e.target;
+      if (v && v.classList && v.classList.contains("rm-clipvid")) view(+v.getAttribute("data-id"));
+    }, true);
+    container.addEventListener("click", function (e) {
+      var lnk = e.target.closest(".rm-cliplink");
+      if (lnk) { view(+lnk.getAttribute("data-id")); return; }
+      var dl = e.target.closest(".rm-download");
+      if (dl) trackClip(+dl.getAttribute("data-id"), "download");
+    });
   }
 
   function setHTML(sel, html) {
@@ -97,13 +163,16 @@ window.RM = (function () {
   return {
     ar: ar, fmtDur: fmtDur, ytThumb: ytThumb, esc: esc, getMe: getMe, api: api,
     videoCard: videoCard, setHTML: setHTML, bindSave: bindSave,
+    trackClip: trackClip, bindClips: bindClips,
 
     // المقاطع
     loadClips: function (sel) {
       api("/api/clips").then(function (res) {
         var list = (res.d && res.d.clips) || [];
-        if (!list.length) { setHTML(sel, '<p class="muted">لا توجد مقاطع بعد.</p>'); return; }
-        setHTML(sel, list.map(function (c) { return videoCard(c, {}); }).join(""));
+        var el = setHTML(sel, list.length
+          ? list.map(function (c) { return videoCard(c, { clip: true }); }).join("")
+          : '<p class="muted">لا توجد مقاطع بعد.</p>');
+        if (el && list.length) bindClips(el);
       });
     },
 

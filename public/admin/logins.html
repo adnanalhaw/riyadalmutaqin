@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>سجلّ الدخول — لوحة الأدمن</title>
+  <meta name="description" content="متى دخل كلّ مستخدم: سجلّ زمنيّ وملخّص لكلّ مستخدم." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-admin-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>سجلّ الدخول</h1>
+            <p>متى دخل كلّ مستخدم — التوقيت بتوقيت جهازك.</p>
+          </div>
+
+          <div style="display:flex;gap:.6rem;margin-bottom:1rem">
+            <button class="btn btn-outline rm-tab active" data-tab="users">ملخّص المستخدمين</button>
+            <button class="btn btn-outline rm-tab" data-tab="recent">السجلّ الزمنيّ</button>
+          </div>
+
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="t">
+              <thead id="thead"></thead>
+              <tbody id="tbody"><tr><td class="muted" style="padding:1rem">يجري التحميل…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/admin/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar, esc = RM.esc, api = RM.api;
+      var ROLES = { student: "متعلّم", teacher: "معلّم", manager: "مدير الموقع", admin: "أدمن" };
+      var data = null, tab = "users";
+
+      function fmt(iso) {
+        if (!iso) return "—";
+        // التواريخ مخزّنة UTC؛ نعرضها بتوقيت المتصفّح.
+        var d = new Date(iso.replace(" ", "T") + "Z");
+        if (isNaN(d)) return esc(iso);
+        return d.toLocaleString("ar");
+      }
+
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "admin") { location.href = "/"; return; }
+        api("/api/admin/logins").then(function (res) { data = res.d || {}; render(); });
+      });
+
+      function render() {
+        if (!data) return;
+        var thead = document.getElementById("thead"), tbody = document.getElementById("tbody");
+        if (tab === "users") {
+          thead.innerHTML = "<tr><th>المستخدم</th><th>الدور</th><th>آخر دخول</th><th>عدد مرّات الدخول</th></tr>";
+          var rows = data.perUser || [];
+          tbody.innerHTML = rows.length ? rows.map(function (r) {
+            return "<tr><td>" + esc(r.name || "—") + '<div class="muted" style="font-size:.8rem">' + esc(r.email || "") + "</div></td>" +
+              "<td>" + (ROLES[r.role] || esc(r.role)) + "</td>" +
+              "<td>" + fmt(r.last_login) + "</td>" +
+              "<td>" + ar(r.login_count || 0) + "</td></tr>";
+          }).join("") : '<tr><td colspan="4" class="muted" style="padding:1rem">لا بيانات.</td></tr>';
+        } else {
+          thead.innerHTML = "<tr><th>المستخدم</th><th>الدور</th><th>وقت الدخول</th><th>البلد</th></tr>";
+          var rec = data.recent || [];
+          tbody.innerHTML = rec.length ? rec.map(function (e) {
+            return "<tr><td>" + esc(e.name || "—") + '<div class="muted" style="font-size:.8rem">' + esc(e.email || "") + "</div></td>" +
+              "<td>" + (ROLES[e.role] || esc(e.role || "")) + "</td>" +
+              "<td>" + fmt(e.created_at) + "</td>" +
+              "<td>" + esc(e.country || "—") + "</td></tr>";
+          }).join("") : '<tr><td colspan="4" class="muted" style="padding:1rem">لا عمليّات دخول مسجّلة بعد.</td></tr>';
+        }
+      }
+
+      document.querySelector(".rm-tab").parentNode.addEventListener("click", function (e) {
+        var t = e.target.closest(".rm-tab"); if (!t) return;
+        document.querySelectorAll(".rm-tab").forEach(function (b) { b.classList.remove("active"); });
+        t.classList.add("active"); tab = t.getAttribute("data-tab"); render();
+      });
+    })();
+  </script>
+</body>
+</html>

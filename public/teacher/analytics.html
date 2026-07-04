@@ -32,6 +32,31 @@
             <div class="stat"><div class="num">…</div><div class="lbl">إكمالات</div></div>
           </div>
 
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">حركة الزوّار — آخر ٣٠ يوماً</h2>
+          <div class="stats" id="trafficStats">
+            <div class="stat"><div class="num">…</div><div class="lbl">مرّات فتح الصفحات</div></div>
+            <div class="stat"><div class="num">…</div><div class="lbl">زوّار مختلفون</div></div>
+          </div>
+          <p class="muted" style="font-size:.85rem;margin:.7rem 2px 0;line-height:1.8">
+            <strong>مرّات فتح الصفحات</strong>: مجموع مرّات فتح أي صفحة (لو فتح شخصٌ ٣ صفحات = ٣ مرّات).
+            &nbsp;•&nbsp;
+            <strong>زوّار مختلفون</strong>: عدد الأشخاص (الأجهزة) المختلفين — الشخص نفسه يُحسب مرّةً واحدة مهما تصفّح.
+          </p>
+          <div class="card" style="margin-top:1rem">
+            <span class="muted" style="font-size:.85rem">المشاهدات — آخر ٧ أيام</span>
+            <div id="trafficChart" style="display:flex;align-items:flex-end;gap:.8rem;height:160px;margin-top:.6rem"></div>
+          </div>
+          <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem">
+            <div class="card" style="flex:1;min-width:240px">
+              <h3 style="color:var(--gold);margin-top:0">من أين أتوا (المصادر)</h3>
+              <div id="sourcesList"><p class="muted">يجري التحميل…</p></div>
+            </div>
+            <div class="card" style="flex:1;min-width:240px">
+              <h3 style="color:var(--gold);margin-top:0">أكثر الصفحات زيارة</h3>
+              <div id="pagesList"><p class="muted">يجري التحميل…</p></div>
+            </div>
+          </div>
+
           <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">أداء الدروس</h2>
           <div class="card" style="padding:0;overflow:hidden">
             <table class="t">
@@ -135,6 +160,54 @@
             '<span class="muted" style="font-size:.8rem">' + s.label + " · " + ar(s.count) + "</span>" +
             "</div>";
         }).join("");
+
+        // ===== حركة الزوّار =====
+        var tr = d.traffic || {};
+        document.getElementById("trafficStats").innerHTML =
+          '<div class="stat"><div class="num">' + ar(tr.views || 0) + '</div><div class="lbl">مرّات فتح الصفحات</div></div>' +
+          '<div class="stat"><div class="num">' + ar(tr.visitors || 0) + '</div><div class="lbl">زوّار مختلفون</div></div>';
+
+        var tc = {};
+        (d.trafficByDay || []).forEach(function (s) { tc[s.day] = s.views; });
+        var tseries = [], tmax = 0;
+        for (var j = 6; j >= 0; j--) {
+          var dt2 = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - j));
+          var key2 = dt2.getUTCFullYear() + "-" + String(dt2.getUTCMonth() + 1).padStart(2, "0") + "-" + String(dt2.getUTCDate()).padStart(2, "0");
+          var c2 = tc[key2] || 0; if (c2 > tmax) tmax = c2;
+          tseries.push({ label: DAYS[dt2.getUTCDay()], count: c2 });
+        }
+        document.getElementById("trafficChart").innerHTML = tseries.map(function (s) {
+          var h = tmax ? Math.max(4, Math.round((s.count / tmax) * 100)) : 4;
+          return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:.4rem;height:100%">' +
+            '<div style="flex:1;display:flex;align-items:flex-end;width:100%" title="' + ar(s.count) + '">' +
+            '<div style="width:100%;height:' + h + '%;background:linear-gradient(180deg,var(--gold-soft),var(--gold));border-radius:6px 6px 0 0"></div></div>' +
+            '<span class="muted" style="font-size:.8rem">' + s.label + " · " + ar(s.count) + "</span></div>";
+        }).join("");
+
+        // أسماء عربية مقروءة للصفحات بدل المسارات الخام.
+        var PAGES = {
+          "/": "الرئيسية", "/clips": "مكتبة المقاطع", "/live": "الدروس المباشرة",
+          "/library": "مكتبة الحفظ", "/about": "عن الموقع", "/share": "بطاقة المشاركة",
+          "/login": "تسجيل الدخول", "/register": "التسجيل", "/account": "حسابي",
+          "/change-password": "تغيير كلمة المرور", "/forgot": "نسيت كلمة المرور",
+        };
+        function pageName(p) { return PAGES[p] || (p || "—"); }
+
+        function listRows(arr, key, fmt) {
+          if (!arr || !arr.length) return '<p class="muted">لا بيانات بعد — ستظهر مع زيارات الموقع.</p>';
+          var mx = arr[0].c || 1;
+          return arr.map(function (r) {
+            var w = Math.max(6, Math.round((r.c / mx) * 100));
+            var label = fmt ? fmt(r[key]) : (r[key] || "—");
+            return '<div style="margin-bottom:.7rem"><div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.9rem">' +
+              '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(label) + '</span>' +
+              '<span class="gold" style="flex:none">' + ar(r.c) + '</span></div>' +
+              '<div style="height:6px;background:var(--border);border-radius:999px;overflow:hidden;margin-top:.25rem">' +
+              '<div style="height:100%;width:' + w + '%;background:var(--gold)"></div></div></div>';
+          }).join("");
+        }
+        document.getElementById("sourcesList").innerHTML = listRows(d.topSources, "source");
+        document.getElementById("pagesList").innerHTML = listRows(d.topPages, "path", pageName);
       }).catch(function () { fail("تعذّر الاتصال بالخادم."); });
     })();
   </script>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>زكاة الفضّة — رياض المتقين</title>
+  <meta name="description" content="احسب زكاة الفضّة: القيمة، النِّصاب، موعد الاستحقاق، والمقدار — محفوظ في حسابك." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .zrow{display:flex;justify-content:space-between;align-items:center;gap:.6rem;padding:.7rem .2rem;border-bottom:1px solid var(--border)}
+    .zrow:last-child{border-bottom:none}.zbig{font-size:1.5rem;font-weight:800;color:var(--gold)}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:640px">
+      <div class="page-head center">
+        <h1>زكاة الفضّة</h1>
+        <p>تجب في الفضّة إذا بلغت <strong>٥٩٥ غراماً</strong> ومرّ عليها حَوْلٌ كامل. المقدار ٢٫٥٪.</p>
+        <p><a class="gold" href="/zakat">‹ كلّ أنواع الزكاة</a></p>
+      </div>
+      <div class="notice" id="gate" hidden></div>
+      <div id="zkMain">
+        <div class="card" id="settingsBar" style="margin-bottom:1.2rem"></div>
+        <div class="card" style="margin-bottom:1.2rem">
+          <h3 style="color:var(--gold);margin-top:0">ممتلكاتك من الفضّة</h3>
+          <div class="field"><label id="qtyLabel" for="qty">الوزن</label><input type="number" step="any" id="qty" placeholder="0" /></div>
+          <div class="field"><label for="hawl">تاريخ بدء الحَوْل (يوم بلوغك النِّصاب)</label><input type="date" id="hawl" /></div>
+          <div class="field"><label for="note">ملاحظة</label><input type="text" id="note" placeholder="اختياري" /></div>
+          <button class="btn btn-primary" id="save">حفظ في حسابي</button>
+          <div class="notice" id="saveMsg" hidden style="margin-top:.8rem"></div>
+        </div>
+        <div class="card">
+          <div class="zrow"><span>قيمة الفضّة</span><strong id="r_value">٠</strong></div>
+          <div class="zrow"><span>النِّصاب (٥٩٥غ)</span><strong id="r_nisab">—</strong></div>
+          <div class="zrow"><span>هل بلغ النِّصاب؟</span><strong id="r_reached">—</strong></div>
+          <div class="zrow"><span>موعد الاستحقاق</span><strong id="r_due">—</strong></div>
+          <div class="zrow"><span>الزكاة المستحقّة الآن (٢٫٥٪)</span><strong class="zbig" id="r_zakat">٠</strong></div>
+          <p class="muted" id="r_note" style="margin-top:.8rem;font-size:.9rem"></p>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script src="/zakat/common.js"></script>
+  <script src="/zakat/holding.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      ZK.holdingPage({
+        kind: "silver", mode: "grams", qtyLabel: "وزن الفضّة الذي تملكه (غرام)",
+        valueOf: function (q) { return q * ZK.silverPrice(); },
+        nisabValue: function () { return ZK.nisabSilver(); },
+        reached: function (q) { return q >= 595; },
+        nisabHint: function () { return "أدخِل سعر الفضّة"; },
+      });
+    });
+  </script>
+</body>
+</html>
