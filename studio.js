@@ -35,6 +35,17 @@ const BRAND = {
 };
 
 let logoImage = null;
+let sceneImage = null; // مشهد القرآن والقنديل والمسجد من التصميم المعتمد
+
+function loadScene() {
+  return new Promise((resolve) => {
+    if (sceneImage) return resolve();
+    const img = new Image();
+    img.onload = () => { sceneImage = img; resolve(); };
+    img.onerror = () => { sceneImage = null; resolve(); };
+    img.src = "verse-scene.jpg";
+  });
+}
 
 function loadLogo() {
   return new Promise((resolve) => {
@@ -152,7 +163,7 @@ function paintContent(ctx, box, S, data, opts = {}) {
   let y = box.y + Math.max(56 * S, (box.h - reserve - contentH) / 2) + (opts.shiftY || 0);
 
   paintLogo(ctx, cx, y, logoR);
-  y += logoR * 2 + 56 * S;
+  y += logoR * 2 + 36 * S + nameSize; // مسافة + صعود السطر الأول (يمنع التداخل مع الشعار)
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
   ctx.fillStyle = BRAND.gold2;
   ctx.font = `700 ${nameSize}px "Aref Ruqaa", serif`;
@@ -195,6 +206,38 @@ function qrMatrix() {
 function qrReserve(S, landscape) {
   const size = (landscape ? 128 : 168) * S;
   return size + (size / 25) * 8.4 + 96 * S;
+}
+
+/* ارتفاع شريط المشهد (القرآن والقنديل والمسجد) */
+function sceneBandH(box, landscape) {
+  return Math.min(box.h * (landscape ? .46 : .34), landscape ? 380 : 560);
+}
+
+/* الحجز الكلي أسفل المحتوى: الختم + النصف الظاهر من المشهد */
+function bottomReserve(box, S, landscape) {
+  return qrReserve(S, landscape) + sceneBandH(box, landscape) * .45;
+}
+
+/* رسم شريط المشهد بأسفل الصندوق بدمج متدرّج مع الخلفية */
+function paintSceneBand(ctx, box, landscape) {
+  if (!sceneImage) return;
+  const bandH = sceneBandH(box, landscape);
+  const by = box.y + box.h - bandH;
+  // مصدر القصّ: الربع الأيمن-السفلي (القرآن + القنديل + المسجد فقط — بلا أي نص)
+  const sx = sceneImage.width * .46, sy = sceneImage.height * .56;
+  const sw = sceneImage.width * .54, sh = sceneImage.height * .44;
+  const scale = Math.max(box.w / sw, bandH / sh);
+  const dw = sw * scale, dh = sh * scale;
+  ctx.save();
+  ctx.beginPath(); ctx.rect(box.x, by, box.w, bandH); ctx.clip();
+  ctx.drawImage(sceneImage, sx, sy, sw, sh,
+    box.x + (box.w - dw) / 2, by + (bandH - dh), dw, dh);
+  // دمج علوي متدرّج مع خلفية التصميم
+  const fade = ctx.createLinearGradient(0, by, 0, by + bandH * .55);
+  fade.addColorStop(0, "rgba(22,37,62,1)");
+  fade.addColorStop(1, "rgba(22,37,62,0)");
+  ctx.fillStyle = fade; ctx.fillRect(box.x, by, box.w, bandH * .55);
+  ctx.restore();
 }
 
 function paintQR(ctx, box, S, landscape) {
@@ -247,8 +290,7 @@ const STYLE_PAINTERS = {
     roundRect(ctx, box.x + 8, box.y + 8, box.w - 16, box.h - 16, 42 * S); ctx.stroke();
     ctx.strokeStyle = BRAND.frameSoft; ctx.lineWidth = Math.max(1, 1.2 * S);
     roundRect(ctx, box.x + 26, box.y + 26, box.w - 52, box.h - 52, 32 * S); ctx.stroke();
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h, bottomReserve: qrReserve(S, p.w > p.h) });
-    paintQR(ctx, box, S, p.w > p.h);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, bottomReserve: bottomReserve(box, S, p.w > p.h) });
   },
 
   mihrab(ctx, p, box, S, data) {
@@ -280,8 +322,7 @@ const STYLE_PAINTERS = {
     const glow = ctx.createRadialGradient(box.x + box.w / 2, ay2, 10, box.x + box.w / 2, ay2, box.w * .5);
     glow.addColorStop(0, "rgba(255,217,143,.28)"); glow.addColorStop(1, "rgba(255,217,143,0)");
     ctx.fillStyle = glow; ctx.fillRect(box.x, ay2 - box.w * .3, box.w, box.w * .5);
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, bottomReserve: qrReserve(S, p.w > p.h) });
-    paintQR(ctx, box, S, p.w > p.h);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, bottomReserve: bottomReserve(box, S, p.w > p.h) });
   },
 
   geometric(ctx, p, box, S, data) {
@@ -303,8 +344,7 @@ const STYLE_PAINTERS = {
     star8(ctx, box.x + 40 * S, box.y + box.h * .5, 150 * S); ctx.fillStyle = BRAND.gold; ctx.fill();
     star8(ctx, box.x + box.w - 40 * S, box.y + box.h * .5, 150 * S); ctx.fill();
     ctx.globalAlpha = 1;
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .95, bottomReserve: qrReserve(S, p.w > p.h) });
-    paintQR(ctx, box, S, p.w > p.h);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .95, bottomReserve: bottomReserve(box, S, p.w > p.h) });
   },
 
   lantern(ctx, p, box, S, data) {
@@ -329,8 +369,7 @@ const STYLE_PAINTERS = {
     ctx.quadraticCurveTo(lx, ly - 92 * S, lx + 30 * S, ly - 60 * S); ctx.fill(); // قبعة
     ctx.fillStyle = "#FFF3D0";
     ctx.beginPath(); ctx.ellipse(lx, ly - 6 * S, 12 * S, 20 * S, 0, 0, 7); ctx.fill(); // شعلة
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, shiftX: -30 * S, bottomReserve: qrReserve(S, p.w > p.h) });
-    paintQR(ctx, box, S, p.w > p.h);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, shiftX: -30 * S, bottomReserve: bottomReserve(box, S, p.w > p.h) });
   },
 
   promo(ctx, p, box, S, data) {
@@ -341,7 +380,7 @@ const STYLE_PAINTERS = {
     const cx = box.x + box.w / 2;
     const landscape = p.w > p.h;
     const logoR = (landscape ? 100 : 140) * S;
-    const reserve = qrReserve(S, landscape);
+    const reserve = bottomReserve(box, S, landscape);
     const estH = logoR * 2 + (landscape ? 380 : 466) * S; // تقدير ارتفاع المحتوى لتوسيطه
     let y = box.y + Math.max(46 * S, (box.h - reserve - estH) / 2);
     paintLogo(ctx, cx, y, logoR);
@@ -375,7 +414,6 @@ const STYLE_PAINTERS = {
     bg.addColorStop(0, BRAND.gold2); bg.addColorStop(1, BRAND.gold);
     ctx.fillStyle = bg; ctx.fill();
     ctx.fillStyle = "#163B2A"; ctx.fillText("riyadalmutaqin.com", cx, y + 15 * S);
-    paintQR(ctx, box, S, landscape);
   },
 };
 
@@ -385,7 +423,10 @@ function drawPost(canvas, p, data) {
   const ctx = canvas.getContext("2d");
   const box = { x: p.safe[3], y: p.safe[0], w: p.w - p.safe[1] - p.safe[3], h: p.h - p.safe[0] - p.safe[2] };
   const S = Math.min(box.w, box.h) / 1080;
+  const landscape = p.w > p.h;
   (STYLE_PAINTERS[data.style] || STYLE_PAINTERS.classic)(ctx, p, box, S, data);
+  paintSceneBand(ctx, box, landscape); // القرآن والقنديل والمسجد أسفل كل تصميم
+  paintQR(ctx, box, S, landscape);     // الختم فوق المشهد
 }
 
 /* ===== واجهة الاستوديو ===== */
@@ -402,6 +443,7 @@ function studioData() {
 async function renderAll() {
   await ensureFonts();
   if (logoImage === null && !renderAll._logoTried) { renderAll._logoTried = true; await loadLogo(); }
+  await loadScene();
   const data = studioData();
   for (const p of PLATFORMS) {
     const canvas = document.querySelector(`canvas[data-key="${p.key}"]`);

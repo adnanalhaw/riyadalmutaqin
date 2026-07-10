@@ -47,6 +47,7 @@ async function publishTelegram(item) {
 /* إرسال عنصر لمنصّة عبر Webhook المحفوظ */
 async function publishItem(item, platformKey) {
   await ensureFonts();
+  await loadScene();
   if (platformKey === "telegram") return publishTelegram(item); // مباشر عبر البوت
   const hooks = hooksGet();
   const url = hooks[platformKey];

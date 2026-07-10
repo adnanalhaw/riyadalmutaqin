@@ -47,8 +47,14 @@ async function convertMediaFor(platformKey) {
     status.textContent = "متصفحك لا يدعم تسجيل الفيديو — جرّب كروم أو سفاري حديثاً.";
     return;
   }
+  const dataCheck = studioData();
+  if (!dataCheck.name && !dataCheck.subject) {
+    toast("اكتب اسم الشيخ وعنوان الدرس في الخطوة ١ أولاً", "err");
+    return;
+  }
   await ensureFonts();
   if (logoImage === null) await loadLogo();
+  await loadScene();
 
   const isVideo = file.type.startsWith("video");
   const media = document.createElement(isVideo ? "video" : "audio");
