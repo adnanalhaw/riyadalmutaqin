@@ -4,10 +4,10 @@
    linear-gradient(180deg,#203B25 0%,#17301D 35%,#142417 70%,#0F1C12 100%) */
 :root {
   /* درجات التصميم المعتمد: أخضر-تيلي ليلي يلتقي بكحلي الهيدر */
-  --g1: #1C4534;
-  --g2: #163B2A;
-  --g3: #123021;
-  --g4: #0E2418;
+  --g1: #15393B;
+  --g2: #133430;
+  --g3: #0F2B27;
+  --g4: #0A1F1C;
   --blue: #173D73;
   --blue-2: #1E4E8F;
   --gold: #D8C07A;
@@ -19,9 +19,9 @@
   --gold-faint: rgba(169, 138, 74, .15);
   --cream: #F6F2E8;
   --cream-dim: #CBC2A9;
-  --panel: #1F4A37;
-  --panel-2: #24523C;
-  --panel-grad: linear-gradient(180deg, #25573F, #1F4A37);
+  --panel: #16403B;
+  --panel-2: #1A4640;
+  --panel-grad: linear-gradient(180deg, #1C4C44, #153A34);
   --danger: #E06A5A;
   --ok: #7BC47F;
   --radius: 18px;
@@ -62,7 +62,7 @@ a { color: var(--gold-2); text-decoration: none; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: .6rem; margin-top: .9rem; padding: .6rem .75rem;
-  background: linear-gradient(165deg, #1E4E8F 0%, #173D73 60%, #12305C 100%);
+  background: linear-gradient(165deg, #1A3A66 0%, #122A4C 55%, #0C1D36 100%);
   border: 1px solid var(--gold-soft); border-bottom: 1px solid #D8C07A;
   border-radius: 20px;
   box-shadow: 0 8px 25px rgba(0, 0, 0, .35);

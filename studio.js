@@ -28,9 +28,9 @@ const STYLES = [
 ];
 
 const BRAND = {
-  g: ["#1C4534", "#163B2A", "#123021", "#0E2418"],
+  g: ["#15393B", "#133430", "#0F2B27", "#0A1F1C"],
   gold: "#D8C07A", gold2: "#D8C07A", goldSec: "#A98A4A", goldDeep: "#8C6C36",
-  cream: "#F6F2E8", brown: "#5E4B33", night: "#0F2A3A", silhouette: "#081720",
+  cream: "#F6F2E8", brown: "#5E4B33", night: "#0B1D36", silhouette: "#081720",
 };
 
 let logoImage = null;
