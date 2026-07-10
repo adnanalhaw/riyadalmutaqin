@@ -266,6 +266,80 @@ select { appearance: none; }
 .size-card .s-name { font-weight: 700; color: var(--gold-2); font-size: .85rem; margin: .45rem 0 .1rem; }
 .size-card .s-dim { font-size: .7rem; color: var(--cream-dim); margin-bottom: .45rem; }
 
+/* ===== رحلة العلم ===== */
+.cta-hero {
+  display: flex; align-items: center; gap: .9rem; width: 100%;
+  background: linear-gradient(150deg, rgba(201,162,75,.30), rgba(201,162,75,.10));
+  border: 2px solid var(--gold); border-radius: 22px; padding: 1.1rem 1.15rem;
+  color: var(--cream); cursor: pointer; margin-bottom: 1rem; text-align: start;
+  transition: transform .06s ease, box-shadow .15s;
+  box-shadow: 0 10px 28px rgba(201, 162, 75, .15);
+}
+.cta-hero:active { transform: scale(.985); }
+.cta-hero .c-ico { font-size: 2rem; }
+.cta-hero .c-title { font-family: var(--font-disp); font-size: 1.3rem; color: var(--gold-2); }
+.cta-hero .c-sub { font-size: .85rem; color: var(--cream-dim); }
+.journey-progress { margin: 1rem 0 1.4rem; }
+.jp-bar { height: 12px; border-radius: 999px; background: rgba(6,14,8,.6); border: 1px solid var(--gold-soft); overflow: hidden; }
+.jp-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, var(--gold-2), var(--gold)); transition: width .5s ease; }
+.jp-label { text-align: center; margin-top: .45rem; font-size: .85rem; color: var(--cream-dim); }
+.station {
+  display: flex; gap: .85rem; align-items: flex-start;
+  background: var(--panel); border: 1.5px solid var(--gold-soft);
+  border-radius: 20px; padding: 1rem 1.05rem; margin-bottom: .85rem;
+  transition: border-color .2s;
+}
+.station.done { border-color: var(--ok); background: linear-gradient(150deg, rgba(123,196,127,.10), var(--panel)); }
+.station .st-num {
+  width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+  border: 2px solid var(--gold); color: var(--gold-2);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-disp); font-size: 1.15rem;
+}
+.station.done .st-num { border-color: var(--ok); color: var(--ok); }
+.station .st-body { flex: 1; }
+.station .st-title { font-family: var(--font-disp); font-size: 1.15rem; color: var(--gold-2); }
+.station.done .st-title { color: var(--ok); }
+.station .st-desc { font-size: .87rem; color: var(--cream-dim); line-height: 1.8; margin: .25rem 0 .6rem; }
+.station .st-actions { display: flex; gap: .5rem; flex-wrap: wrap; }
+.journey-done {
+  text-align: center; border: 2px solid var(--ok); border-radius: 22px;
+  padding: 1.3rem 1rem; background: linear-gradient(150deg, rgba(123,196,127,.14), var(--panel));
+  margin-top: .4rem;
+}
+
+/* ===== أدوات المسلم ===== */
+.hijri-chip {
+  text-align: center; padding: 1rem; border-radius: var(--radius);
+  border: 1.5px solid var(--gold-soft); background: var(--panel); margin-bottom: 1rem;
+}
+.hijri-chip .h-date { font-family: var(--font-disp); font-size: 1.3rem; color: var(--gold-2); }
+.tasbih-wrap { text-align: center; padding: 1.2rem 0; }
+.tasbih-dhikr { font-family: var(--font-disp); font-size: 1.6rem; color: var(--gold-2); margin-bottom: .3rem; }
+.tasbih-count { font-size: 2.6rem; font-weight: 700; color: var(--cream); margin: .3rem 0; }
+.tasbih-btn {
+  width: 170px; height: 170px; border-radius: 50%; cursor: pointer;
+  border: 3px solid var(--gold); color: #2b2008; font-family: var(--font-disp); font-size: 1.5rem;
+  background: radial-gradient(circle at 35% 30%, var(--gold-2), var(--gold) 75%);
+  box-shadow: 0 14px 36px rgba(201, 162, 75, .35);
+  transition: transform .05s ease;
+}
+.tasbih-btn:active { transform: scale(.95); }
+.tasbih-total { margin-top: .8rem; font-size: .85rem; color: var(--cream-dim); }
+.adhkar details {
+  background: var(--panel); border: 1px solid var(--gold-soft);
+  border-radius: 14px; margin-bottom: .6rem; overflow: hidden;
+}
+.adhkar summary {
+  cursor: pointer; padding: .85rem 1rem; font-weight: 700; color: var(--gold-2);
+  list-style: none; display: flex; justify-content: space-between; align-items: center;
+}
+.adhkar summary::after { content: "▾"; color: var(--gold); transition: transform .2s; }
+.adhkar details[open] summary::after { transform: rotate(180deg); }
+.adhkar .dhikr-body { padding: 0 1rem .9rem; line-height: 2.1; font-size: 1.02rem; }
+.adhkar .dhikr-src { display: block; margin-top: .3rem; font-size: .75rem; color: var(--cream-dim); }
+.adhkar .dhikr-rep { display: inline-block; margin-inline-start: .4rem; padding: .1rem .6rem; border-radius: 999px; border: 1px solid var(--gold-soft); font-size: .75rem; color: var(--gold-2); }
+
 /* ===== جداول الإدارة ===== */
 table.accounts { width: 100%; border-collapse: collapse; font-size: .85rem; }
 table.accounts th, table.accounts td { padding: .55rem .5rem; border-bottom: 1px solid var(--gold-faint); text-align: start; }

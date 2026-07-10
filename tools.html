@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<!-- رياض المتقين — أدوات المسلم: سبحة إلكترونية، أذكار الصباح والمساء، والتاريخ الهجري -->
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>أدوات المسلم — رياض المتقين</title>
+<meta name="theme-color" content="#0F1C12">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="رياض المتقين" class="logo">
+      <span class="name">رياض المتقين</span>
+    </div>
+    <a class="btn btn-sm" href="index.html">الرئيسية</a>
+  </header>
+
+  <main>
+    <h2 class="center gold" style="margin-top:.8rem">🕌 أدوات المسلم</h2>
+
+    <!-- التاريخ الهجري (تقويم أم القرى — مدمج في المتصفح) -->
+    <div class="hijri-chip">
+      <div class="muted xsmall">اليوم</div>
+      <div id="hijri-date" class="h-date">…</div>
+      <div id="greg-date" class="muted xsmall"></div>
+    </div>
+
+    <!-- السبحة الإلكترونية -->
+    <h3 class="section-title">📿 السبحة</h3>
+    <div class="card tasbih-wrap">
+      <div id="tasbih-dhikr" class="tasbih-dhikr">سُبْحَانَ الله</div>
+      <div id="tasbih-count" class="tasbih-count">0 / 33</div>
+      <button id="tasbih-btn" class="tasbih-btn" type="button">سبِّح</button>
+      <div id="tasbih-total" class="tasbih-total">مجموع تسبيحك المحفوظ: 0</div>
+      <button id="tasbih-reset" class="btn btn-sm" type="button" style="margin-top:.6rem">تصفير الدورة ↺</button>
+      <p class="xsmall muted" style="margin-top:.6rem">دورة كاملة: سبحان الله ٣٣ · الحمد لله ٣٣ · الله أكبر ٣٤ — «معقّبات لا يخيب قائلهن» (رواه مسلم).</p>
+    </div>
+
+    <!-- الأذكار -->
+    <h3 class="section-title">🌅 أذكار الصباح والمساء (مختارات)</h3>
+    <div class="adhkar" id="adhkar"></div>
+    <p class="xsmall muted center" style="margin-top:.6rem">مختارات مختصرة من الأذكار الصحيحة — للتوسّع راجع «حصن المسلم».</p>
+
+    <div class="card" style="margin-top:1.1rem">
+      <p class="small center">🚀 أكمل <a href="journey.html"><b>رحلة العلم</b></a> — أربع محطات نحو الفائدة.</p>
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script>
+  // ===== التاريخ الهجري — Intl مدمج، بلا أي خدمة خارجية =====
+  try {
+    document.getElementById("hijri-date").textContent =
+      new Intl.DateTimeFormat("ar-SA-u-ca-islamic-umalqura", { weekday: "long", day: "numeric", month: "long", year: "numeric" }).format(new Date());
+    document.getElementById("greg-date").textContent =
+      new Intl.DateTimeFormat("ar", { day: "numeric", month: "long", year: "numeric" }).format(new Date()) + " م";
+  } catch { document.getElementById("hijri-date").textContent = "التقويم غير مدعوم في متصفحك"; }
+
+  // ===== السبحة: دورة سبحان الله ٣٣ → الحمد لله ٣٣ → الله أكبر ٣٤ =====
+  const PHASES = [
+    { text: "سُبْحَانَ الله", target: 33 },
+    { text: "الْحَمْدُ لِلَّه", target: 33 },
+    { text: "اللهُ أَكْبَر", target: 34 },
+  ];
+  let phase = 0, count = 0;
+  let total = parseInt(localStorage.getItem("rm_tasbih_total") || "0", 10) || 0;
+
+  function renderTasbih() {
+    document.getElementById("tasbih-dhikr").textContent = PHASES[phase].text;
+    document.getElementById("tasbih-count").textContent = count + " / " + PHASES[phase].target;
+    document.getElementById("tasbih-total").textContent = "مجموع تسبيحك المحفوظ: " + total.toLocaleString("ar");
+  }
+  document.getElementById("tasbih-btn").addEventListener("click", () => {
+    count++; total++;
+    localStorage.setItem("rm_tasbih_total", String(total));
+    if (navigator.vibrate) navigator.vibrate(12);
+    if (count >= PHASES[phase].target) {
+      count = 0; phase++;
+      if (phase >= PHASES.length) {
+        phase = 0;
+        toast("أتممت دورة كاملة (١٠٠) — تقبّل الله 🌿", "ok");
+        if (navigator.vibrate) navigator.vibrate([60, 40, 60]);
+      }
+    }
+    renderTasbih();
+  });
+  document.getElementById("tasbih-reset").addEventListener("click", () => { phase = 0; count = 0; renderTasbih(); });
+  renderTasbih();
+
+  // ===== أذكار صحيحة مختارة (بنصوصها المشهورة ومصادرها) =====
+  const ADHKAR = [
+    { t: "آية الكرسي", rep: "مرة", src: "من قالها حين يصبح أُجير من الجن حتى يمسي، ومن قالها حين يمسي أُجير حتى يصبح — صحيح الترغيب",
+      b: "﴿اللَّهُ لَا إِلَٰهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ ۚ لَا تَأْخُذُهُ سِنَةٌ وَلَا نَوْمٌ ۚ لَّهُ مَا فِي السَّمَاوَاتِ وَمَا فِي الْأَرْضِ ۗ مَن ذَا الَّذِي يَشْفَعُ عِندَهُ إِلَّا بِإِذْنِهِ ۚ يَعْلَمُ مَا بَيْنَ أَيْدِيهِمْ وَمَا خَلْفَهُمْ ۖ وَلَا يُحِيطُونَ بِشَيْءٍ مِّنْ عِلْمِهِ إِلَّا بِمَا شَاءَ ۚ وَسِعَ كُرْسِيُّهُ السَّمَاوَاتِ وَالْأَرْضَ ۖ وَلَا يَئُودُهُ حِفْظُهُمَا ۚ وَهُوَ الْعَلِيُّ الْعَظِيمُ﴾ [البقرة 255]" },
+    { t: "الإخلاص والمعوذتان", rep: "٣ مرات", src: "«تكفيك من كل شيء» — رواه أبو داود والترمذي",
+      b: "﴿قُلْ هُوَ اللَّهُ أَحَدٌ...﴾ · ﴿قُلْ أَعُوذُ بِرَبِّ الْفَلَقِ...﴾ · ﴿قُلْ أَعُوذُ بِرَبِّ النَّاسِ...﴾" },
+    { t: "سيد الاستغفار", rep: "مرة", src: "«من قالها موقناً بها فمات من يومه دخل الجنة» — رواه البخاري",
+      b: "اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَٰهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ، وَأَنَا عَلَى عَهْدِكَ وَوَعْدِكَ مَا اسْتَطَعْتُ، أَعُوذُ بِكَ مِنْ شَرِّ مَا صَنَعْتُ، أَبُوءُ لَكَ بِنِعْمَتِكَ عَلَيَّ، وَأَبُوءُ بِذَنْبِي، فَاغْفِرْ لِي؛ فَإِنَّهُ لَا يَغْفِرُ الذُّنُوبَ إِلَّا أَنْتَ." },
+    { t: "أصبحنا وأصبح الملك لله", rep: "مرة (وفي المساء: أمسينا)", src: "رواه مسلم",
+      b: "أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ." },
+    { t: "اللهم بك أصبحنا", rep: "مرة (وفي المساء: بك أمسينا)", src: "رواه الترمذي",
+      b: "اللَّهُمَّ بِكَ أَصْبَحْنَا، وَبِكَ أَمْسَيْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ النُّشُورُ." },
+    { t: "سبحان الله وبحمده", rep: "١٠٠ مرة", src: "«حُطَّت خطاياه وإن كانت مثل زبد البحر» — متفق عليه",
+      b: "سُبْحَانَ اللهِ وَبِحَمْدِهِ." },
+    { t: "لا إله إلا الله وحده لا شريك له", rep: "١٠٠ مرة أو ١٠", src: "«كانت له عدل عشر رقاب...» — متفق عليه",
+      b: "لَا إِلَٰهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ، وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ." },
+    { t: "اللهم عافني في بدني", rep: "٣ مرات", src: "رواه أبو داود",
+      b: "اللَّهُمَّ عَافِنِي فِي بَدَنِي، اللَّهُمَّ عَافِنِي فِي سَمْعِي، اللَّهُمَّ عَافِنِي فِي بَصَرِي، لَا إِلَٰهَ إِلَّا أَنْتَ." },
+  ];
+  document.getElementById("adhkar").innerHTML = ADHKAR.map((d) =>
+    `<details>
+       <summary>${d.t} <span class="dhikr-rep">${d.rep}</span></summary>
+       <div class="dhikr-body">${d.b}<span class="dhikr-src">📚 ${d.src}</span></div>
+     </details>`).join("");
+</script>
+</body>
+</html>

@@ -49,6 +49,10 @@ const I18N = {
 const STRINGS = {
   "nav.login": { ar: "دخول", en: "Login" },
   "nav.logout": { ar: "خروج", en: "Logout" },
+  "cta.title": { ar: "ابدأ رحلتك نحو العلم", en: "Start your journey to knowledge" },
+  "cta.sub": { ar: "أربع محطات بسيطة — خطوة كل يوم تكفي", en: "Four simple stations — one step a day" },
+  "tools.title": { ar: "أدوات المسلم", en: "Muslim tools" },
+  "tools.sub": { ar: "السبحة · الأذكار · التاريخ الهجري", en: "Tasbih · Adhkar · Hijri date" },
   "hero.youtube": { ar: "يوتيوب", en: "YouTube" },
   "hero.youtube.sub": { ar: "شاهد الدروس والمحاضرات", en: "Watch lessons & lectures" },
   "hero.tiktok": { ar: "تيك توك", en: "TikTok" },

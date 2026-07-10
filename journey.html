@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<!-- رياض المتقين — رحلة العلم: أربع محطات تأخذ الزائر خطوة بخطوة، وتقدّمه محفوظ في جهازه -->
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>رحلة العلم — رياض المتقين</title>
+<meta name="theme-color" content="#0F1C12">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="رياض المتقين" class="logo">
+      <span class="name">رياض المتقين</span>
+    </div>
+    <a class="btn btn-sm" href="index.html">الرئيسية</a>
+  </header>
+
+  <main>
+    <h2 class="center gold" style="margin-top:.8rem">🚀 رحلة العلم</h2>
+    <p class="center muted small">أربع محطات بسيطة — امشِ فيها بترتيبك، وتقدّمك محفوظ على جهازك.</p>
+
+    <div class="journey-progress">
+      <div class="jp-bar"><div id="jp-fill" class="jp-fill"></div></div>
+      <div id="jp-label" class="jp-label">0 من 4 محطات</div>
+    </div>
+
+    <div id="stations"></div>
+
+    <div id="journey-done" class="journey-done hidden">
+      <div style="font-size:2rem">🌿</div>
+      <h3 class="gold" style="margin:.3rem 0">ما شاء الله — أتممت الرحلة!</h3>
+      <p class="small muted">اجعلها عادة يومية: فائدة قصيرة كل يوم خير من انقطاع طويل.</p>
+      <button id="jd-share" class="btn btn-gold" type="button" style="margin-top:.7rem">شارك الرحلة مع صديق 🔗</button>
+      <button id="jd-reset" class="btn btn-sm" type="button" style="margin-top:.7rem">ابدأ من جديد ↺</button>
+    </div>
+
+    <div class="card" style="margin-top:1.1rem">
+      <p class="small center">🕌 وبين المحطات — <a href="tools.html"><b>أدوات المسلم</b></a>: السبحة، الأذكار، والتاريخ الهجري.</p>
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script>
+  // المحطات: كل واحدة عمل حقيقي بوجهة حقيقية — لا محتوى وهمياً
+  const STATIONS = [
+    { key: "quran",  icon: "📖", title: "ابدأ بالقرآن",
+      desc: "افتح قناتنا واستمع لتلاوة أو تفسير — خير ما تبدأ به يومك ورحلتك.",
+      btn: "افتح يوتيوب ▶", url: () => SITE.links.youtube },
+    { key: "lesson", icon: "🕌", title: "احضر درساً",
+      desc: "اختر محاضرة من الدروس والمحاضرات واستمع لها كاملة ولو على أيام.",
+      btn: "الدروس والمحاضرات ▶", url: () => SITE.links.youtube },
+    { key: "daily",  icon: "✨", title: "فائدة قصيرة كل يوم",
+      desc: "تابع مقاطعنا القصيرة — دقيقة واحدة يومياً تبني علماً مع الأيام.",
+      btn: "المقاطع القصيرة ♪", url: () => SITE.links.tiktok },
+    { key: "join",   icon: "🤝", title: "كن مع المجتمع",
+      desc: "تابع صفحتنا وشارك ما تعلّمته مع أهلك وأصدقائك — الدالّ على الخير كفاعله.",
+      btn: "تابعنا على فيسبوك f", url: () => SITE.links.facebook },
+  ];
+
+  function progress() {
+    try { return JSON.parse(localStorage.getItem("rm_journey") || "{}"); } catch { return {}; }
+  }
+  function saveProgress(p) { localStorage.setItem("rm_journey", JSON.stringify(p)); }
+
+  function render() {
+    const p = progress();
+    const doneCount = STATIONS.filter((s) => p[s.key]).length;
+    document.getElementById("jp-fill").style.width = (doneCount / STATIONS.length * 100) + "%";
+    document.getElementById("jp-label").textContent = doneCount + " من " + STATIONS.length + " محطات";
+    document.getElementById("journey-done").classList.toggle("hidden", doneCount < STATIONS.length);
+
+    const wrap = document.getElementById("stations");
+    wrap.innerHTML = "";
+    STATIONS.forEach((s, i) => {
+      const done = !!p[s.key];
+      const div = document.createElement("div");
+      div.className = "station" + (done ? " done" : "");
+      div.innerHTML =
+        `<div class="st-num">${done ? "✓" : i + 1}</div>
+         <div class="st-body">
+           <div class="st-title">${s.icon} ${s.title}</div>
+           <div class="st-desc">${s.desc}</div>
+           <div class="st-actions">
+             <button class="btn btn-gold btn-sm" data-open="${s.key}">${s.btn}</button>
+             <button class="btn btn-sm" data-toggle="${s.key}">${done ? "إلغاء الإتمام" : "أتممتها ✓"}</button>
+           </div>
+         </div>`;
+      wrap.appendChild(div);
+    });
+  }
+
+  document.getElementById("stations").addEventListener("click", (e) => {
+    const t = e.target;
+    if (t.dataset.open) {
+      const s = STATIONS.find((x) => x.key === t.dataset.open);
+      const url = s.url();
+      if (url) window.open(url, "_blank", "noopener");
+      else toast("الرابط لم يُضَف بعد", "err");
+      // فتح المحطة يُعلّمها منجزة تلقائياً (ويمكن التراجع بزر الإلغاء)
+      const p = progress(); p[s.key] = true; saveProgress(p); render();
+    }
+    if (t.dataset.toggle) {
+      const p = progress(); p[t.dataset.toggle] = !p[t.dataset.toggle]; saveProgress(p); render();
+    }
+  });
+
+  document.getElementById("jd-reset").addEventListener("click", () => {
+    localStorage.removeItem("rm_journey"); render();
+    toast("بدأنا من جديد — بارك الله في همّتك 🌿", "ok");
+  });
+  document.getElementById("jd-share").addEventListener("click", sharePage);
+
+  render();
+</script>
+</body>
+</html>
