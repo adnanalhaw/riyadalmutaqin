@@ -192,7 +192,13 @@ async function renderAll() {
 
 function downloadCanvas(canvas, filename) {
   return new Promise((resolve) => {
-    canvas.toBlob((blob) => {
+    canvas.toBlob(async (blob) => {
+      // على الهاتف: ورقة مشاركة النظام (حفظ في الصور/إرسال واتساب مباشرة)
+      const file = new File([blob], filename, { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: "رياض المتقين" }); resolve(); return; }
+        catch (e) { if (e && e.name === "AbortError") { resolve(); return; } }
+      }
       const a = document.createElement("a");
       a.href = URL.createObjectURL(blob);
       a.download = filename;

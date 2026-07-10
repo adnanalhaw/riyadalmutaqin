@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<!-- رياض المتقين — لوحة التحليلات (للمعلمين والإدارة).
+     بصدق: موقع ثابت لا يسحب أرقام المنصّات آلياً بلا API — فاللوحة تعمل على
+     «قراءاتك الدورية» (تدخلها بدقيقة كل أسبوع) + أداء محتوى مكتبتك، وتحسب منها:
+     النموّ، أفضل منصّة، أفضل المواضيع، واهتمامات جمهورك، مع توصيات تركيز. -->
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>لوحة التحليلات — رياض المتقين</title>
+<meta name="theme-color" content="#0F1C12">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="رياض المتقين" class="logo">
+      <span class="name">رياض المتقين</span>
+    </div>
+    <a class="btn btn-sm" href="dashboard.html">لوحة التحكم</a>
+  </header>
+
+  <main>
+    <h2 class="center gold" style="margin-top:1rem">📊 لوحة التحليلات</h2>
+    <p class="center muted small">افهم جمهورك — واعرف أين تركّز.</p>
+
+    <!-- إدخال قراءة أسبوعية -->
+    <h3 class="section-title">📥 سجّل قراءة هذا الأسبوع</h3>
+    <div class="card">
+      <div class="row gap">
+        <select id="k-plat" class="grow">
+          <option value="youtube">يوتيوب</option>
+          <option value="tiktok">تيك توك</option>
+          <option value="facebook">فيسبوك</option>
+          <option value="instagram">إنستغرام</option>
+          <option value="x">إكس (X)</option>
+        </select>
+      </div>
+      <div class="row gap" style="margin-top:.6rem">
+        <input type="number" id="k-followers" min="0" placeholder="المتابعون الآن" style="direction:ltr">
+        <input type="number" id="k-views" min="0" placeholder="مشاهدات آخر ٧ أيام" style="direction:ltr">
+      </div>
+      <button id="k-add" class="btn btn-gold btn-block" style="margin-top:.7rem">حفظ القراءة 📌</button>
+      <p class="xsmall muted center" style="margin-top:.4rem">دقيقة كل أسبوع: انسخ الرقمين من تطبيق كل منصّة — والباقي علينا.</p>
+    </div>
+
+    <!-- النمو لكل منصة -->
+    <h3 class="section-title">📈 نموّ منصّاتك</h3>
+    <div id="growth"></div>
+
+    <!-- خلاصات ذكية -->
+    <h3 class="section-title">🧠 خلاصات تركّز جهدك</h3>
+    <div id="insights" class="card"><p class="xsmall muted center">سجّل قراءات وأداء محتوى لتظهر الخلاصات.</p></div>
+
+    <!-- أفضل المحتوى -->
+    <h3 class="section-title">🏆 أفضل محتواك</h3>
+    <div id="top-content" class="card"></div>
+
+    <!-- توصيات عامة -->
+    <h3 class="section-title">💡 توصيات النشر الدعوي</h3>
+    <div class="card">
+      <ul style="list-style:none; line-height:2.2" class="small">
+        <li>🕐 أفضل الأوقات المجرّبة للمحتوى الدعوي: بعد الفجر، بعد المغرب، و٩–١١ مساءً.</li>
+        <li>📅 الجمعة أعلى تفاعلاً — جهّز أقوى محتواك لها (الكهف، الصلاة على النبي ﷺ).</li>
+        <li>⏱️ للمقاطع القصيرة: أول ٣ ثوانٍ تحسم البقاء — ابدأ بالفائدة لا بالمقدمة.</li>
+        <li>🔁 أعد نشر الأفضل أداءً بقالب مختلف بعد ٣–٤ أسابيع.</li>
+        <li>🌙 المواسم (رمضان، الحج، العشر) تضاعف الوصول — جدولها مسبقاً من لوحة الجدولة.</li>
+      </ul>
+      <p class="xsmall muted">إرشادات عامة مجرّبة — قراءاتك أعلاه هي الحكم النهائي لجمهورك أنت.</p>
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script src="auth.js"></script>
+<script>
+  const session = requireSession();
+  if (session && !["teacher", "admin", "sysadmin"].includes(session.role)) location.href = "dashboard.html";
+
+  const PLAT_AR = { youtube: "يوتيوب ▶", tiktok: "تيك توك ♪", facebook: "فيسبوك f", instagram: "إنستغرام ◎", x: "إكس 𝕏" };
+  function kpi() { try { return JSON.parse(localStorage.getItem("rm_kpi") || "{}"); } catch { return {}; } }
+  function saveKpi(v) { localStorage.setItem("rm_kpi", JSON.stringify(v)); }
+  function lib() { try { return JSON.parse(localStorage.getItem("rm_library") || "[]"); } catch { return []; } }
+
+  document.getElementById("k-add").addEventListener("click", () => {
+    const p = document.getElementById("k-plat").value;
+    const f = parseInt(document.getElementById("k-followers").value, 10);
+    const v = parseInt(document.getElementById("k-views").value, 10);
+    if (isNaN(f) && isNaN(v)) { toast("أدخل رقماً واحداً على الأقل", "err"); return; }
+    const k = kpi();
+    (k[p] = k[p] || []).push({ d: new Date().toISOString().slice(0, 10), f: isNaN(f) ? null : f, v: isNaN(v) ? null : v });
+    saveKpi(k); render(); toast("حُفظت القراءة 📌", "ok");
+  });
+
+  function spark(values) {
+    if (values.length < 2) return "";
+    const w = 120, h = 30, min = Math.min(...values), max = Math.max(...values) || 1;
+    const pts = values.map((v, i) =>
+      `${(i / (values.length - 1) * w).toFixed(1)},${(h - 4 - ((v - min) / (max - min || 1)) * (h - 8)).toFixed(1)}`).join(" ");
+    return `<svg width="${w}" height="${h}" style="direction:ltr"><polyline points="${pts}" fill="none" stroke="#D8CE9A" stroke-width="2"/></svg>`;
+  }
+
+  function render() {
+    const k = kpi();
+    // النمو
+    const growth = Object.keys(PLAT_AR).map((p) => {
+      const rows = (k[p] || []).filter((r) => r.f != null);
+      if (!rows.length) return `<div class="card" style="margin-bottom:.6rem"><div class="row between"><b class="small gold">${PLAT_AR[p]}</b><span class="xsmall muted">لا قراءات بعد</span></div></div>`;
+      const last = rows[rows.length - 1], prev = rows.length > 1 ? rows[rows.length - 2] : null;
+      const delta = prev ? last.f - prev.f : 0;
+      return `<div class="card" style="margin-bottom:.6rem">
+        <div class="row between">
+          <b class="small gold">${PLAT_AR[p]}</b>
+          <span class="small">${last.f.toLocaleString("ar")} متابع
+            ${prev ? `<b style="color:${delta >= 0 ? "var(--ok)" : "var(--danger)"}">(${delta >= 0 ? "+" : ""}${delta.toLocaleString("ar")})</b>` : ""}
+          </span>
+        </div>
+        <div class="row between" style="margin-top:.3rem">${spark(rows.map((r) => r.f))}<span class="xsmall muted">${rows.length} قراءة</span></div>
+      </div>`;
+    }).join("");
+    document.getElementById("growth").innerHTML = growth;
+
+    // الخلاصات
+    const items = lib().filter((x) => x.views);
+    const notes = [];
+    // أفضل منصّة نمواً
+    let bestP = null, bestD = -Infinity;
+    for (const p of Object.keys(PLAT_AR)) {
+      const rows = (k[p] || []).filter((r) => r.f != null);
+      if (rows.length > 1) {
+        const d = rows[rows.length - 1].f - rows[rows.length - 2].f;
+        if (d > bestD) { bestD = d; bestP = p; }
+      }
+    }
+    if (bestP && bestD > 0) notes.push(`🚀 <b>${PLAT_AR[bestP]}</b> الأسرع نمواً هذا الأسبوع (+${bestD.toLocaleString("ar")}) — كثّف النشر فيها.`);
+    // اهتمامات الجمهور من كلمات العناوين الأعلى مشاهدة
+    if (items.length >= 2) {
+      const words = {};
+      for (const it of items) for (const w of it.subject.split(/\s+/)) {
+        if (w.length < 4) continue;
+        (words[w] = words[w] || []).push(it.views);
+      }
+      const top = Object.entries(words).map(([w, arr]) => [w, arr.reduce((a, b) => a + b, 0) / arr.length])
+        .sort((a, b) => b[1] - a[1]).slice(0, 3).map(([w]) => w);
+      if (top.length) notes.push(`❤️ جمهورك يتفاعل أكثر مع مواضيع فيها: <b>${top.join("، ")}</b> — قدّم منها المزيد.`);
+      const avg = items.reduce((a, b) => a + b.views, 0) / items.length;
+      const stars = items.filter((x) => x.views > avg * 1.5).length;
+      if (stars) notes.push(`⭐ عندك ${stars} منشور تجاوز متوسّطك بـ٥٠٪+ — أعد إنتاجها بصيغ أخرى (مقطع أطول/تصميم جديد).`);
+    }
+    if (!notes.length) notes.push("سجّل قراءتين أسبوعيتين وأداء منشورين على الأقل — وستظهر خلاصات مخصّصة هنا.");
+    document.getElementById("insights").innerHTML = `<ul style="list-style:none; line-height:2.3" class="small">${notes.map((n) => `<li>${n}</li>`).join("")}</ul>`;
+
+    // أفضل المحتوى
+    const top3 = items.sort((a, b) => b.views - a.views).slice(0, 3);
+    document.getElementById("top-content").innerHTML = top3.length
+      ? top3.map((it, i) => `<div class="row between" style="padding:.45rem 0; border-bottom:1px solid var(--gold-faint)">
+          <span class="small">${["🥇", "🥈", "🥉"][i]} ${it.subject.slice(0, 34)}</span>
+          <b class="small gold">${it.views.toLocaleString("ar")} 👁</b>
+        </div>`).join("")
+      : '<p class="xsmall muted center">سجّل «تحديث الأداء» على عناصر مكتبتك (من لوحة التحكم) لتظهر هنا.</p>';
+  }
+
+  render();
+</script>
+</body>
+</html>

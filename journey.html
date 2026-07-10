@@ -25,7 +25,7 @@
 
   <main>
     <h2 class="center gold" style="margin-top:.8rem">🚀 رحلة العلم</h2>
-    <p class="center muted small">أربع محطات بسيطة — امشِ فيها بترتيبك، وتقدّمك محفوظ على جهازك.</p>
+    <p class="center muted small">خمس محطات بسيطة — امشِ فيها بترتيبك، وتقدّمك محفوظ على جهازك.</p>
 
     <div class="journey-progress">
       <div class="jp-bar"><div id="jp-fill" class="jp-fill"></div></div>
@@ -52,6 +52,9 @@
 <script>
   // المحطات: كل واحدة عمل حقيقي بوجهة حقيقية — لا محتوى وهمياً
   const STATIONS = [
+    { key: "about",  icon: "🧭", title: "تعرّف على رياض المتقين",
+      desc: "افهم فكرتنا وما يقدّمه الموقع لك — دقيقة واحدة تكفي لتعرف طريقك.",
+      btn: "افتح الصفحة التعريفية 🧭", url: () => "about.html", internal: true },
     { key: "quran",  icon: "📖", title: "ابدأ بالقرآن",
       desc: "افتح قناتنا واستمع لتلاوة أو تفسير — خير ما تبدأ به يومك ورحلتك.",
       btn: "افتح يوتيوب ▶", url: () => SITE.links.youtube },
@@ -103,6 +106,7 @@
     if (t.dataset.open) {
       const s = STATIONS.find((x) => x.key === t.dataset.open);
       const url = s.url();
+      if (url && s.internal) { const p = progress(); p[s.key] = true; saveProgress(p); location.href = url; return; }
       if (url) window.open(url, "_blank", "noopener");
       else toast("الرابط لم يُضَف بعد", "err");
       // فتح المحطة يُعلّمها منجزة تلقائياً (ويمكن التراجع بزر الإلغاء)

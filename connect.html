@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<!-- رياض المتقين — الربط والنشر التلقائي (للمعلمين ومدير الموقع ومدير النظام).
+     المبدأ بصراحة: موقعنا ثابت بلا خادم، فالنشر التلقائي يتم عبر «جسر Webhook»:
+     صاحب الحساب يجهّز سيناريو على Make.com (أو Zapier) بحساباته هو، يلصق رابط
+     الـ Webhook هنا، وموقعنا يرسل له المحتوى (نص + صورة) عند النشر. لا نطلب ولا
+     نخزّن كلمات مرور منصّات التواصل إطلاقاً — الربط بحساباته يبقى عنده. -->
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>الربط والنشر — رياض المتقين</title>
+<meta name="theme-color" content="#0F1C12">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="رياض المتقين" class="logo">
+      <span class="name">رياض المتقين</span>
+    </div>
+    <a class="btn btn-sm" href="dashboard.html">لوحة التحكم</a>
+  </header>
+
+  <main>
+    <h2 class="center gold" style="margin-top:1rem">🔌 الربط والنشر التلقائي</h2>
+    <p class="center muted small">اربط قنواتك مرّة واحدة — وانشر من الموقع مباشرة.</p>
+
+    <div class="card" style="margin:.8rem 0">
+      <b class="gold">كيف يعمل الربط؟ (اقرأ أولاً)</b>
+      <p class="small" style="line-height:2; margin-top:.4rem">
+        ١. تنشئ حساباً مجانياً على <b>Make.com</b> (أو Zapier).<br>
+        ٢. تبني «سيناريو»: مشغّله <b>Webhook</b> ← وموديول المنصّة (يوتيوب/فيسبوك/إنستغرام/إكس) مربوطاً
+        <b>بحسابك أنت</b> (بريد Gmail وحسابات التواصل التي بحوزتك).<br>
+        ٣. تنسخ رابط الـ Webhook وتلصقه في خانة المنصّة أدناه وتضغط «حفظ».<br>
+        ٤. من الآن: أي نشر/جدولة من موقعنا يُرسل تلقائياً لقناتك.
+      </p>
+      <p class="xsmall muted">🔒 أمانك أولاً: لا نطلب كلمات مرور حساباتك إطلاقاً — الربط بحساباتك يتم عند مزوّد الأتمتة وحده، ونحن نرسل المحتوى فقط. الروابط تُحفظ على جهازك.</p>
+    </div>
+
+    <div id="platforms"></div>
+
+    <h3 class="section-title">📖 إرشادات تفصيلية لكل منصّة</h3>
+    <div class="adhkar" id="guides"></div>
+
+    <div class="card" style="margin-top:1rem">
+      <b class="gold">ماذا نرسل للـ Webhook؟</b>
+      <p class="xsmall" style="line-height:1.9; margin-top:.3rem">
+        حزمة JSON فيها: <code class="mono">platform</code> (المنصّة) ·
+        <code class="mono">title</code> (الصفة) · <code class="mono">name</code> (اسم الشيخ) ·
+        <code class="mono">subject</code> (العنوان) · <code class="mono">caption</code> (نص جاهز للمنشور) ·
+        <code class="mono">imageDataUrl</code> (صورة البوست بمقاس المنصّة PNG) ·
+        <code class="mono">test</code> (عند زر الاختبار). في Make اختر
+        «Custom webhook» ثم اضغط «Redetermine data structure» وأرسل اختباراً من هنا ليتعرّف على الحقول.
+      </p>
+    </div>
+  </main>
+</div>
+
+<script src="app.js"></script>
+<script src="auth.js"></script>
+<script src="studio.js"></script>
+<script>
+  const session = requireSession();
+  if (session && !["teacher", "admin", "sysadmin"].includes(session.role)) location.href = "dashboard.html";
+
+  const PLATS = [
+    { key: "youtube",   name: "يوتيوب",    ico: "▶" },
+    { key: "facebook",  name: "فيسبوك",    ico: "f" },
+    { key: "instagram", name: "إنستغرام",  ico: "◎" },
+    { key: "x",         name: "إكس (X)",   ico: "𝕏" },
+    { key: "tiktok",    name: "تيك توك",   ico: "♪" },
+  ];
+
+  function hooks() { try { return JSON.parse(localStorage.getItem("rm_webhooks") || "{}"); } catch { return {}; } }
+  function saveHooks(h) { localStorage.setItem("rm_webhooks", JSON.stringify(h)); }
+
+  function render() {
+    const h = hooks();
+    document.getElementById("platforms").innerHTML = PLATS.map((p) => `
+      <div class="card" style="margin-bottom:.8rem">
+        <div class="row between">
+          <b class="gold" style="font-size:1.05rem">${p.ico} ${p.name}</b>
+          <span class="chip" style="${h[p.key] ? "border-color:var(--ok); color:var(--ok)" : ""}">${h[p.key] ? "✓ مربوط" : "غير مربوط"}</span>
+        </div>
+        <label class="fld">رابط الـ Webhook</label>
+        <input type="text" id="wh-${p.key}" dir="ltr" placeholder="https://hook.eu2.make.com/xxxxxxxx" value="${h[p.key] || ""}">
+        <div class="row gap" style="margin-top:.6rem">
+          <button class="btn btn-sm btn-gold grow" data-save="${p.key}">حفظ</button>
+          <button class="btn btn-sm grow" data-test="${p.key}">إرسال اختبار ⚡</button>
+        </div>
+        <p class="xsmall muted" id="st-${p.key}" style="margin-top:.4rem; min-height:1rem"></p>
+      </div>`).join("");
+  }
+
+  async function sendToHook(url, payload) {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    return true;
+  }
+
+  document.getElementById("platforms").addEventListener("click", async (e) => {
+    const saveKey = e.target.dataset.save, testKey = e.target.dataset.test;
+    if (saveKey) {
+      const v = document.getElementById("wh-" + saveKey).value.trim();
+      if (v && !/^https:\/\//.test(v)) { toast("الرابط يجب أن يبدأ بـ https://", "err"); return; }
+      const h = hooks(); if (v) h[saveKey] = v; else delete h[saveKey]; saveHooks(h); render();
+      toast(v ? "حُفظ الربط ✓" : "أُزيل الربط", "ok");
+    }
+    if (testKey) {
+      const h = hooks();
+      const st = document.getElementById("st-" + testKey);
+      if (!h[testKey]) { st.textContent = "احفظ رابط الـ Webhook أولاً."; return; }
+      st.textContent = "جارٍ الإرسال…";
+      try {
+        await sendToHook(h[testKey], {
+          test: true, platform: testKey,
+          title: "الشيخ", name: "اختبار الربط", subject: "رسالة اختبار من موقع رياض المتقين",
+          caption: "✅ اختبار ربط النشر التلقائي — رياض المتقين", sentAt: new Date().toISOString(),
+        });
+        st.innerHTML = '<span style="color:var(--ok)">✓ وصل الاختبار — تحقّق من سيناريو Make أنه استقبله.</span>';
+      } catch (err) {
+        st.innerHTML = '<span style="color:var(--danger)">✗ فشل الإرسال (' + err.message + ') — تأكّد من الرابط وأن السيناريو مفعّل.</span>';
+      }
+    }
+  });
+
+  // إرشادات مفصّلة لكل منصّة (بصدق: تيك توك ليس له موديول رسمي في Make)
+  const GUIDES = [
+    ["يوتيوب ▶", `١. في Make: سيناريو جديد ← Webhooks ← Custom webhook ← انسخ الرابط والصقه أعلاه.<br>
+      ٢. أضف موديول <b>YouTube ← Upload a Video</b> (للمنشورات المجتمعية استخدم نشر الصورة عبر صفحة فيسبوك المربوطة أو انشرها يدوياً).<br>
+      ٣. عند إضافة الموديول اضغط Sign in وادخل <b>بحساب Gmail الخاص بالقناة</b>.<br>
+      ٤. اربط الحقول: Title ← subject · Description ← caption.<br>٥. فعّل السيناريو (ON).`],
+    ["فيسبوك f", `١. Webhook كما سبق.<br>٢. أضف موديول <b>Facebook Pages ← Create a Photo Post</b>.<br>
+      ٣. Sign in بحساب فيسبوك الذي يدير الصفحة.<br>
+      ٤. Photo ← imageDataUrl (مرّره عبر موديول <b>Tools ← Base64 to file</b> أولاً) · Caption ← caption.<br>٥. فعّل السيناريو.`],
+    ["إنستغرام ◎", `١. يتطلّب حساب إنستغرام <b>Business</b> مربوطاً بصفحة فيسبوك.<br>
+      ٢. Webhook ثم موديول <b>Instagram for Business ← Create a Photo Post</b>.<br>
+      ٣. الصورة من imageDataUrl (عبر Base64 to file) والنص من caption.`],
+    ["إكس (X) 𝕏", `١. Webhook ثم موديول <b>X (Twitter) ← Create a Post</b>.<br>
+      ٢. Sign in بحساب إكس.<br>٣. Text ← caption، والصورة عبر Upload media من imageDataUrl.`],
+    ["تيك توك ♪ (بصراحة)", `لا يوفّر تيك توك نشراً تلقائياً رسمياً عبر Make للحسابات العادية.
+      البديل العملي: نزّل تصميم تيك توك من الاستوديو على هاتفك وانشره من التطبيق،
+      أو استخدم أداة جدولة معتمدة رسمياً مثل <b>Buffer / Metricool</b> واربطها بنفس الطريقة إن وفّرت Webhook.`],
+  ];
+  document.getElementById("guides").innerHTML = GUIDES.map(([t, b]) =>
+    `<details><summary>${t}</summary><div class="dhikr-body xsmall" style="line-height:2">${b}</div></details>`).join("");
+
+  render();
+</script>
+</body>
+</html>

@@ -66,9 +66,57 @@
     كل مقاس يراعي «المنطقة الآمنة» الخاصة بمنصّته حتى لا تغطي أزرارُ التطبيق النصَّ.
     باقي العناصر (الشعار والإطار والمعرّف) ثابتة دائمًا.</p>
 
-    <button id="st-download-all" class="btn btn-gold btn-block" type="button">⬇ تحميل جميع المقاسات</button>
+    <div class="row gap">
+      <button id="st-download-all" class="btn btn-gold grow" type="button">⬇ تحميل جميع المقاسات</button>
+      <button id="st-save-lib" class="btn grow" type="button">💾 حفظ في المكتبة</button>
+    </div>
 
     <div id="sizes-grid" class="sizes-grid"></div>
+  </section>
+
+  <!-- ===== 🎬 أدوات صانع المحتوى (معلم + مدير الموقع + مدير النظام) ===== -->
+  <section id="sec-creator" class="hidden">
+    <div id="due-banner" class="card hidden" style="border-color:var(--gold-2); margin-top:1rem">
+      <b class="gold">⏰ عندك منشورات مجدولة مستحقة الآن</b>
+      <p class="xsmall muted">انزل لقسم الجدولة واضغط «أرسل الآن» — لا نرسل شيئاً دون ضغطتك.</p>
+    </div>
+
+    <h3 class="section-title">🎬 أدوات صانع المحتوى</h3>
+    <div class="actions-grid">
+      <a class="action-card" href="connect.html" style="text-decoration:none">
+        <span class="a-ico">🔌</span><span>الربط والنشر</span>
+        <span class="a-sub">اربط قنواتك وانشر تلقائياً</span>
+      </a>
+      <a class="action-card" href="insights.html" style="text-decoration:none">
+        <span class="a-ico">📊</span><span>لوحة التحليلات</span>
+        <span class="a-sub">افهم جمهورك ووجّه جهدك</span>
+      </a>
+    </div>
+
+    <h3 class="section-title">💾 مكتبة المحتوى</h3>
+    <div id="library-list"></div>
+
+    <h3 class="section-title" id="sec-schedule">🗓️ جدولة النشر</h3>
+    <div class="card">
+      <label class="fld">المحتوى (من مكتبتك)</label>
+      <select id="sch-item"></select>
+      <label class="fld">موعد النشر</label>
+      <input type="datetime-local" id="sch-when">
+      <label class="fld">المنصّات</label>
+      <div class="row gap" style="flex-wrap:wrap">
+        <label class="row" style="gap:.3rem"><input type="checkbox" data-sch-plat="youtube" style="width:auto"> يوتيوب</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" data-sch-plat="facebook" style="width:auto"> فيسبوك</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" data-sch-plat="instagram" style="width:auto"> إنستغرام</label>
+        <label class="row" style="gap:.3rem"><input type="checkbox" data-sch-plat="x" style="width:auto"> إكس</label>
+      </div>
+      <label class="row" style="gap:.4rem; margin-top:.7rem">
+        <input type="checkbox" id="sch-approve" style="width:auto">
+        <span class="small">أوافق أنا صاحب المحتوى على نشره بهذا الموعد</span>
+      </label>
+      <button id="sch-add" class="btn btn-gold btn-block" style="margin-top:.7rem">أضف للجدولة 🗓️</button>
+      <p class="xsmall muted" style="margin-top:.4rem">الإرسال عند الاستحقاق يتم من هنا بضغطة «أرسل الآن» عبر ربط Webhook — لا يُنشر شيء دون موافقتك وضغطتك.</p>
+    </div>
+    <div id="schedule-list" style="margin-top:.8rem"></div>
   </section>
 
   <!-- ===== 🔗 روابط المنصّات (مدير الموقع + مدير النظام) ===== -->
@@ -136,6 +184,7 @@
 <script src="app.js"></script>
 <script src="auth.js"></script>
 <script src="studio.js"></script>
+<script src="creator.js"></script>
 <script>
   const session = requireSession();
   if (session) {
@@ -147,6 +196,7 @@
     // الصلاحيات: من يرى ماذا
     const CAN = {
       studio:   ["teacher", "admin", "sysadmin"],
+      creator:  ["teacher", "admin", "sysadmin"],
       links:    ["admin", "sysadmin"],
       accounts: ["sysadmin"],
       student:  ["student"],
@@ -155,8 +205,9 @@
       if (roles.includes(role)) document.getElementById("sec-" + sec).classList.remove("hidden");
     }
 
-    // استوديو المونتاج
+    // استوديو المونتاج + أدوات صانع المحتوى
     if (CAN.studio.includes(role)) mountStudio();
+    if (CAN.creator.includes(role)) mountCreator();
 
     // قائمة الروابط الحالية
     if (CAN.links.includes(role)) {
