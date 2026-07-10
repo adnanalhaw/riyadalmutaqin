@@ -4,10 +4,10 @@
    linear-gradient(180deg,#203B25 0%,#17301D 35%,#142417 70%,#0F1C12 100%) */
 :root {
   /* درجات التصميم المعتمد: أخضر-تيلي ليلي يلتقي بكحلي الهيدر */
-  --g1: #071720;
-  --g2: #05131A;
-  --g3: #030E12;
-  --g4: #02090C;
+  --g1: #0B1F36;
+  --g2: #16253E;
+  --g3: #37293A;
+  --g4: #2A181A;
   --blue: #173D73;
   --blue-2: #1E4E8F;
   --gold: #D8C07A;
@@ -36,7 +36,9 @@ body {
   min-height: 100vh;
   color: var(--cream);
   font-family: var(--font-body);
-  background: linear-gradient(180deg, var(--g1) 0%, var(--g2) 35%, var(--g3) 70%, var(--g4) 100%);
+  background:
+    radial-gradient(130% 42% at 50% 108%, rgba(224, 140, 66, .16) 0%, rgba(224, 140, 66, 0) 62%),
+    linear-gradient(180deg, var(--g1) 0%, var(--g2) 35%, var(--g3) 70%, var(--g4) 100%);
   overflow-x: hidden;
 }
 /* زخرفة خلفية خفيفة (أشكال نجمية إسلامية) */

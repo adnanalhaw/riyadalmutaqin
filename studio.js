@@ -28,7 +28,7 @@ const STYLES = [
 ];
 
 const BRAND = {
-  g: ["#0A1E33", "#051526", "#041019", "#02090C"],
+  g: ["#0B1F36", "#16253E", "#37293A", "#2A181A"],
   gold: "#D8C07A", gold2: "#D8C07A", goldSec: "#A98A4A", goldDeep: "#8C6C36",
   frame: "#8FA9C6", frameSoft: "rgba(143,169,198,.45)",
   cream: "#F6F2E8", brown: "#5E4B33", night: "#0A1E33", silhouette: "#081720",
