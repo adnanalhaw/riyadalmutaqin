@@ -72,6 +72,23 @@
     </div>
 
     <div id="sizes-grid" class="sizes-grid"></div>
+
+    <h3 class="section-title">🎬 مقطعك داخل الفريم (فيديو/صوت)</h3>
+    <div class="card">
+      <p class="small muted" style="margin-bottom:.5rem">ارفع مقطع فيديو أو تسجيلاً صوتياً — نركّبه داخل التصميم أعلاه (الاسم والعنوان الحاليين) ويخرج فيديو بمقاس المنصّة جاهزاً للتحميل على هاتفك.</p>
+      <label class="fld" for="vs-file">الملف (فيديو أو صوت)</label>
+      <input type="file" id="vs-file" accept="video/*,audio/*">
+      <label class="fld" for="vs-platform">المنصّة</label>
+      <select id="vs-platform"></select>
+      <div class="row gap" style="margin-top:.8rem">
+        <button id="vs-convert" class="btn btn-gold grow" type="button">🎬 ابدأ التحويل</button>
+        <button id="vs-cancel" class="btn btn-sm hidden" type="button" style="border-color:var(--danger); color:var(--danger)">إلغاء</button>
+      </div>
+      <div class="jp-bar" style="margin-top:.7rem"><div id="vs-bar" class="jp-fill"></div></div>
+      <p id="vs-status" class="xsmall muted" style="margin-top:.4rem; min-height:1rem">التحويل يجري على جهازك بسرعة تشغيل المقطع نفسه — مثالي للمقاطع القصيرة (≤ ٣ دقائق).</p>
+      <video id="vs-preview" class="hidden" controls playsinline style="width:100%; border-radius:14px; margin-top:.6rem; border:1px solid var(--gold-soft)"></video>
+      <button id="vs-download" class="btn btn-blue btn-block hidden" type="button" style="margin-top:.6rem">⬇ تحميل / مشاركة على الهاتف</button>
+    </div>
   </section>
 
   <!-- ===== 🎬 أدوات صانع المحتوى (معلم + مدير الموقع + مدير النظام) ===== -->
@@ -185,6 +202,7 @@
 <script src="auth.js"></script>
 <script src="studio.js"></script>
 <script src="creator.js"></script>
+<script src="video-studio.js"></script>
 <script>
   const session = requireSession();
   if (session) {
@@ -206,7 +224,7 @@
     }
 
     // استوديو المونتاج + أدوات صانع المحتوى
-    if (CAN.studio.includes(role)) mountStudio();
+    if (CAN.studio.includes(role)) { mountStudio(); mountVideoStudio(); }
     if (CAN.creator.includes(role)) mountCreator();
 
     // قائمة الروابط الحالية
