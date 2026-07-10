@@ -96,10 +96,20 @@ function paintBg(ctx, w, h, topColor) {
   grad.addColorStop(0, topColor || BRAND.g[0]); grad.addColorStop(.35, BRAND.g[1]);
   grad.addColorStop(.7, BRAND.g[2]); grad.addColorStop(1, BRAND.g[3]);
   ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "rgba(169,138,74,.12)";
-  for (let y = 60; y < h; y += 170) for (let x = 60 + (y % 340 ? 85 : 0); x < w; x += 170) {
-    ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill();
-  }
+  // نسيج هندسي إسلامي: شبكة نجوم ثمانية شفافة تكسو الخلفية كلها (كالتصميم الأصلي)
+  ctx.save();
+  ctx.globalAlpha = .055; ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(1, w * .0012);
+  const st = Math.max(180, w * .21);
+  for (let y = 0; y <= h + st; y += st * .86)
+    for (let x = (Math.round(y / (st * .86)) % 2 ? st / 2 : 0); x <= w + st; x += st) {
+      star8(ctx, x, y, st * .36); ctx.stroke();
+      star8(ctx, x, y, st * .18); ctx.stroke();
+    }
+  ctx.restore();
+  // فينييت يعمّق الأطراف ويركّز النظر على الوسط
+  const vg = ctx.createRadialGradient(w / 2, h * .45, Math.min(w, h) * .45, w / 2, h * .5, Math.max(w, h) * .8);
+  vg.addColorStop(0, "rgba(0,0,0,0)"); vg.addColorStop(1, "rgba(3,10,20,.38)");
+  ctx.fillStyle = vg; ctx.fillRect(0, 0, w, h);
 }
 
 function paintStars(ctx, w, h) {
@@ -118,6 +128,11 @@ function paintCrescent(ctx, x, y, r, fill, cutFill) {
 }
 
 function paintLogo(ctx, cx, y, r) {
+  // توهّج ذهبي ناعم خلف الشعار (كما في التصميم الأصلي)
+  const gl = ctx.createRadialGradient(cx, y + r, r * .5, cx, y + r, r * 2.2);
+  gl.addColorStop(0, "rgba(216,192,122,.22)"); gl.addColorStop(1, "rgba(216,192,122,0)");
+  ctx.fillStyle = gl;
+  ctx.beginPath(); ctx.arc(cx, y + r, r * 2.2, 0, 7); ctx.fill();
   ctx.save();
   ctx.beginPath(); ctx.arc(cx, y + r, r, 0, 7); ctx.closePath();
   ctx.fillStyle = "#0d1a10"; ctx.fill(); ctx.clip();
@@ -145,37 +160,98 @@ function star8(ctx, cx, cy, r) {
   ctx.closePath();
 }
 
-/* كتلة النص (الشعار + الاسم + الفاصل + العنوان + الشارة + المعرّف) داخل صندوق */
+/* لوحة قوس مدبّب مزخرف حول النص — على هيئة إطار الآية في التصميم الأصلي */
+function paintArchPanel(ctx, cx, top, w, bottom, S) {
+  const x0 = cx - w / 2, x1 = cx + w / 2;
+  const archH = w * .34;
+  const ys = top + archH; // كتف القوس
+  const path = (inset) => {
+    const xa = x0 + inset, xb = x1 - inset, yb = bottom - inset, tp = top + inset * 1.6;
+    ctx.beginPath();
+    ctx.moveTo(xa, yb);
+    ctx.lineTo(xa, ys);
+    ctx.quadraticCurveTo(xa, ys - archH * .62, cx - w * .17, ys - archH * .66);
+    ctx.quadraticCurveTo(cx - w * .045, ys - archH * .78, cx, tp);
+    ctx.quadraticCurveTo(cx + w * .045, ys - archH * .78, cx + w * .17, ys - archH * .66);
+    ctx.quadraticCurveTo(xb, ys - archH * .62, xb, ys);
+    ctx.lineTo(xb, yb);
+    ctx.closePath();
+  };
+  // تعبئة ناعمة تميّز اللوحة عن الخلفية (فجر أعلى → دفء غروب أسفل)
+  path(0);
+  const g = ctx.createLinearGradient(0, top, 0, bottom);
+  g.addColorStop(0, "rgba(146,175,214,.10)");
+  g.addColorStop(.55, "rgba(11,31,54,.20)");
+  g.addColorStop(1, "rgba(224,140,66,.09)");
+  ctx.fillStyle = g; ctx.fill();
+  // حدّ ذهبي رفيع خارجي + حدّ فجري أرفع داخلي
+  path(0); ctx.strokeStyle = "rgba(216,192,122,.9)"; ctx.lineWidth = Math.max(1.5, 2.2 * S); ctx.stroke();
+  path(11 * S); ctx.strokeStyle = BRAND.frameSoft; ctx.lineWidth = Math.max(1, 1.2 * S); ctx.stroke();
+  // ذؤابة ۞ فوق القمّة ونجمتان بزاويتي القاعدة
+  ctx.fillStyle = BRAND.gold; ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  ctx.font = `${Math.round(34 * S)}px serif`; ctx.fillText("۞", cx, top - 16 * S);
+  ctx.fillStyle = BRAND.goldSec;
+  star8(ctx, x0, bottom, 9 * S); ctx.fill();
+  star8(ctx, x1, bottom, 9 * S); ctx.fill();
+}
+
+/* كتلة النص (الشعار + الاسم + الفاصل + العنوان + الشارة) داخل صندوق.
+   بالأوضاع الطولية تُحاط بالقوس المزخرف، ويتكبّر المحتوى تلقائياً ليملأ
+   الفراغ الرأسي بدل أن يضيع صغيراً وسط مساحة فارغة. */
 function paintContent(ctx, box, S, data, opts = {}) {
   const landscape = opts.landscape;
   const cx = box.x + box.w / 2 + (opts.shiftX || 0);
-  const nameSize = Math.round((landscape ? 60 : 74) * S * (opts.scale || 1));
-  const subjSize = Math.round((landscape ? 52 : 62) * S * (opts.scale || 1));
-  const logoR = (landscape ? 84 : 112) * S * (opts.scale || 1);
+  const reserve = opts.bottomReserve || 0; // مساحة ختم QR والمشهد أسفل المحتوى
+  const arch = !landscape && opts.arch !== false;
+  const aw = box.w * .88, archH = arch ? aw * .34 : 0;
 
-  ctx.font = `700 ${nameSize}px "Aref Ruqaa", serif`;
-  const nameLines = wrapText(ctx, ((data.title ? data.title + " " : "") + (data.name || "")).trim(), box.w * .8);
-  ctx.font = `700 ${subjSize}px "Amiri", serif`;
-  const subjLines = wrapText(ctx, data.subject || "", box.w * .78);
-  const contentH = logoR * 2 + 56 * S + nameLines.length * nameSize * 1.35 + 20 * S + 66 * S +
-    subjLines.length * subjSize * 1.5 + (data.audioBadge ? 100 * S : 0);
-  const reserve = opts.bottomReserve || 0; // مساحة ختم QR والتذييل أسفل المحتوى
-  let y = box.y + Math.max(56 * S, (box.h - reserve - contentH) / 2) + (opts.shiftY || 0);
+  const measure = (k) => {
+    const nameSize = Math.round((landscape ? 60 : 74) * S * k);
+    const subjSize = Math.round((landscape ? 52 : 62) * S * k);
+    const logoR = (landscape ? 84 : 112) * S * k;
+    ctx.font = `700 ${nameSize}px "Aref Ruqaa", serif`;
+    const nameLines = wrapText(ctx, ((data.title ? data.title + " " : "") + (data.name || "")).trim(), box.w * (arch ? .7 : .8));
+    ctx.font = `700 ${subjSize}px "Amiri", serif`;
+    const subjLines = wrapText(ctx, data.subject || "", box.w * (arch ? .64 : .78));
+    const gapLogo = arch ? 26 * S : 36 * S;
+    const headroom = (arch ? archH * .38 : 0) + nameSize; // نزول أول سطر تحت قمّة القوس/الشعار
+    const contentH = logoR * 2 + gapLogo + headroom + nameLines.length * nameSize * 1.35 +
+      6 * S + 66 * S + subjLines.length * subjSize * 1.5 +
+      (data.audioBadge ? 110 * S : 0) + (arch ? 56 * S : 0);
+    return { nameSize, subjSize, logoR, nameLines, subjLines, gapLogo, headroom, contentH };
+  };
 
-  paintLogo(ctx, cx, y, logoR);
-  y += logoR * 2 + 36 * S + nameSize; // مسافة + صعود السطر الأول (يمنع التداخل مع الشعار)
+  let m = measure(opts.scale || 1);
+  const avail = box.h - reserve - 96 * S;
+  const grow = Math.min(landscape ? 1.12 : 1.5, Math.max(.85, (avail * .9) / m.contentH));
+  if (Math.abs(grow - 1) > .03) m = measure((opts.scale || 1) * grow);
+
+  let y = box.y + Math.max(48 * S, (box.h - reserve - m.contentH) / 2) + (opts.shiftY || 0);
+
+  if (arch) paintArchPanel(ctx, cx, y + m.logoR * 2 + m.gapLogo, aw, y + m.contentH, S);
+  paintLogo(ctx, cx, y, m.logoR);
+  y += m.logoR * 2 + m.gapLogo + m.headroom;
   ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  if (arch) { // زخرفة داخل قمّة القوس فوق الاسم
+    ctx.fillStyle = "rgba(216,192,122,.7)";
+    ctx.font = `${Math.round(26 * S)}px serif`;
+    ctx.fillText("۞", cx, y - m.nameSize * 1.5);
+  }
   ctx.fillStyle = BRAND.gold2;
-  ctx.font = `700 ${nameSize}px "Aref Ruqaa", serif`;
-  for (const line of nameLines) { ctx.fillText(line, cx, y); y += nameSize * 1.35; }
+  ctx.font = `700 ${m.nameSize}px "Aref Ruqaa", serif`;
+  for (const line of m.nameLines) { ctx.fillText(line, cx, y); y += m.nameSize * 1.35; }
   y += 6 * S;
+  // فاصل مزخرف: خط ذهبي بنجمتين على طرفيه و۞ في وسطه
   ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(2, 3 * S);
   ctx.beginPath(); ctx.moveTo(cx - 130 * S, y); ctx.lineTo(cx + 130 * S, y); ctx.stroke();
-  ctx.fillStyle = BRAND.gold; ctx.font = `${Math.round(32 * S)}px serif`; ctx.fillText("۞", cx, y + 11 * S);
+  ctx.fillStyle = BRAND.gold;
+  star8(ctx, cx - 150 * S, y, 7 * S); ctx.fill();
+  star8(ctx, cx + 150 * S, y, 7 * S); ctx.fill();
+  ctx.font = `${Math.round(32 * S)}px serif`; ctx.fillText("۞", cx, y + 11 * S);
   y += 66 * S;
   ctx.fillStyle = BRAND.cream;
-  ctx.font = `700 ${subjSize}px "Amiri", serif`;
-  for (const line of subjLines) { ctx.fillText(line, cx, y); y += subjSize * 1.5; }
+  ctx.font = `700 ${m.subjSize}px "Amiri", serif`;
+  for (const line of m.subjLines) { ctx.fillText(line, cx, y); y += m.subjSize * 1.5; }
   if (data.audioBadge) {
     y += 26 * S;
     const label = "🎧 مقطع صوتي";
@@ -204,13 +280,13 @@ function qrMatrix() {
 
 /* ارتفاع منطقة الختم (للحجز في توسيط المحتوى) */
 function qrReserve(S, landscape) {
-  const size = (landscape ? 128 : 168) * S;
+  const size = (landscape ? 128 : 200) * S;
   return size + (size / 25) * 8.4 + 96 * S;
 }
 
 /* ارتفاع شريط المشهد (القرآن والقنديل والمسجد) */
 function sceneBandH(box, landscape) {
-  return Math.min(box.h * (landscape ? .46 : .34), landscape ? 380 : 560);
+  return Math.min(box.h * (landscape ? .46 : .4), landscape ? 380 : 640);
 }
 
 /* الحجز الكلي أسفل المحتوى: الختم + النصف الظاهر من المشهد */
@@ -282,10 +358,10 @@ function paintQR(ctx, box, S, landscape) {
   const m = qrMatrix();
   if (!m) return;
   // ختم متناسق وسط أسفل التصميم — بلاطة عاجية بميل ذهبي (لا بيضاء صارخة)
-  const size = (landscape ? 128 : 168) * S;
+  const size = (landscape ? 128 : 200) * S; // أكبر بالطولي — وضوح مسح أعلى
   const pad = (size / m.n) * 4.2; // منطقة هدوء ≥ ٤ خلايا (شرط القراءة)
-  const x = box.x + (box.w - size) / 2;
-  const y = box.y + box.h - size - pad - 74 * S;
+  const x = Math.round(box.x + (box.w - size) / 2);
+  const y = Math.round(box.y + box.h - size - pad - 74 * S);
   const tile = { x: x - pad, y: y - pad, w: size + pad * 2, h: size + pad * 2 };
   // توهّج ناعم خلف الختم يدمجه بالخلفية
   const halo = ctx.createRadialGradient(x + size / 2, y + size / 2, size * .3, x + size / 2, y + size / 2, size * 1.1);
@@ -324,10 +400,19 @@ function paintQR(ctx, box, S, landscape) {
 const STYLE_PAINTERS = {
   classic(ctx, p, box, S, data) {
     paintBg(ctx, p.w, p.h);
+    paintStars(ctx, p.w, p.h);
+    paintCrescent(ctx, box.x + 80 * S, box.y + 84 * S, 26 * S, BRAND.gold2, BRAND.g[0]);
     ctx.strokeStyle = BRAND.frame; ctx.lineWidth = Math.max(1.5, 2.4 * S);
     roundRect(ctx, box.x + 8, box.y + 8, box.w - 16, box.h - 16, 42 * S); ctx.stroke();
     ctx.strokeStyle = BRAND.frameSoft; ctx.lineWidth = Math.max(1, 1.2 * S);
     roundRect(ctx, box.x + 26, box.y + 26, box.w - 52, box.h - 52, 32 * S); ctx.stroke();
+    // ذؤابة ۞ أعلى الإطار ونجمتان بزاويتيه العلويتين
+    ctx.fillStyle = BRAND.gold; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.font = `${Math.round(34 * S)}px serif`; ctx.fillText("۞", box.x + box.w / 2, box.y + 9);
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = BRAND.goldSec;
+    star8(ctx, box.x + 8 + 42 * S, box.y + 8, 8 * S); ctx.fill();
+    star8(ctx, box.x + box.w - 8 - 42 * S, box.y + 8, 8 * S); ctx.fill();
     paintContent(ctx, box, S, data, { landscape: p.w > p.h, bottomReserve: bottomReserve(box, S, p.w > p.h) });
   },
 
@@ -345,18 +430,8 @@ const STYLE_PAINTERS = {
     ctx.fillStyle = BRAND.gold2; ctx.globalAlpha = .9;
     ctx.fillRect(mx - 7 * S, box.y + box.h * .42, 12 * S, 20 * S);
     ctx.globalAlpha = 1;
-    // قوس المحراب
-    const aw = box.w * .82, ax = box.x + (box.w - aw) / 2, ay2 = box.y + box.h * .9;
-    const apexY = box.y + 48 * S, springY = box.y + box.h * .3;
-    ctx.strokeStyle = BRAND.frame; ctx.lineWidth = Math.max(1.5, 2.4 * S);
-    ctx.beginPath();
-    ctx.moveTo(ax, ay2); ctx.lineTo(ax, springY);
-    ctx.quadraticCurveTo(ax, apexY + 30 * S, box.x + box.w / 2, apexY);
-    ctx.quadraticCurveTo(ax + aw, apexY + 30 * S, ax + aw, springY);
-    ctx.lineTo(ax + aw, ay2); ctx.stroke();
-    ctx.fillStyle = BRAND.gold2; ctx.textAlign = "center";
-    ctx.font = `${Math.round(30 * S)}px serif`; ctx.fillText("۞", box.x + box.w / 2, apexY - 14 * S);
-    // توهّج أرضي
+    // توهّج أرضي (القوس المزخرف يأتي من كتلة المحتوى نفسها)
+    const ay2 = box.y + box.h * .9;
     const glow = ctx.createRadialGradient(box.x + box.w / 2, ay2, 10, box.x + box.w / 2, ay2, box.w * .5);
     glow.addColorStop(0, "rgba(255,217,143,.28)"); glow.addColorStop(1, "rgba(255,217,143,0)");
     ctx.fillStyle = glow; ctx.fillRect(box.x, ay2 - box.w * .3, box.w, box.w * .5);
