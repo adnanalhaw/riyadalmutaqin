@@ -24,16 +24,33 @@ function captionOf(item) {
 function renderItemImage(item, platformKey) {
   const p = PLATFORMS.find((x) => x.key === platformKey) || PLATFORMS[0];
   const canvas = document.createElement("canvas");
-  drawPost(canvas, p, { title: item.title, name: item.name, subject: item.subject, audioBadge: item.badge });
-  return canvas.toDataURL("image/png");
+  drawPost(canvas, p, { title: item.title, name: item.name, subject: item.subject, audioBadge: item.badge, style: item.style || "classic" });
+  return { dataUrl: canvas.toDataURL("image/png"), canvas };
+}
+
+/* نشر مباشر إلى قناة تيليغرام عبر Bot API (يدعم النداء من المتصفح) */
+async function publishTelegram(item) {
+  let cfg = null;
+  try { cfg = JSON.parse(localStorage.getItem("rm_telegram") || "null"); } catch { }
+  if (!cfg || !cfg.token || !cfg.chat) throw new Error("اضبط بوت تيليغرام من صفحة الربط والنشر أولاً.");
+  const { canvas } = renderItemImage(item, "telegram");
+  const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+  const form = new FormData();
+  form.append("chat_id", cfg.chat);
+  form.append("caption", captionOf(item));
+  form.append("photo", blob, "riyad.png");
+  const res = await fetch(`https://api.telegram.org/bot${cfg.token}/sendPhoto`, { method: "POST", body: form });
+  const out = await res.json().catch(() => ({}));
+  if (!res.ok || !out.ok) throw new Error(out.description || "HTTP " + res.status);
 }
 
 /* إرسال عنصر لمنصّة عبر Webhook المحفوظ */
 async function publishItem(item, platformKey) {
+  await ensureFonts();
+  if (platformKey === "telegram") return publishTelegram(item); // مباشر عبر البوت
   const hooks = hooksGet();
   const url = hooks[platformKey];
   if (!url) throw new Error("لا يوجد ربط لهذه المنصّة — اضبطه من صفحة الربط والنشر.");
-  await ensureFonts();
   const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -41,7 +58,7 @@ async function publishItem(item, platformKey) {
       platform: platformKey,
       title: item.title, name: item.name, subject: item.subject,
       caption: captionOf(item),
-      imageDataUrl: renderItemImage(item, platformKey),
+      imageDataUrl: renderItemImage(item, platformKey).dataUrl,
       sentAt: new Date().toISOString(),
     }),
   });
@@ -56,6 +73,7 @@ function saveCurrentDesignToLibrary() {
     name: $("st-name").value.trim(),
     subject: $("st-subject").value.trim(),
     badge: $("st-audio").checked,
+    style: (document.querySelector(".style-card.active") || {}).dataset?.style || "classic",
     createdAt: new Date().toISOString(),
     views: null, likes: null, publishedAt: null,
   };

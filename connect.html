@@ -43,6 +43,23 @@
       <p class="xsmall muted">🔒 أمانك أولاً: لا نطلب كلمات مرور حساباتك إطلاقاً — الربط بحساباتك يتم عند مزوّد الأتمتة وحده، ونحن نرسل المحتوى فقط. الروابط تُحفظ على جهازك.</p>
     </div>
 
+    <div class="card" style="margin-bottom:.8rem; border-color:var(--gold-2)">
+      <div class="row between">
+        <b class="gold" style="font-size:1.05rem">✈ تيليغرام — ربط مباشر (الأسهل!)</b>
+        <span id="tg-chip" class="chip">غير مربوط</span>
+      </div>
+      <p class="xsmall muted" style="margin:.4rem 0">تيليغرام يتيح النشر مباشرة عبر بوت — بلا أي وسيط: أنشئ بوتاً من <b>@BotFather</b>، اجعله مشرفاً في قناتك، والصق هنا:</p>
+      <label class="fld">توكن البوت</label>
+      <input type="text" id="tg-token" dir="ltr" placeholder="123456:ABC-DEF...">
+      <label class="fld">معرّف القناة</label>
+      <input type="text" id="tg-chat" dir="ltr" placeholder="@riyadalmutaqin">
+      <div class="row gap" style="margin-top:.6rem">
+        <button id="tg-save" class="btn btn-sm btn-gold grow">حفظ</button>
+        <button id="tg-test" class="btn btn-sm grow">إرسال اختبار للقناة ⚡</button>
+      </div>
+      <p id="tg-status" class="xsmall muted" style="margin-top:.4rem; min-height:1rem"></p>
+    </div>
+
     <div id="platforms"></div>
 
     <h3 class="section-title">📖 إرشادات تفصيلية لكل منصّة</h3>
@@ -134,8 +151,49 @@
     }
   });
 
+  // ===== تيليغرام المباشر =====
+  function tgCfg() { try { return JSON.parse(localStorage.getItem("rm_telegram") || "null") || {}; } catch { return {}; } }
+  function tgRender() {
+    const c = tgCfg();
+    document.getElementById("tg-token").value = c.token || "";
+    document.getElementById("tg-chat").value = c.chat || "";
+    const chip = document.getElementById("tg-chip");
+    chip.textContent = c.token && c.chat ? "✓ مربوط" : "غير مربوط";
+    chip.style.cssText = c.token && c.chat ? "border-color:var(--ok); color:var(--ok)" : "";
+  }
+  document.getElementById("tg-save").addEventListener("click", () => {
+    const token = document.getElementById("tg-token").value.trim();
+    const chat = document.getElementById("tg-chat").value.trim();
+    if (token && !/^\d+:[\w-]{30,}$/.test(token)) { toast("صيغة التوكن غير صحيحة", "err"); return; }
+    if (chat && !/^@?[\w\d_]{4,}$|^-?\d+$/.test(chat)) { toast("معرّف القناة مثل @riyadalmutaqin", "err"); return; }
+    if (token && chat) localStorage.setItem("rm_telegram", JSON.stringify({ token, chat: chat.startsWith("@") || /^-?\d+$/.test(chat) ? chat : "@" + chat }));
+    else localStorage.removeItem("rm_telegram");
+    tgRender(); toast(token && chat ? "حُفظ ربط تيليغرام ✓" : "أُزيل الربط", "ok");
+  });
+  document.getElementById("tg-test").addEventListener("click", async () => {
+    const c = tgCfg();
+    const st = document.getElementById("tg-status");
+    if (!c.token || !c.chat) { st.textContent = "احفظ التوكن ومعرّف القناة أولاً."; return; }
+    st.textContent = "جارٍ الإرسال…";
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${c.token}/sendMessage`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chat_id: c.chat, text: "✅ اختبار ربط النشر — رياض المتقين 🌿" }),
+      });
+      const out = await res.json();
+      st.innerHTML = out.ok
+        ? '<span style="color:var(--ok)">✓ وصلت رسالة الاختبار لقناتك!</span>'
+        : '<span style="color:var(--danger)">✗ ' + (out.description || "فشل") + " — تأكّد أن البوت مشرف في القناة.</span>";
+    } catch (e) { st.innerHTML = '<span style="color:var(--danger)">✗ تعذّر الاتصال: ' + e.message + "</span>"; }
+  });
+  tgRender();
+
   // إرشادات مفصّلة لكل منصّة (بصدق: تيك توك ليس له موديول رسمي في Make)
   const GUIDES = [
+    ["تيليغرام ✈ (مباشر بلا وسيط)", `١. افتح تيليغرام وابحث عن <b>@BotFather</b> ← أرسل /newbot ← اختر اسماً ← انسخ الـ<b>Token</b>.<br>
+      ٢. أنشئ قناتك (أو افتح قناتك) ← Administrators ← أضف البوت <b>مشرفاً</b> بصلاحية النشر.<br>
+      ٣. الصق التوكن ومعرّف القناة (مثل @riyadalmutaqin) أعلاه واضغط حفظ ثم «إرسال اختبار».<br>
+      ٤. من الآن: الجدولة في لوحة التحكم تنشر لقناتك <b>مباشرة</b> (صورة + نص) بلا Make.`],
     ["يوتيوب ▶", `١. في Make: سيناريو جديد ← Webhooks ← Custom webhook ← انسخ الرابط والصقه أعلاه.<br>
       ٢. أضف موديول <b>YouTube ← Upload a Video</b> (للمنشورات المجتمعية استخدم نشر الصورة عبر صفحة فيسبوك المربوطة أو انشرها يدوياً).<br>
       ٣. عند إضافة الموديول اضغط Sign in وادخل <b>بحساب Gmail الخاص بالقناة</b>.<br>

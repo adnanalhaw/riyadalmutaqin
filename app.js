@@ -9,9 +9,10 @@ const SITE = {
     youtube: "https://www.youtube.com/@رياضالمتقين-س1ر",
     tiktok: "https://www.tiktok.com/@reyad.almutqyan",
     facebook: "https://www.facebook.com/profile.php?id=61586546952951",
-    // المنصّتان التاليتان لم تُزوَّد روابطهما بعد — حدّثهما هنا عند إنشائهما:
+    // الروابط التالية لم تُزوَّد بعد — حدّثها هنا عند إنشائها:
     instagram: "",
     x: "",
+    telegram: "",
   },
 };
 
@@ -169,6 +170,8 @@ function mountLanding() {
     ["soc-facebook", SITE.links.facebook, "فيسبوك"],
     ["soc-instagram", SITE.links.instagram, "إنستغرام"],
     ["soc-x", SITE.links.x, "إكس"],
+    ["soc-telegram", SITE.links.telegram, "تيليغرام"],
+    ["card-telegram", SITE.links.telegram, "تيليغرام"],
   ];
   for (const [id, url, nameAr] of map) {
     const el = $(id);

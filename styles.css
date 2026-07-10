@@ -374,3 +374,29 @@ table.accounts { width: 100%; border-collapse: collapse; font-size: .85rem; }
 table.accounts th, table.accounts td { padding: .55rem .5rem; border-bottom: 1px solid var(--gold-faint); text-align: start; }
 table.accounts th { color: var(--gold-2); font-weight: 700; }
 code.mono { font-family: monospace; font-size: .78rem; color: var(--gold-2); word-break: break-all; direction: ltr; display: inline-block; }
+
+/* ===== رحلة الاستوديو والنشر ===== */
+.step-head { display: flex; align-items: center; gap: .55rem; font-weight: 700; color: var(--gold-2); font-size: 1.05rem; }
+.step-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(180deg, var(--blue-2), var(--blue));
+  border: 1.5px solid var(--gold); color: var(--gold-2); font-size: .9rem;
+}
+.steps-nav { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.steps-nav a {
+  display: inline-flex; align-items: center; gap: .4rem;
+  padding: .45rem .8rem; border-radius: 999px; font-size: .85rem; font-weight: 700;
+  border: 1px solid var(--gold-soft); color: var(--cream); background: var(--panel-grad);
+}
+.steps-nav a:hover { border-color: var(--gold-2); }
+.style-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: .6rem; }
+.style-card {
+  border: 2px solid var(--gold-soft); border-radius: 14px; padding: .35rem;
+  background: var(--panel-grad); cursor: pointer; text-align: center;
+  transition: border-color .15s, transform .06s ease;
+}
+.style-card:active { transform: scale(.97); }
+.style-card.active { border-color: var(--gold-2); box-shadow: 0 0 14px rgba(216, 206, 154, .25); }
+.style-card canvas { width: 100%; height: auto; border-radius: 9px; display: block; background: var(--g3); }
+.style-card .s-name { font-size: .72rem; font-weight: 700; color: var(--gold-2); margin-top: .3rem; }
