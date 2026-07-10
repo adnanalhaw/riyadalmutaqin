@@ -114,6 +114,18 @@ function mountLangMenu() {
   applyLang(currentLang());
 }
 
+/* ===== قائمة التنقّل (☰) ===== */
+function mountNavMenu() {
+  const btn = $("nav-btn");
+  const menu = $("nav-menu");
+  if (!btn || !menu) return;
+  btn.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("hidden"); });
+  menu.querySelectorAll("[data-go]").forEach((b) =>
+    b.addEventListener("click", () => { location.href = b.dataset.go; }));
+  document.addEventListener("click", () => menu.classList.add("hidden"));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") menu.classList.add("hidden"); });
+}
+
 /* ===== مشاركة الصفحة ===== */
 async function sharePage() {
   const data = { title: SITE.name, text: "قناة رياض المتقين — العلم النافع من الكتاب والسنّة", url: "https://" + SITE.domain };
@@ -179,6 +191,7 @@ function mountLanding() {
 document.addEventListener("DOMContentLoaded", () => {
   mountLogos();
   mountLangMenu();
+  mountNavMenu();
   mountModals();
   mountLanding();
 });

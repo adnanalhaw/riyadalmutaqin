@@ -3,18 +3,21 @@
    التدرّج المعتمد حرفياً:
    linear-gradient(180deg,#203B25 0%,#17301D 35%,#142417 70%,#0F1C12 100%) */
 :root {
-  --g1: #203B25;
-  --g2: #17301D;
-  --g3: #142417;
-  --g4: #0F1C12;
+  /* درجات التصميم المعتمد: أخضر-تيلي ليلي يلتقي بكحلي الهيدر */
+  --g1: #1B3A33;
+  --g2: #16332E;
+  --g3: #122A22;
+  --g4: #0C1A14;
+  --navy: #0C2030;
+  --navy-2: #0A1926;
   --gold: #C9A24B;
   --gold-2: #E7C778;
   --gold-soft: rgba(201, 162, 75, .38);
   --gold-faint: rgba(201, 162, 75, .16);
   --cream: #EFE7D6;
   --cream-dim: #B9B29E;
-  --panel: rgba(10, 22, 13, .55);
-  --panel-2: rgba(16, 30, 19, .78);
+  --panel: #0F231C;
+  --panel-2: #132A21;
   --danger: #E06A5A;
   --ok: #7BC47F;
   --radius: 18px;
@@ -22,12 +25,14 @@
   --font-body: "Amiri", serif;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
-html { -webkit-text-size-adjust: 100%; }
+/* لا وجه زرّ افتراضياً من النظام — نرسم كل الأزرار بأنفسنا */
+button { appearance: none; -webkit-appearance: none; background: none; border: none; color: inherit; }
+html { -webkit-text-size-adjust: 100%; background: var(--g4); }
 body {
   min-height: 100vh;
   color: var(--cream);
   font-family: var(--font-body);
-  background: linear-gradient(180deg, #203B25 0%, #17301D 35%, #142417 70%, #0F1C12 100%) fixed;
+  background: linear-gradient(180deg, var(--g1) 0%, var(--g2) 35%, var(--g3) 70%, var(--g4) 100%);
   overflow-x: hidden;
 }
 /* زخرفة خلفية خفيفة (أشكال نجمية إسلامية) */
@@ -49,10 +54,14 @@ a { color: var(--gold-2); text-decoration: none; }
 .hidden { display: none !important; }
 .gold { color: var(--gold-2); }
 
-/* ===== الهيدر ===== */
+/* ===== الهيدر (لوح كحلي بحدّ ذهبي — مطابق للتصميم) ===== */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
-  padding: .9rem .2rem .6rem; gap: .6rem;
+  gap: .6rem; margin-top: .9rem; padding: .6rem .75rem;
+  background: linear-gradient(165deg, var(--navy), var(--navy-2));
+  border: 1px solid var(--gold-soft); border-bottom: 2px solid var(--gold);
+  border-radius: 20px;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .35);
 }
 .brand { display: flex; align-items: center; gap: .55rem; }
 .brand .logo {
@@ -131,21 +140,29 @@ a { color: var(--gold-2); text-decoration: none; }
 .platform-card .p-sub { font-size: .85rem; color: var(--cream-dim); }
 .platform-card .p-arrow { color: var(--gold); font-size: 1.2rem; }
 
-/* ===== بطاقة الآية ===== */
-.verse-card {
-  position: relative; margin: 1.2rem 0; padding: 2.2rem 1.4rem 1.6rem;
-  border: 2px solid var(--gold-soft); border-radius: 26px; text-align: center;
-  background:
-    radial-gradient(120% 90% at 50% 110%, rgba(201, 162, 75, .14) 0%, transparent 55%),
-    var(--panel);
-  overflow: hidden;
+/* ===== مشهد الآية (مسجد ليلي + مصحف وقنديل — مطابق للتصميم) ===== */
+.verse-scene {
+  position: relative; margin: 1.2rem 0; border-radius: 26px; overflow: hidden;
+  border: 1.5px solid var(--gold-soft);
+  box-shadow: 0 14px 36px rgba(0, 0, 0, .4);
 }
-.verse-card::before {
-  content: "۞"; position: absolute; top: .55rem; inset-inline-start: 50%;
-  transform: translateX(50%); color: var(--gold); font-size: 1.2rem; opacity: .9;
+.verse-scene svg { display: block; width: 100%; height: auto; }
+.verse-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center;
+  padding: 12% 27% 0;
+  text-align: center;
 }
-.verse-text { font-family: var(--font-disp); font-size: 1.55rem; line-height: 2.1; color: var(--gold-2); }
-.verse-ref { margin-top: .6rem; color: var(--cream-dim); font-size: .9rem; }
+.verse-overlay .verse-text {
+  font-family: var(--font-disp); color: var(--gold-2);
+  font-size: clamp(1.02rem, 4.9vw, 1.5rem); line-height: 2.1;
+  text-shadow: 0 2px 14px rgba(0, 0, 0, .75);
+  max-width: 100%;
+}
+.verse-overlay .verse-ref {
+  margin-top: .5rem; color: var(--cream-dim); font-size: .88rem;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, .8);
+}
 
 /* ===== شبكة الإجراءات ===== */
 .actions-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .8rem; margin-top: .4rem; }
