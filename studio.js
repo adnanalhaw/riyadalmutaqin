@@ -218,26 +218,64 @@ function bottomReserve(box, S, landscape) {
   return qrReserve(S, landscape) + sceneBandH(box, landscape) * .45;
 }
 
-/* رسم شريط المشهد بأسفل الصندوق بدمج متدرّج مع الخلفية */
-function paintSceneBand(ctx, box, landscape) {
+function hexRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/* لون خلفية التصميم عند نسبة ارتفاع معيّنة — للدمج بلون الموضع نفسه لا بلون ثابت */
+function bgColorAt(t) {
+  const stops = [[0, BRAND.g[0]], [.35, BRAND.g[1]], [.7, BRAND.g[2]], [1, BRAND.g[3]]];
+  let a = stops[0], b = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++)
+    if (t >= stops[i][0] && t <= stops[i + 1][0]) { a = stops[i]; b = stops[i + 1]; break; }
+  const k = Math.min(1, Math.max(0, (t - a[0]) / (b[0] - a[0] || 1)));
+  const c1 = hexRgb(a[1]), c2 = hexRgb(b[1]);
+  return c1.map((v, i) => Math.round(v + (c2[i] - v) * k)).join(",");
+}
+
+/* مشهد القرآن والقنديل والمسجد مذاباً في التصميم لا ملصوقاً:
+   يمتد لحواف اللوحة الثلاث (يمين/يسار/أسفل) بلا أي مستطيل داخلي، ويُذاب من
+   أعلاه بتدرّج طويل بلون الخلفية في موضعه نفسه، وتُصبغ الصورة كلها بطبقة من
+   تدرّج الهوية (فجر×غروب) مع تعتيم جانبي ناعم — فيصير جزءاً من الخلفية. */
+function paintSceneBand(ctx, p, box, landscape) {
   if (!sceneImage) return;
-  const bandH = sceneBandH(box, landscape);
-  const by = box.y + box.h - bandH;
+  const by = box.y + box.h - sceneBandH(box, landscape);
+  const bandH = p.h - by; // يبلغ أسفل اللوحة تماماً — لا حافة سفلية
   // مصدر القصّ: الربع الأيمن-السفلي (القرآن + القنديل + المسجد فقط — بلا أي نص)
   const sx = sceneImage.width * .46, sy = sceneImage.height * .56;
   const sw = sceneImage.width * .54, sh = sceneImage.height * .44;
-  const scale = Math.max(box.w / sw, bandH / sh);
+  const scale = Math.max(p.w / sw, bandH / sh);
   const dw = sw * scale, dh = sh * scale;
-  ctx.save();
-  ctx.beginPath(); ctx.rect(box.x, by, box.w, bandH); ctx.clip();
-  ctx.drawImage(sceneImage, sx, sy, sw, sh,
-    box.x + (box.w - dw) / 2, by + (bandH - dh), dw, dh);
-  // دمج علوي متدرّج مع خلفية التصميم
-  const fade = ctx.createLinearGradient(0, by, 0, by + bandH * .55);
-  fade.addColorStop(0, "rgba(22,37,62,1)");
-  fade.addColorStop(1, "rgba(22,37,62,0)");
-  ctx.fillStyle = fade; ctx.fillRect(box.x, by, box.w, bandH * .55);
-  ctx.restore();
+  const deep = hexRgb(BRAND.g[3]).join(",");
+  // نرسم المشهد على لوحة جانبية ثم نمحو أعلاه بقناع شفافية متدرّج —
+  // فتظهر خلفية التصميم الحقيقية (بإطاراتها وتوهّجاتها) عبر الذوبان بلا أي خطّ لوني
+  const off = document.createElement("canvas");
+  off.width = p.w; off.height = bandH;
+  const o = off.getContext("2d");
+  o.drawImage(sceneImage, sx, sy, sw, sh, (p.w - dw) / 2, bandH - dh, dw, dh);
+  // صبغة الهوية فوق المشهد كله — فيرث درجات الفجر والغروب بدل ألوان الصورة الخام
+  const tint = o.createLinearGradient(0, 0, 0, bandH);
+  tint.addColorStop(0, `rgba(${bgColorAt(by / p.h)},.42)`);
+  tint.addColorStop(.55, `rgba(${bgColorAt((by + bandH * .55) / p.h)},.2)`);
+  tint.addColorStop(1, `rgba(${deep},.32)`);
+  o.fillStyle = tint; o.fillRect(0, 0, p.w, bandH);
+  // تعتيم جانبي ناعم (ظلّ عمق لا رقعة لون)
+  const vw = p.w * .2;
+  const lv = o.createLinearGradient(0, 0, vw, 0);
+  lv.addColorStop(0, `rgba(${deep},.4)`); lv.addColorStop(1, `rgba(${deep},0)`);
+  o.fillStyle = lv; o.fillRect(0, 0, vw, bandH);
+  const rv = o.createLinearGradient(p.w, 0, p.w - vw, 0);
+  rv.addColorStop(0, `rgba(${deep},.4)`); rv.addColorStop(1, `rgba(${deep},0)`);
+  o.fillStyle = rv; o.fillRect(p.w - vw, 0, vw, bandH);
+  // قناع الذوبان العلوي: محو متدرّج طويل لأعلى المشهد نفسه
+  o.globalCompositeOperation = "destination-out";
+  const mask = o.createLinearGradient(0, 0, 0, bandH * .62);
+  mask.addColorStop(0, "rgba(0,0,0,1)");
+  mask.addColorStop(.4, "rgba(0,0,0,.6)");
+  mask.addColorStop(1, "rgba(0,0,0,0)");
+  o.fillStyle = mask; o.fillRect(0, 0, p.w, bandH * .62);
+  ctx.drawImage(off, 0, by);
 }
 
 function paintQR(ctx, box, S, landscape) {
@@ -425,7 +463,7 @@ function drawPost(canvas, p, data) {
   const S = Math.min(box.w, box.h) / 1080;
   const landscape = p.w > p.h;
   (STYLE_PAINTERS[data.style] || STYLE_PAINTERS.classic)(ctx, p, box, S, data);
-  paintSceneBand(ctx, box, landscape); // القرآن والقنديل والمسجد أسفل كل تصميم
+  paintSceneBand(ctx, p, box, landscape); // القرآن والقنديل والمسجد مذاباً أسفل كل تصميم
   paintQR(ctx, box, S, landscape);     // الختم فوق المشهد
 }
 
