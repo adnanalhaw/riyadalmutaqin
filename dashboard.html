@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<!-- رياض المتقين — لوحة التحكم (تتشكّل حسب دور الحساب) -->
+<html dir="rtl" lang="ar">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>لوحة التحكم — رياض المتقين</title>
+<meta name="theme-color" content="#0F1C12">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Amiri:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div class="wrap">
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="logo.png" alt="رياض المتقين" class="logo">
+      <span class="name">رياض المتقين</span>
+    </div>
+    <button id="logout-btn" class="btn btn-sm" type="button">خروج</button>
+  </header>
+
+  <div class="dash-head">
+    <span id="user-chip" class="chip">…</span>
+    <a class="small" href="index.html">← عرض الموقع</a>
+  </div>
+
+  <!-- ===== 🎨 استوديو المونتاج (معلم + مدير الموقع + مدير النظام) ===== -->
+  <section id="sec-studio" class="hidden">
+    <h3 class="section-title">🎨 استوديو بوستات رياض المتقين</h3>
+    <p class="muted small">صمّم بوست واحد — حمّله جاهزًا لكل المنصّات.</p>
+
+    <div class="card" style="margin-top:.8rem">
+      <div class="row" style="gap:.7rem; align-items:flex-start; flex-wrap:wrap">
+        <div style="flex:1; min-width:120px">
+          <label class="fld" for="st-title">الصفة</label>
+          <select id="st-title">
+            <option value="الشيخ">الشيخ</option>
+            <option value="فضيلة الشيخ">فضيلة الشيخ</option>
+            <option value="الدكتور">الدكتور</option>
+            <option value="الأستاذ">الأستاذ</option>
+            <option value="القارئ">القارئ</option>
+            <option value="">بدون صفة</option>
+          </select>
+        </div>
+        <div style="flex:2; min-width:200px">
+          <label class="fld" for="st-name">اسم الشيخ / المحاضر</label>
+          <input type="text" id="st-name" placeholder="محمد بن صالح العثيمين">
+        </div>
+      </div>
+
+      <label class="fld" for="st-subject">عنوان المادة / المقطع</label>
+      <input type="text" id="st-subject" placeholder="أجمل ما قيل في ذمّ التفاخر في الدنيا">
+
+      <div class="row between" style="margin-top:.9rem">
+        <span>إظهار شارة «مقطع صوتي»</span>
+        <label class="switch"><input type="checkbox" id="st-audio"><span></span></label>
+      </div>
+    </div>
+
+    <p class="studio-note">اكتب الاسم والعنوان فوق — تنزّل لك التصاميم بالمقاسات المضبوطة لكل منصّة
+    (تيك توك، ريلز إنستغرام، ستوري، منشور إنستغرام، حالة واتساب، إكس، فيسبوك، مصغّرة يوتيوب) —
+    كل مقاس يراعي «المنطقة الآمنة» الخاصة بمنصّته حتى لا تغطي أزرارُ التطبيق النصَّ.
+    باقي العناصر (الشعار والإطار والمعرّف) ثابتة دائمًا.</p>
+
+    <button id="st-download-all" class="btn btn-gold btn-block" type="button">⬇ تحميل جميع المقاسات</button>
+
+    <div id="sizes-grid" class="sizes-grid"></div>
+  </section>
+
+  <!-- ===== 🔗 روابط المنصّات (مدير الموقع + مدير النظام) ===== -->
+  <section id="sec-links" class="hidden">
+    <h3 class="section-title">🔗 روابط المنصّات الحالية</h3>
+    <div class="card">
+      <div id="links-list"></div>
+      <p class="xsmall muted" style="margin-top:.7rem">
+        لتغيير رابط نهائياً لكل الزوّار: عدّل كائن
+        <code class="mono">SITE.links</code>
+        أعلى ملف
+        <code class="mono">app.js</code>
+        في مستودع GitHub ثم أعد النشر.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== 👥 الحسابات والصلاحيات (مدير النظام فقط) ===== -->
+  <section id="sec-accounts" class="hidden">
+    <h3 class="section-title">👥 الحسابات والصلاحيات</h3>
+    <div class="card">
+      <table class="accounts">
+        <thead><tr><th>الدور</th><th>البريد</th><th>الصلاحيات</th></tr></thead>
+        <tbody id="accounts-rows"></tbody>
+      </table>
+    </div>
+
+    <div class="card" style="margin-top:.9rem">
+      <b class="gold">🔑 مولّد بصمة كلمة مرور جديدة</b>
+      <p class="xsmall muted" style="margin:.4rem 0 .6rem">
+        لتغيير كلمة مرور أي حساب: اختر الحساب، اكتب الكلمة الجديدة، انسخ البصمة الناتجة
+        واستبدلها بحقل hash الخاص بالحساب في ملف auth.js على GitHub، ثم أعد النشر.
+        كلمة المرور نفسها لا تُخزَّن في أي مكان.
+      </p>
+      <select id="hg-account"></select>
+      <label class="fld" for="hg-pass">كلمة المرور الجديدة</label>
+      <input type="text" id="hg-pass" placeholder="اكتب كلمة قوية (12+ حرفاً)">
+      <button id="hg-btn" class="btn btn-block" type="button" style="margin-top:.7rem">توليد البصمة</button>
+      <p id="hg-out" class="xsmall" style="margin-top:.6rem; word-break:break-all"></p>
+    </div>
+  </section>
+
+  <!-- ===== 📚 بطاقات المتعلم ===== -->
+  <section id="sec-student" class="hidden">
+    <h3 class="section-title">📚 قنوات التعلم</h3>
+    <button id="card-youtube" class="platform-card" type="button">
+      <span class="p-ico">▶</span>
+      <span class="p-body"><span class="p-title">يوتيوب</span><br><span class="p-sub">الدروس والمحاضرات الكاملة</span></span>
+      <span class="p-arrow">‹</span>
+    </button>
+    <button id="card-tiktok" class="platform-card" type="button">
+      <span class="p-ico">♪</span>
+      <span class="p-body"><span class="p-title">تيك توك</span><br><span class="p-sub">مقاطع قصيرة نافعة</span></span>
+      <span class="p-arrow">‹</span>
+    </button>
+    <button id="card-facebook" class="platform-card" type="button">
+      <span class="p-ico">f</span>
+      <span class="p-body"><span class="p-title">فيسبوك</span><br><span class="p-sub">صفحتنا على فيسبوك</span></span>
+      <span class="p-arrow">‹</span>
+    </button>
+  </section>
+
+</div>
+
+<script src="app.js"></script>
+<script src="auth.js"></script>
+<script src="studio.js"></script>
+<script>
+  const session = requireSession();
+  if (session) {
+    const role = session.role;
+    document.getElementById("user-chip").textContent =
+      ROLES[role].icon + " " + ROLES[role].label + " · " + session.email;
+    document.getElementById("logout-btn").addEventListener("click", logout);
+
+    // الصلاحيات: من يرى ماذا
+    const CAN = {
+      studio:   ["teacher", "admin", "sysadmin"],
+      links:    ["admin", "sysadmin"],
+      accounts: ["sysadmin"],
+      student:  ["student"],
+    };
+    for (const [sec, roles] of Object.entries(CAN)) {
+      if (roles.includes(role)) document.getElementById("sec-" + sec).classList.remove("hidden");
+    }
+
+    // استوديو المونتاج
+    if (CAN.studio.includes(role)) mountStudio();
+
+    // قائمة الروابط الحالية
+    if (CAN.links.includes(role)) {
+      const list = document.getElementById("links-list");
+      const rows = [
+        ["يوتيوب", SITE.links.youtube], ["تيك توك", SITE.links.tiktok],
+        ["فيسبوك", SITE.links.facebook], ["إنستغرام", SITE.links.instagram], ["إكس (X)", SITE.links.x],
+      ];
+      list.innerHTML = rows.map(([n, u]) =>
+        `<div class="row between" style="padding:.4rem 0; border-bottom:1px solid var(--gold-faint)">
+           <b>${n}</b>
+           ${u ? `<a class="xsmall" href="${u}" target="_blank" rel="noopener">فتح ↗</a>`
+               : `<span class="xsmall muted">غير مضاف بعد</span>`}
+         </div>`).join("");
+    }
+
+    // إدارة الحسابات + مولّد البصمة
+    if (CAN.accounts.includes(role)) {
+      const perms = {
+        student: "التصفح والتعلم",
+        teacher: "استوديو المونتاج",
+        admin: "استوديو المونتاج + روابط المنصّات",
+        sysadmin: "كل الصلاحيات + إدارة الحسابات",
+      };
+      document.getElementById("accounts-rows").innerHTML = USERS.map((u) =>
+        `<tr><td>${ROLES[u.role].icon} ${ROLES[u.role].label}</td>
+             <td><code class="mono">${u.email}</code></td>
+             <td class="xsmall">${perms[u.role]}</td></tr>`).join("");
+      const sel = document.getElementById("hg-account");
+      sel.innerHTML = USERS.map((u) => `<option value="${u.email}">${ROLES[u.role].label} — ${u.email}</option>`).join("");
+      document.getElementById("hg-btn").addEventListener("click", async () => {
+        const email = sel.value;
+        const pass = document.getElementById("hg-pass").value;
+        const out = document.getElementById("hg-out");
+        if (pass.length < 12) { out.innerHTML = '<span style="color:var(--danger)">١٢ حرفاً على الأقل.</span>'; return; }
+        const hash = await sha256Hex(email.toLowerCase() + ":" + pass);
+        out.innerHTML = 'البصمة الجديدة (انسخها إلى auth.js):<br><code class="mono">' + hash + "</code>";
+      });
+    }
+
+    // بطاقات المتعلم
+    if (CAN.student.includes(role)) {
+      [["card-youtube", SITE.links.youtube], ["card-tiktok", SITE.links.tiktok], ["card-facebook", SITE.links.facebook]]
+        .forEach(([id, url]) => document.getElementById(id).addEventListener("click", () => window.open(url, "_blank", "noopener")));
+    }
+  }
+</script>
+</body>
+</html>
