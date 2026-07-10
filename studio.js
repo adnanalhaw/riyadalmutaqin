@@ -179,6 +179,50 @@ function paintContent(ctx, box, S, data, opts = {}) {
   ctx.fillText("رياض المتقين · riyadalmutaqin.com", box.x + box.w / 2, box.y + box.h - 40 * S);
 }
 
+/* ===== QR زخرفي يوصل للموقع مباشرة =====
+   بلاطة كريمية بحدّ ذهبي مزدوج ونجوم ثمانية بالزوايا، والوحدات بأركان
+   منحنية بلون أخضر ليلي — تُقرأ بكل الماسحات (منطقة هدوء محفوظة). */
+let _qrCache = null;
+function qrMatrix() {
+  if (_qrCache) return _qrCache;
+  if (typeof qrcode === "undefined") return null; // qr.js غير محمّل — نتخطى بهدوء
+  const qr = qrcode(0, "M");
+  qr.addData("https://riyadalmutaqin.com");
+  qr.make();
+  _qrCache = { n: qr.getModuleCount(), dark: (r, c) => qr.isDark(r, c) };
+  return _qrCache;
+}
+
+function paintQR(ctx, box, S) {
+  const m = qrMatrix();
+  if (!m) return;
+  const size = 200 * S;
+  const pad = (size / m.n) * 4.2; // منطقة هدوء ≥ ٤ خلايا (شرط المواصفة للقراءة)
+  const x = box.x + box.w - size - 34 * S;
+  const y = box.y + box.h - size - 96 * S;
+  // البلاطة الكريمية بحدّ ذهبي مزدوج
+  roundRect(ctx, x - pad, y - pad, size + pad * 2, size + pad * 2, 20 * S);
+  ctx.fillStyle = "#F7F5EE"; ctx.fill();
+  ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(2, 4 * S); ctx.stroke();
+  roundRect(ctx, x - pad + 7 * S, y - pad + 7 * S, size + pad * 2 - 14 * S, size + pad * 2 - 14 * S, 14 * S);
+  ctx.strokeStyle = "rgba(201,162,75,.45)"; ctx.lineWidth = Math.max(1, 2 * S); ctx.stroke();
+  // نجوم ثمانية ذهبية على الزوايا الأربع
+  ctx.fillStyle = BRAND.gold;
+  for (const [sx, sy] of [[x - pad, y - pad], [x + size + pad, y - pad], [x - pad, y + size + pad], [x + size + pad, y + size + pad]]) {
+    star8(ctx, sx, sy, 11 * S); ctx.fill();
+  }
+  // نجمة تاج صغيرة أعلى الوسط
+  star8(ctx, x + size / 2, y - pad - 14 * S, 9 * S);
+  ctx.fillStyle = BRAND.gold2; ctx.fill();
+  // وحدات الرمز مربعة حادة — التدوير يكسر القراءة بالأحجام الصغيرة
+  // (مُثبت بفاحص jsQR: المربعات تُقرأ مع الزخرفة، والمدوّرة لا)
+  const cell = size / m.n;
+  ctx.fillStyle = "#143026";
+  for (let r = 0; r < m.n; r++) for (let c = 0; c < m.n; c++) {
+    if (m.dark(r, c)) ctx.fillRect(x + c * cell, y + r * cell, cell + .5, cell + .5);
+  }
+}
+
 /* ===== التصاميم الخمسة ===== */
 const STYLE_PAINTERS = {
   classic(ctx, p, box, S, data) {
@@ -188,6 +232,7 @@ const STYLE_PAINTERS = {
     ctx.strokeStyle = "rgba(201,162,75,.35)"; ctx.lineWidth = Math.max(2, 3 * S);
     roundRect(ctx, box.x + 26, box.y + 26, box.w - 52, box.h - 52, 32 * S); ctx.stroke();
     paintContent(ctx, box, S, data, { landscape: p.w > p.h });
+    paintQR(ctx, box, S);
   },
 
   mihrab(ctx, p, box, S, data) {
@@ -220,6 +265,7 @@ const STYLE_PAINTERS = {
     glow.addColorStop(0, "rgba(255,217,143,.28)"); glow.addColorStop(1, "rgba(255,217,143,0)");
     ctx.fillStyle = glow; ctx.fillRect(box.x, ay2 - box.w * .3, box.w, box.w * .5);
     paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92 });
+    paintQR(ctx, box, S);
   },
 
   geometric(ctx, p, box, S, data) {
@@ -242,6 +288,7 @@ const STYLE_PAINTERS = {
     star8(ctx, box.x + box.w - 40 * S, box.y + box.h * .5, 150 * S); ctx.fill();
     ctx.globalAlpha = 1;
     paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .95 });
+    paintQR(ctx, box, S);
   },
 
   lantern(ctx, p, box, S, data) {
@@ -267,6 +314,7 @@ const STYLE_PAINTERS = {
     ctx.fillStyle = "#FFF3D0";
     ctx.beginPath(); ctx.ellipse(lx, ly - 6 * S, 12 * S, 20 * S, 0, 0, 7); ctx.fill(); // شعلة
     paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, shiftX: -30 * S });
+    paintQR(ctx, box, S);
   },
 
   promo(ctx, p, box, S, data) {
@@ -310,6 +358,7 @@ const STYLE_PAINTERS = {
     bg.addColorStop(0, BRAND.gold2); bg.addColorStop(1, BRAND.gold);
     ctx.fillStyle = bg; ctx.fill();
     ctx.fillStyle = "#1C3120"; ctx.fillText("riyadalmutaqin.com", cx, y + 15 * S);
+    paintQR(ctx, box, S);
   },
 };
 
