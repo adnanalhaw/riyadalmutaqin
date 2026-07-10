@@ -120,8 +120,11 @@ function mountNavMenu() {
   const menu = $("nav-menu");
   if (!btn || !menu) return;
   btn.addEventListener("click", (e) => { e.stopPropagation(); menu.classList.toggle("hidden"); });
-  menu.querySelectorAll("[data-go]").forEach((b) =>
-    b.addEventListener("click", () => { location.href = b.dataset.go; }));
+  const here = location.pathname.split("/").pop() || "index.html";
+  menu.querySelectorAll("[data-go]").forEach((b) => {
+    b.classList.toggle("active", b.dataset.go === here); // الصفحة الحالية بالأزرق الملكي
+    b.addEventListener("click", () => { location.href = b.dataset.go; });
+  });
   document.addEventListener("click", () => menu.classList.add("hidden"));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") menu.classList.add("hidden"); });
 }
