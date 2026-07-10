@@ -30,6 +30,7 @@ const STYLES = [
 const BRAND = {
   g: ["#0A1E33", "#051526", "#041019", "#02090C"],
   gold: "#D8C07A", gold2: "#D8C07A", goldSec: "#A98A4A", goldDeep: "#8C6C36",
+  frame: "#8FA9C6", frameSoft: "rgba(143,169,198,.45)",
   cream: "#F6F2E8", brown: "#5E4B33", night: "#0A1E33", silhouette: "#081720",
 };
 
@@ -119,7 +120,7 @@ function paintLogo(ctx, cx, y, r) {
   }
   ctx.restore();
   ctx.beginPath(); ctx.arc(cx, y + r, r, 0, 7);
-  ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(3, r * .06); ctx.stroke();
+  ctx.strokeStyle = BRAND.frameSoft; ctx.lineWidth = Math.max(1.5, r * .03); ctx.stroke();
 }
 
 function star8(ctx, cx, cy, r) {
@@ -215,7 +216,7 @@ function paintQR(ctx, box, S, landscape) {
   const tg = ctx.createLinearGradient(0, tile.y, 0, tile.y + tile.h);
   tg.addColorStop(0, "#F6F2E8"); tg.addColorStop(1, "#E9DCBB");
   ctx.fillStyle = tg; ctx.fill();
-  ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(2, 4 * S); ctx.stroke();
+  ctx.strokeStyle = BRAND.goldSec; ctx.lineWidth = Math.max(1.5, 2 * S); ctx.stroke();
   roundRect(ctx, tile.x + 6 * S, tile.y + 6 * S, tile.w - 12 * S, tile.h - 12 * S, 13 * S);
   ctx.strokeStyle = "rgba(169,138,74,.55)"; ctx.lineWidth = Math.max(1, 2 * S); ctx.stroke();
   // نجوم ثمانية عتيقة على الزوايا + تاج
@@ -242,9 +243,9 @@ function paintQR(ctx, box, S, landscape) {
 const STYLE_PAINTERS = {
   classic(ctx, p, box, S, data) {
     paintBg(ctx, p.w, p.h);
-    ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(3, 6 * S);
+    ctx.strokeStyle = BRAND.frame; ctx.lineWidth = Math.max(1.5, 2.4 * S);
     roundRect(ctx, box.x + 8, box.y + 8, box.w - 16, box.h - 16, 42 * S); ctx.stroke();
-    ctx.strokeStyle = "rgba(169,138,74,.55)"; ctx.lineWidth = Math.max(2, 3 * S);
+    ctx.strokeStyle = BRAND.frameSoft; ctx.lineWidth = Math.max(1, 1.2 * S);
     roundRect(ctx, box.x + 26, box.y + 26, box.w - 52, box.h - 52, 32 * S); ctx.stroke();
     paintContent(ctx, box, S, data, { landscape: p.w > p.h, bottomReserve: qrReserve(S, p.w > p.h) });
     paintQR(ctx, box, S, p.w > p.h);
@@ -267,7 +268,7 @@ const STYLE_PAINTERS = {
     // قوس المحراب
     const aw = box.w * .82, ax = box.x + (box.w - aw) / 2, ay2 = box.y + box.h * .9;
     const apexY = box.y + 48 * S, springY = box.y + box.h * .3;
-    ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(3, 6 * S);
+    ctx.strokeStyle = BRAND.frame; ctx.lineWidth = Math.max(1.5, 2.4 * S);
     ctx.beginPath();
     ctx.moveTo(ax, ay2); ctx.lineTo(ax, springY);
     ctx.quadraticCurveTo(ax, apexY + 30 * S, box.x + box.w / 2, apexY);
@@ -286,7 +287,7 @@ const STYLE_PAINTERS = {
   geometric(ctx, p, box, S, data) {
     paintBg(ctx, p.w, p.h);
     // شريطا نجوم ثمانية أعلى وأسفل + إطار
-    ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(3, 5 * S);
+    ctx.strokeStyle = BRAND.frame; ctx.lineWidth = Math.max(1.5, 2 * S);
     roundRect(ctx, box.x + 8, box.y + 8, box.w - 16, box.h - 16, 30 * S); ctx.stroke();
     const step = 88 * S, r = 26 * S;
     for (const yy of [box.y + 56 * S, box.y + box.h - 56 * S]) {
@@ -335,7 +336,7 @@ const STYLE_PAINTERS = {
   promo(ctx, p, box, S, data) {
     paintBg(ctx, p.w, p.h);
     paintStars(ctx, p.w, p.h);
-    ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(3, 6 * S);
+    ctx.strokeStyle = BRAND.frame; ctx.lineWidth = Math.max(1.5, 2.4 * S);
     roundRect(ctx, box.x + 8, box.y + 8, box.w - 16, box.h - 16, 42 * S); ctx.stroke();
     const cx = box.x + box.w / 2;
     const landscape = p.w > p.h;
