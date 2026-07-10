@@ -28,9 +28,9 @@ const STYLES = [
 ];
 
 const BRAND = {
-  g: ["#203B25", "#17301D", "#142417", "#0F1C12"],
-  gold: "#C9A24B", gold2: "#E7C778", goldDeep: "#8A6A2F",
-  cream: "#EFE7D6", night: "#0F2A3A", silhouette: "#081720",
+  g: ["#1C4534", "#163B2A", "#123021", "#0E2418"],
+  gold: "#D8C07A", gold2: "#D8C07A", goldSec: "#A98A4A", goldDeep: "#8C6C36",
+  cream: "#F6F2E8", brown: "#5E4B33", night: "#0F2A3A", silhouette: "#081720",
 };
 
 let logoImage = null;
@@ -84,7 +84,7 @@ function paintBg(ctx, w, h, topColor) {
   grad.addColorStop(0, topColor || BRAND.g[0]); grad.addColorStop(.35, BRAND.g[1]);
   grad.addColorStop(.7, BRAND.g[2]); grad.addColorStop(1, BRAND.g[3]);
   ctx.fillStyle = grad; ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = "rgba(201,162,75,.10)";
+  ctx.fillStyle = "rgba(169,138,74,.12)";
   for (let y = 60; y < h; y += 170) for (let x = 60 + (y % 340 ? 85 : 0); x < w; x += 170) {
     ctx.beginPath(); ctx.arc(x, y, 3, 0, 7); ctx.fill();
   }
@@ -147,7 +147,8 @@ function paintContent(ctx, box, S, data, opts = {}) {
   const subjLines = wrapText(ctx, data.subject || "", box.w * .78);
   const contentH = logoR * 2 + 56 * S + nameLines.length * nameSize * 1.35 + 20 * S + 66 * S +
     subjLines.length * subjSize * 1.5 + (data.audioBadge ? 100 * S : 0);
-  let y = box.y + Math.max(60 * S, (box.h - contentH) / 2 - 24 * S) + (opts.shiftY || 0);
+  const reserve = opts.bottomReserve || 0; // مساحة ختم QR والتذييل أسفل المحتوى
+  let y = box.y + Math.max(56 * S, (box.h - reserve - contentH) / 2) + (opts.shiftY || 0);
 
   paintLogo(ctx, cx, y, logoR);
   y += logoR * 2 + 56 * S;
@@ -169,14 +170,10 @@ function paintContent(ctx, box, S, data, opts = {}) {
     ctx.font = `700 ${Math.round(38 * S)}px "Amiri", serif`;
     const bw = ctx.measureText(label).width + 84 * S, bh = 72 * S;
     roundRect(ctx, cx - bw / 2, y - bh / 2 - 8 * S, bw, bh, bh / 2);
-    ctx.fillStyle = "rgba(201,162,75,.18)"; ctx.fill();
+    ctx.fillStyle = "rgba(169,138,74,.2)"; ctx.fill();
     ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(2, 3 * S); ctx.stroke();
     ctx.fillStyle = BRAND.gold2; ctx.fillText(label, cx, y + 12 * S);
   }
-  // المعرّف
-  ctx.fillStyle = "rgba(239,231,214,.75)";
-  ctx.font = `${Math.round(32 * S)}px "Amiri", serif`;
-  ctx.fillText("رياض المتقين · riyadalmutaqin.com", box.x + box.w / 2, box.y + box.h - 40 * S);
 }
 
 /* ===== QR زخرفي يوصل للموقع مباشرة =====
@@ -193,34 +190,52 @@ function qrMatrix() {
   return _qrCache;
 }
 
-function paintQR(ctx, box, S) {
+/* ارتفاع منطقة الختم (للحجز في توسيط المحتوى) */
+function qrReserve(S, landscape) {
+  const size = (landscape ? 128 : 168) * S;
+  return size + (size / 25) * 8.4 + 96 * S;
+}
+
+function paintQR(ctx, box, S, landscape) {
   const m = qrMatrix();
   if (!m) return;
-  const size = 200 * S;
-  const pad = (size / m.n) * 4.2; // منطقة هدوء ≥ ٤ خلايا (شرط المواصفة للقراءة)
-  const x = box.x + box.w - size - 34 * S;
-  const y = box.y + box.h - size - 96 * S;
-  // البلاطة الكريمية بحدّ ذهبي مزدوج
-  roundRect(ctx, x - pad, y - pad, size + pad * 2, size + pad * 2, 20 * S);
-  ctx.fillStyle = "#F7F5EE"; ctx.fill();
+  // ختم متناسق وسط أسفل التصميم — بلاطة عاجية بميل ذهبي (لا بيضاء صارخة)
+  const size = (landscape ? 128 : 168) * S;
+  const pad = (size / m.n) * 4.2; // منطقة هدوء ≥ ٤ خلايا (شرط القراءة)
+  const x = box.x + (box.w - size) / 2;
+  const y = box.y + box.h - size - pad - 74 * S;
+  const tile = { x: x - pad, y: y - pad, w: size + pad * 2, h: size + pad * 2 };
+  // توهّج ناعم خلف الختم يدمجه بالخلفية
+  const halo = ctx.createRadialGradient(x + size / 2, y + size / 2, size * .3, x + size / 2, y + size / 2, size * 1.1);
+  halo.addColorStop(0, "rgba(216,192,122,.18)"); halo.addColorStop(1, "rgba(216,192,122,0)");
+  ctx.fillStyle = halo;
+  ctx.beginPath(); ctx.arc(x + size / 2, y + size / 2, size * 1.1, 0, 7); ctx.fill();
+  // البلاطة: تدرّج عاجي→ذهبي فاتح من لوحة الهوية
+  roundRect(ctx, tile.x, tile.y, tile.w, tile.h, 18 * S);
+  const tg = ctx.createLinearGradient(0, tile.y, 0, tile.y + tile.h);
+  tg.addColorStop(0, "#F6F2E8"); tg.addColorStop(1, "#E9DCBB");
+  ctx.fillStyle = tg; ctx.fill();
   ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(2, 4 * S); ctx.stroke();
-  roundRect(ctx, x - pad + 7 * S, y - pad + 7 * S, size + pad * 2 - 14 * S, size + pad * 2 - 14 * S, 14 * S);
-  ctx.strokeStyle = "rgba(201,162,75,.45)"; ctx.lineWidth = Math.max(1, 2 * S); ctx.stroke();
-  // نجوم ثمانية ذهبية على الزوايا الأربع
-  ctx.fillStyle = BRAND.gold;
-  for (const [sx, sy] of [[x - pad, y - pad], [x + size + pad, y - pad], [x - pad, y + size + pad], [x + size + pad, y + size + pad]]) {
-    star8(ctx, sx, sy, 11 * S); ctx.fill();
+  roundRect(ctx, tile.x + 6 * S, tile.y + 6 * S, tile.w - 12 * S, tile.h - 12 * S, 13 * S);
+  ctx.strokeStyle = "rgba(169,138,74,.55)"; ctx.lineWidth = Math.max(1, 2 * S); ctx.stroke();
+  // نجوم ثمانية عتيقة على الزوايا + تاج
+  ctx.fillStyle = BRAND.goldSec;
+  for (const [sx, sy] of [[tile.x, tile.y], [tile.x + tile.w, tile.y], [tile.x, tile.y + tile.h], [tile.x + tile.w, tile.y + tile.h]]) {
+    star8(ctx, sx, sy, 10 * S); ctx.fill();
   }
-  // نجمة تاج صغيرة أعلى الوسط
-  star8(ctx, x + size / 2, y - pad - 14 * S, 9 * S);
-  ctx.fillStyle = BRAND.gold2; ctx.fill();
-  // وحدات الرمز مربعة حادة — التدوير يكسر القراءة بالأحجام الصغيرة
-  // (مُثبت بفاحص jsQR: المربعات تُقرأ مع الزخرفة، والمدوّرة لا)
+  star8(ctx, x + size / 2, tile.y - 12 * S, 8.5 * S);
+  ctx.fillStyle = BRAND.gold; ctx.fill();
+  // وحدات الرمز مربعة حادة بلون الأخضر الغني — التدوير يكسر القراءة (مُثبت بـ jsQR)
   const cell = size / m.n;
-  ctx.fillStyle = "#143026";
+  ctx.fillStyle = "#163B2A";
   for (let r = 0; r < m.n; r++) for (let c = 0; c < m.n; c++) {
     if (m.dark(r, c)) ctx.fillRect(x + c * cell, y + r * cell, cell + .5, cell + .5);
   }
+  // التذييل تحت الختم — يكتمل به الشكل ككتلة واحدة
+  ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+  ctx.fillStyle = "rgba(246,242,232,.85)";
+  ctx.font = `${Math.round(30 * S)}px "Amiri", serif`;
+  ctx.fillText("امسح لزيارة الموقع · riyadalmutaqin.com", box.x + box.w / 2, tile.y + tile.h + 44 * S);
 }
 
 /* ===== التصاميم الخمسة ===== */
@@ -229,10 +244,10 @@ const STYLE_PAINTERS = {
     paintBg(ctx, p.w, p.h);
     ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(3, 6 * S);
     roundRect(ctx, box.x + 8, box.y + 8, box.w - 16, box.h - 16, 42 * S); ctx.stroke();
-    ctx.strokeStyle = "rgba(201,162,75,.35)"; ctx.lineWidth = Math.max(2, 3 * S);
+    ctx.strokeStyle = "rgba(169,138,74,.55)"; ctx.lineWidth = Math.max(2, 3 * S);
     roundRect(ctx, box.x + 26, box.y + 26, box.w - 52, box.h - 52, 32 * S); ctx.stroke();
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h });
-    paintQR(ctx, box, S);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, bottomReserve: qrReserve(S, p.w > p.h) });
+    paintQR(ctx, box, S, p.w > p.h);
   },
 
   mihrab(ctx, p, box, S, data) {
@@ -264,8 +279,8 @@ const STYLE_PAINTERS = {
     const glow = ctx.createRadialGradient(box.x + box.w / 2, ay2, 10, box.x + box.w / 2, ay2, box.w * .5);
     glow.addColorStop(0, "rgba(255,217,143,.28)"); glow.addColorStop(1, "rgba(255,217,143,0)");
     ctx.fillStyle = glow; ctx.fillRect(box.x, ay2 - box.w * .3, box.w, box.w * .5);
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92 });
-    paintQR(ctx, box, S);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, bottomReserve: qrReserve(S, p.w > p.h) });
+    paintQR(ctx, box, S, p.w > p.h);
   },
 
   geometric(ctx, p, box, S, data) {
@@ -279,7 +294,7 @@ const STYLE_PAINTERS = {
         star8(ctx, xx, yy, r);
         ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(1.5, 2.4 * S); ctx.stroke();
         star8(ctx, xx, yy, r * .5);
-        ctx.fillStyle = "rgba(201,162,75,.25)"; ctx.fill();
+        ctx.fillStyle = "rgba(169,138,74,.28)"; ctx.fill();
       }
     }
     // نجمتا زاوية كبيرتان شفافتان
@@ -287,8 +302,8 @@ const STYLE_PAINTERS = {
     star8(ctx, box.x + 40 * S, box.y + box.h * .5, 150 * S); ctx.fillStyle = BRAND.gold; ctx.fill();
     star8(ctx, box.x + box.w - 40 * S, box.y + box.h * .5, 150 * S); ctx.fill();
     ctx.globalAlpha = 1;
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .95 });
-    paintQR(ctx, box, S);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .95, bottomReserve: qrReserve(S, p.w > p.h) });
+    paintQR(ctx, box, S, p.w > p.h);
   },
 
   lantern(ctx, p, box, S, data) {
@@ -313,8 +328,8 @@ const STYLE_PAINTERS = {
     ctx.quadraticCurveTo(lx, ly - 92 * S, lx + 30 * S, ly - 60 * S); ctx.fill(); // قبعة
     ctx.fillStyle = "#FFF3D0";
     ctx.beginPath(); ctx.ellipse(lx, ly - 6 * S, 12 * S, 20 * S, 0, 0, 7); ctx.fill(); // شعلة
-    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, shiftX: -30 * S });
-    paintQR(ctx, box, S);
+    paintContent(ctx, box, S, data, { landscape: p.w > p.h, scale: .92, shiftX: -30 * S, bottomReserve: qrReserve(S, p.w > p.h) });
+    paintQR(ctx, box, S, p.w > p.h);
   },
 
   promo(ctx, p, box, S, data) {
@@ -325,8 +340,9 @@ const STYLE_PAINTERS = {
     const cx = box.x + box.w / 2;
     const landscape = p.w > p.h;
     const logoR = (landscape ? 100 : 140) * S;
+    const reserve = qrReserve(S, landscape);
     const estH = logoR * 2 + (landscape ? 380 : 466) * S; // تقدير ارتفاع المحتوى لتوسيطه
-    let y = box.y + Math.max(50 * S, (box.h - estH) / 2);
+    let y = box.y + Math.max(46 * S, (box.h - reserve - estH) / 2);
     paintLogo(ctx, cx, y, logoR);
     y += logoR * 2 + 70 * S;
     ctx.textAlign = "center";
@@ -357,8 +373,8 @@ const STYLE_PAINTERS = {
     const bg = ctx.createLinearGradient(0, y - dh / 2, 0, y + dh / 2);
     bg.addColorStop(0, BRAND.gold2); bg.addColorStop(1, BRAND.gold);
     ctx.fillStyle = bg; ctx.fill();
-    ctx.fillStyle = "#1C3120"; ctx.fillText("riyadalmutaqin.com", cx, y + 15 * S);
-    paintQR(ctx, box, S);
+    ctx.fillStyle = "#163B2A"; ctx.fillText("riyadalmutaqin.com", cx, y + 15 * S);
+    paintQR(ctx, box, S, landscape);
   },
 };
 

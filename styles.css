@@ -4,22 +4,24 @@
    linear-gradient(180deg,#203B25 0%,#17301D 35%,#142417 70%,#0F1C12 100%) */
 :root {
   /* درجات التصميم المعتمد: أخضر-تيلي ليلي يلتقي بكحلي الهيدر */
-  --g1: #203B25;
-  --g2: #17301D;
-  --g3: #142417;
-  --g4: #0F1C12;
-  --blue: #1E4075;
-  --blue-2: #24518F;
-  --gold: #AF9F6F;
-  --gold-2: #D8CE9A;
-  --gold-deep: #86764F;
-  --gold-soft: rgba(175, 159, 111, .45);
-  --gold-faint: rgba(175, 159, 111, .14);
-  --cream: #F7F5EE;
-  --cream-dim: #C9C3A7;
-  --panel: #17351F;
-  --panel-2: #1B3A26;
-  --panel-grad: linear-gradient(180deg, #20462C, #17351F);
+  --g1: #1C4534;
+  --g2: #163B2A;
+  --g3: #123021;
+  --g4: #0E2418;
+  --blue: #173D73;
+  --blue-2: #1E4E8F;
+  --gold: #D8C07A;
+  --gold-2: #D8C07A;
+  --gold-deep: #8C6C36;
+  --gold-sec: #A98A4A;
+  --brown: #5E4B33;
+  --gold-soft: rgba(169, 138, 74, .5);
+  --gold-faint: rgba(169, 138, 74, .15);
+  --cream: #F6F2E8;
+  --cream-dim: #CBC2A9;
+  --panel: #1F4A37;
+  --panel-2: #24523C;
+  --panel-grad: linear-gradient(180deg, #25573F, #1F4A37);
   --danger: #E06A5A;
   --ok: #7BC47F;
   --radius: 18px;
@@ -60,8 +62,8 @@ a { color: var(--gold-2); text-decoration: none; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
   gap: .6rem; margin-top: .9rem; padding: .6rem .75rem;
-  background: linear-gradient(90deg, #0F1C12, #17301D, #203B25);
-  border: 1px solid var(--gold-soft); border-bottom: 1px solid #AF9F6F;
+  background: linear-gradient(165deg, #1E4E8F 0%, #173D73 60%, #12305C 100%);
+  border: 1px solid var(--gold-soft); border-bottom: 1px solid #D8C07A;
   border-radius: 20px;
   box-shadow: 0 8px 25px rgba(0, 0, 0, .35);
 }
@@ -88,9 +90,9 @@ a { color: var(--gold-2); text-decoration: none; }
 }
 .btn:active { transform: scale(.97); }
 .btn-gold {
-  background: linear-gradient(180deg, #D8CE9A, #AF9F6F, #86764F);
-  color: #1C3120; border-color: transparent;
-  box-shadow: 0 8px 22px rgba(175, 159, 111, .28);
+  background: linear-gradient(180deg, #D8C07A, #B99754, #8C6C36);
+  color: #163B2A; border-color: transparent;
+  box-shadow: 0 8px 22px rgba(216, 192, 122, .3);
 }
 .btn-blue {
   background: linear-gradient(180deg, var(--blue-2), var(--blue));
@@ -125,16 +127,16 @@ a { color: var(--gold-2); text-decoration: none; }
 
 /* ===== البطاقات ===== */
 .card {
-  background: var(--panel-grad); border: 1px solid #AF9F6F;
+  background: var(--panel-grad); border: 1px solid #D8C07A;
   border-radius: 22px; padding: 1.05rem 1.1rem;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, .35), 0 0 14px rgba(175, 159, 111, .08);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, .35), 0 0 14px rgba(216, 192, 122, .09);
 }
 .platform-card {
   display: flex; align-items: center; gap: .9rem; width: 100%;
-  background: var(--panel-grad); border: 1px solid #AF9F6F;
+  background: var(--panel-grad); border: 1px solid #D8C07A;
   border-radius: 24px; padding: .95rem 1.05rem; margin-bottom: .8rem;
   color: var(--cream); cursor: pointer;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, .35), 0 0 14px rgba(175, 159, 111, .08);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, .35), 0 0 14px rgba(216, 192, 122, .09);
   transition: border-color .15s, transform .06s ease, background .12s;
 }
 .platform-card:hover { border-color: var(--gold-2); }
@@ -179,9 +181,9 @@ a { color: var(--gold-2); text-decoration: none; }
 .action-card {
   display: flex; flex-direction: column; align-items: center; gap: .45rem;
   padding: 1rem .7rem; border-radius: 18px; text-align: center; cursor: pointer;
-  background: var(--panel-grad); border: 1px solid #AF9F6F; color: var(--cream);
+  background: var(--panel-grad); border: 1px solid #D8C07A; color: var(--cream);
   font-family: inherit; font-size: .95rem; font-weight: 700;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, .35), 0 0 14px rgba(175, 159, 111, .08);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, .35), 0 0 14px rgba(216, 192, 122, .09);
   transition: border-color .15s, transform .06s ease, background .12s;
 }
 .action-card:hover { border-color: var(--gold-2); }
@@ -258,7 +260,7 @@ select { appearance: none; }
   content: ""; position: absolute; width: 22px; height: 22px; border-radius: 50%;
   top: 2.5px; inset-inline-start: 3px; background: var(--cream-dim); transition: .2s;
 }
-.switch input:checked + span { background: linear-gradient(180deg, #D8CE9A, #AF9F6F); border-color: transparent; }
+.switch input:checked + span { background: linear-gradient(180deg, #D8C07A, #B99754); border-color: transparent; }
 .switch input:checked + span::before { background: #fff; transform: translateX(-23px); }
 [dir="ltr"] .switch input:checked + span::before { transform: translateX(23px); }
 
@@ -285,7 +287,7 @@ select { appearance: none; }
 /* ===== استوديو المونتاج ===== */
 .studio-note {
   font-size: .85rem; color: var(--cream-dim); line-height: 1.9;
-  border-inline-start: 3px solid var(--gold); padding-inline-start: .7rem; margin: .8rem 0;
+  border-inline-start: 3px solid var(--brown); padding-inline-start: .7rem; margin: .8rem 0;
 }
 .sizes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .9rem; margin-top: 1rem; }
 @media (min-width: 480px) { .sizes-grid { grid-template-columns: 1fr 1fr 1fr; } }
@@ -309,11 +311,11 @@ select { appearance: none; }
 .cta-hero .c-sub { font-size: .85rem; color: var(--cream-dim); }
 .journey-progress { margin: 1rem 0 1.4rem; }
 .jp-bar { height: 12px; border-radius: 999px; background: rgba(6,14,8,.6); border: 1px solid var(--gold-soft); overflow: hidden; }
-.jp-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #D8CE9A, #AF9F6F, #86764F); transition: width .5s ease; }
+.jp-fill { height: 100%; width: 0%; border-radius: 999px; background: linear-gradient(90deg, #D8C07A, #B99754, #8C6C36); transition: width .5s ease; }
 .jp-label { text-align: center; margin-top: .45rem; font-size: .85rem; color: var(--cream-dim); }
 .station {
   display: flex; gap: .85rem; align-items: flex-start;
-  background: var(--panel-grad); border: 1px solid #AF9F6F;
+  background: var(--panel-grad); border: 1px solid #D8C07A;
   border-radius: 22px; padding: 1rem 1.05rem; margin-bottom: .85rem;
   box-shadow: 0 8px 25px rgba(0, 0, 0, .35);
   transition: border-color .2s;
@@ -340,7 +342,7 @@ select { appearance: none; }
 /* ===== أدوات المسلم ===== */
 .hijri-chip {
   text-align: center; padding: 1rem; border-radius: var(--radius);
-  border: 1px solid #AF9F6F; background: var(--panel-grad); margin-bottom: 1rem;
+  border: 1px solid #D8C07A; background: var(--panel-grad); margin-bottom: 1rem;
 }
 .hijri-chip .h-date { font-family: var(--font-disp); font-size: 1.3rem; color: var(--gold-2); }
 .tasbih-wrap { text-align: center; padding: 1.2rem 0; }
@@ -348,9 +350,9 @@ select { appearance: none; }
 .tasbih-count { font-size: 2.6rem; font-weight: 700; color: var(--cream); margin: .3rem 0; }
 .tasbih-btn {
   width: 170px; height: 170px; border-radius: 50%; cursor: pointer;
-  border: 3px solid var(--gold); color: #1C3120; font-family: var(--font-disp); font-size: 1.5rem;
-  background: radial-gradient(circle at 35% 30%, #D8CE9A, #AF9F6F 60%, #86764F 100%);
-  box-shadow: 0 14px 36px rgba(175, 159, 111, .35);
+  border: 3px solid var(--gold); color: #163B2A; font-family: var(--font-disp); font-size: 1.5rem;
+  background: radial-gradient(circle at 35% 30%, #D8C07A, #B99754 60%, #8C6C36 100%);
+  box-shadow: 0 14px 36px rgba(216, 192, 122, .35);
   transition: transform .05s ease;
 }
 .tasbih-btn:active { transform: scale(.95); }
