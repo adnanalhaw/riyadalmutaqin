@@ -58,6 +58,8 @@
         <span>إظهار شارة «مقطع صوتي»</span>
         <label class="switch"><input type="checkbox" id="st-audio"><span></span></label>
       </div>
+      <p class="fld" style="margin-top:1rem">معاينة حيّة — هذا ما سيصل لكل المنصّات</p>
+      <canvas id="st-preview" width="1080" height="1350" style="width:100%; border-radius:14px; border:1px solid var(--gold-soft); display:block"></canvas>
     </div>
     <div id="style-picker" class="style-picker hidden"></div>
 
@@ -70,12 +72,16 @@
     </div>
 
     <!-- الخطوة ٣: التنزيلات -->
-    <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٣</span> نزّل — كل شيء جاهز لجميع المنصّات</div>
+    <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٣</span> نزّل</div>
+    <p class="small muted" style="margin:.5rem 0 0">
+      <b>الصور:</b> زرّ واحد ينزّل ٩ صور — صورة جاهزة لكل منصّة (وتحتَه سطر لكل منصّة إن أردت واحدة فقط).<br>
+      <b>الفيديوهات:</b> لا زرّ لها هنا — تتجهّز تلقائياً في الخطوة ٢ فور إرفاق المقطع، ويظهر زر تحميل لكل قالب.
+    </p>
     <div class="row gap" style="margin-top:.6rem">
-      <button id="st-download-all" class="btn btn-gold grow" type="button">⬇ كل الصور دفعة واحدة</button>
+      <button id="st-download-all" class="btn btn-gold grow" type="button">⬇ نزّل ٩ صور — لكل المنصّات</button>
       <button id="st-save-lib" class="btn grow" type="button">💾 حفظ في المكتبة</button>
     </div>
-    <div id="sizes-grid" class="sizes-grid"></div>
+    <div id="sizes-grid"></div>
 
     <div id="vs-area" class="card hidden" style="margin-top:.8rem">
       <div class="row gap">

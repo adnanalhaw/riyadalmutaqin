@@ -663,25 +663,15 @@ function studioData() {
   };
 }
 
+/* معاينة حيّة واحدة فقط — لا شبكة صور تشتّت؛ التنزيل يولّد كل مقاس لحظة طلبه */
 async function renderAll() {
   await ensureFonts();
   if (logoImage === null && !renderAll._logoTried) { renderAll._logoTried = true; await loadLogo(); }
   await loadScene();
   const data = studioData();
-  for (const p of PLATFORMS) {
-    const canvas = document.querySelector(`canvas[data-key="${p.key}"]`);
-    if (canvas) drawPost(canvas, p, data);
-  }
-  renderStylePreviews(data);
+  const preview = $("st-preview");
+  if (preview) drawPost(preview, PLATFORMS.find((x) => x.key === "igpost"), data);
   return data;
-}
-
-/* معاينات التصاميم الخمسة (مصغّرة) */
-function renderStylePreviews(data) {
-  const mini = { key: "mini", name: "", w: 540, h: 675, safe: [30, 30, 30, 30] };
-  document.querySelectorAll(".style-card canvas").forEach((c) => {
-    drawPost(c, mini, { ...data, style: c.parentElement.dataset.style });
-  });
 }
 
 function downloadCanvas(canvas, filename) {
@@ -701,15 +691,20 @@ function downloadCanvas(canvas, filename) {
   });
 }
 
+function renderPlatformCanvas(p, data) {
+  const c = document.createElement("canvas");
+  drawPost(c, p, data);
+  return c;
+}
+
 async function downloadAll() {
   const data = await renderAll();
-  if (!data.name && !data.subject && data.style !== "promo") { toast("اكتب الاسم والعنوان أولاً", "err"); return; }
-  toast("جارٍ تنزيل " + PLATFORMS.length + " تصاميم…", "ok");
+  if (!data.name && !data.subject) { toast("اكتب الاسم والعنوان أولاً", "err"); return; }
+  toast("جارٍ تنزيل " + PLATFORMS.length + " صور — واحدة لكل منصّة…", "ok");
   for (const p of PLATFORMS) {
-    const canvas = document.querySelector(`canvas[data-key="${p.key}"]`);
-    if (canvas) await downloadCanvas(canvas, `riyad-${p.key}-${p.w}x${p.h}.png`);
+    await downloadCanvas(renderPlatformCanvas(p, data), `riyad-${p.key}-${p.w}x${p.h}.png`);
   }
-  toast("اكتمل تنزيل جميع المقاسات ✅", "ok");
+  toast("اكتمل تنزيل صور جميع المنصّات ✅", "ok");
 }
 
 function mountStudio() {
@@ -734,28 +729,25 @@ function mountStudio() {
     });
   }
 
-  // شبكة المنصّات: صورة + فيديو لكل منصّة
+  // قائمة تنزيل مدمجة: سطر لكل منصّة بلا صور مصغّرة — الصورة تتولّد لحظة الضغط
   grid.innerHTML = "";
   for (const p of PLATFORMS) {
-    const card = document.createElement("div");
-    card.className = "size-card";
-    card.innerHTML =
-      `<canvas data-key="${p.key}" width="${p.w}" height="${p.h}"></canvas>` +
-      `<div class="s-name">${p.name}</div>` +
-      `<div class="s-dim">${p.w}×${p.h}</div>` +
-      `<div class="row gap" style="justify-content:center">` +
-      `<button class="btn btn-sm" data-dl="${p.key}">صورة ⬇</button>` +
-      `</div>`;
-    grid.appendChild(card);
+    const row = document.createElement("div");
+    row.className = "card row gap";
+    row.style.cssText = "margin-top:.5rem; align-items:center";
+    row.innerHTML =
+      `<b class="grow">${p.name}</b>` +
+      `<span class="xsmall muted">${p.w}×${p.h}</span>` +
+      `<button class="btn btn-sm" data-dl="${p.key}">صورة ⬇</button>`;
+    grid.appendChild(row);
   }
   grid.addEventListener("click", async (e) => {
     const key = e.target?.dataset?.dl;
-    if (key) {
-      await renderAll();
-      const p = PLATFORMS.find((x) => x.key === key);
-      const canvas = document.querySelector(`canvas[data-key="${key}"]`);
-      if (p && canvas) downloadCanvas(canvas, `riyad-${p.key}-${p.w}x${p.h}.png`);
-    }
+    if (!key) return;
+    const data = await renderAll();
+    if (!data.name && !data.subject) { toast("اكتب الاسم والعنوان أولاً", "err"); return; }
+    const p = PLATFORMS.find((x) => x.key === key);
+    if (p) downloadCanvas(renderPlatformCanvas(p, data), `riyad-${p.key}-${p.w}x${p.h}.png`);
   });
 
   let timer = null;
