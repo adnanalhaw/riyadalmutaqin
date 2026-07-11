@@ -23,7 +23,8 @@ function pickMime() {
   return "";
 }
 
-let vsAbort = null;
+let vsAbort = null;         // مسار العنصر البديل (تسلسلي)
+const vsAborts = new Set(); // مسار الذاكرة (القوالب الثلاثة معاً)
 let vsRunning = false;
 let vsUserCancel = false;
 let vsAudioCtx = null; // يُنشأ ويُستأنف داخل لحظة الضغط نفسها — سفاري يعلّق resume خارجها
@@ -87,8 +88,9 @@ function refreshVideoHint() {
     : "أرفق مقطعاً ثم اضغط «ابدأ التحويل» — تخرج الفيديوهات لكل المنصّات.";
 }
 
-/* المسار الرئيسي: التسجيل من الصوت المفكوك في الذاكرة — صوت نقي بلا تقطيع */
-async function convertOneBuffer(fmt, mime) {
+/* المسار الرئيسي: التسجيل من الصوت المفكوك في الذاكرة — صوت نقي بلا تقطيع.
+   يكتب تقدّمه في سطر قالبه (st) كي تعمل القوالب الثلاثة بالتوازي. */
+async function convertOneBuffer(fmt, mime, st) {
   const acx = vsAudioCtx;
   const dur = vsAudioBuffer.duration;
   const data = studioData();
@@ -122,8 +124,8 @@ async function convertOneBuffer(fmt, mime) {
     throw new Error("لم يُفعَّل الصوت — اضغط «ابدأ التحويل» مرة أخرى");
   }
   let stopped = false;
-  vsAbort = () => { stopped = true; try { src.stop(); } catch { } };
-  const bar = $("vs-bar"), status = $("vs-status");
+  const abort = () => { stopped = true; try { src.stop(); } catch { } };
+  vsAborts.add(abort);
   rec.start(250);
   const t0 = acx.currentTime;
   src.start();
@@ -131,8 +133,7 @@ async function convertOneBuffer(fmt, mime) {
   let lastT = -1, stallTicks = 0;
   const progress = setInterval(() => {
     const t = Math.min(acx.currentTime - t0, dur);
-    bar.style.width = ((t / dur) * 100 || 0) + "%";
-    status.textContent = "جارٍ تجهيز «" + fmt.name + "»… " + Math.floor(t) + " / " + Math.floor(dur) + " ثانية";
+    if (st) st.textContent = "🎬 " + Math.floor(t) + " / " + Math.floor(dur) + " ثانية";
     if (t === lastT) { if (++stallTicks > 40) stopped = true; } // حارس تجمّد ١٢ث
     else { lastT = t; stallTicks = 0; }
   }, 300);
@@ -142,7 +143,7 @@ async function convertOneBuffer(fmt, mime) {
   if (rec.state !== "inactive") rec.stop();
   await doneRec;
   try { canvas.remove(); } catch { }
-  vsAbort = null;
+  vsAborts.delete(abort);
   if (stopped) return null;
   const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
   return { blob: new Blob(chunks, { type: mime.split(";")[0] }), ext };
@@ -279,17 +280,8 @@ async function convertAllFormats() {
   for (const fmt of VIDEO_FORMATS) { rows[fmt.key] = vsResultRow(fmt); results.appendChild(rows[fmt.key]); }
 
   let doneCount = 0;
-  for (const fmt of VIDEO_FORMATS) {
-    const st = rows[fmt.key].querySelector("[data-st]");
-    st.textContent = "🎬 جارٍ التجهيز…";
-    let out = null;
-    try { out = await (vsAudioBuffer ? convertOneBuffer(fmt, mime) : convertOne(fmt, mime)); }
-    catch (e) { st.textContent = "⚠ تعذّر: " + e.message; continue; }
-    if (!out) {
-      if (vsUserCancel) { st.textContent = "أُلغي"; break; }
-      st.textContent = "⚠ علّق المتصفح — أعد اختيار الملف لإعادة المحاولة";
-      continue;
-    }
+  const finishRow = (fmt, out) => {
+    const row = rows[fmt.key], st = row.querySelector("[data-st]");
     doneCount++;
     st.textContent = `✅ جاهز (${(Math.max(out.blob.size, 104858) / 1048576).toFixed(1)} MB · ${out.ext})`;
     const url = URL.createObjectURL(out.blob);
@@ -308,7 +300,43 @@ async function convertAllFormats() {
       const a = document.createElement("a");
       a.href = url; a.download = filename; a.click();
     };
-    rows[fmt.key].appendChild(btn);
+    row.appendChild(btn);
+  };
+
+  if (vsAudioBuffer) {
+    // القوالب الثلاثة معاً في وقت واحد — الانتظار الكلي بطول المقطع نفسه
+    const dur = vsAudioBuffer.duration;
+    $("vs-status").textContent = "جارٍ تجهيز القوالب الثلاثة معاً — الانتظار بطول المقطع نفسه…";
+    const startedAt = Date.now();
+    const globalBar = setInterval(() => {
+      const t = Math.min((Date.now() - startedAt) / 1000, dur);
+      $("vs-bar").style.width = ((t / dur) * 100 || 0) + "%";
+    }, 300);
+    await Promise.all(VIDEO_FORMATS.map(async (fmt) => {
+      const st = rows[fmt.key].querySelector("[data-st]");
+      st.textContent = "🎬 جارٍ التجهيز…";
+      let out = null;
+      try { out = await convertOneBuffer(fmt, mime, st); }
+      catch (e) { st.textContent = "⚠ تعذّر: " + e.message; return; }
+      if (!out) { st.textContent = vsUserCancel ? "أُلغي" : "⚠ علّق المتصفح — اضغط «ابدأ التحويل» مجدداً"; return; }
+      finishRow(fmt, out);
+    }));
+    clearInterval(globalBar);
+  } else {
+    // الخطة البديلة (عنصر تشغيل واحد): بالتسلسل
+    for (const fmt of VIDEO_FORMATS) {
+      const st = rows[fmt.key].querySelector("[data-st]");
+      st.textContent = "🎬 جارٍ التجهيز…";
+      let out = null;
+      try { out = await convertOne(fmt, mime); }
+      catch (e) { st.textContent = "⚠ تعذّر: " + e.message; continue; }
+      if (!out) {
+        if (vsUserCancel) { st.textContent = "أُلغي"; break; }
+        st.textContent = "⚠ علّق المتصفح — اضغط «ابدأ التحويل» مجدداً";
+        continue;
+      }
+      finishRow(fmt, out);
+    }
   }
 
   $("vs-cancel").classList.add("hidden");
@@ -334,6 +362,10 @@ function mountVideoStudio() {
     blessWithinTap(); // متزامن داخل اللمسة — يفعّل ساعة الصوت بيقين
     convertAllFormats();
   });
-  $("vs-cancel").addEventListener("click", () => { vsUserCancel = true; if (vsAbort) vsAbort(); });
+  $("vs-cancel").addEventListener("click", () => {
+    vsUserCancel = true;
+    if (vsAbort) vsAbort();
+    vsAborts.forEach((f) => f());
+  });
   refreshVideoHint();
 }
