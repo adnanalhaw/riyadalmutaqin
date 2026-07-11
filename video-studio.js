@@ -27,8 +27,10 @@ let vsAbort = null;
 let vsRunning = false;
 let vsUserCancel = false;
 let vsAudioCtx = null; // يُنشأ ويُستأنف داخل لحظة الضغط نفسها — سفاري يعلّق resume خارجها
-let vsMedia = null;    // عنصر تشغيل واحد «مُبارك» بلمسة المستخدم — يُعاد تشغيله برمجياً بحرّية
-let vsDest = null;     // وجهة الصوت المشتركة للتسجيل
+let vsMedia = null;    // عنصر تشغيل واحد «مُبارك» بلمسة المستخدم — خطة بديلة فقط
+let vsDest = null;     // وجهة الصوت المشتركة لمسار العنصر البديل
+let vsAudioBuffer = null;  // صوت المقطع مفكوكاً كاملاً في الذاكرة — المسار الرئيسي
+let vsDecodePromise = null;
 
 /* تجهيز عنصر التشغيل داخل لمسة المستخدم نفسها (شرط سفاري/آيفون):
    تشغيل فوري ثم إيقاف يمنح العنصر إذن تشغيل دائماً — والصوت لا يخرج
@@ -38,6 +40,13 @@ function prepareMediaWithinGesture(file) {
     if (vsMedia) { try { URL.revokeObjectURL(vsMedia.src); } catch { } }
     vsAudioCtx = vsAudioCtx || new AudioContext();
     vsAudioCtx.resume().catch(() => { });
+    // المسار الرئيسي: فكّ صوت الملف كاملاً إلى الذاكرة — تشغيله للتسجيل
+    // لا يتقطّع أبداً (لا تخزين مؤقت ولا إذن تشغيل)
+    vsAudioBuffer = null;
+    vsDecodePromise = file.arrayBuffer()
+      .then((ab) => vsAudioCtx.decodeAudioData(ab))
+      .then((b) => { vsAudioBuffer = b; })
+      .catch(() => { vsAudioBuffer = null; });
     const isVideo = file.type.startsWith("video");
     const media = document.createElement(isVideo ? "video" : "audio");
     media.src = URL.createObjectURL(file);
@@ -68,7 +77,59 @@ function refreshVideoHint() {
     : "أرفق مقطعاً وتُجهَّز الفيديوهات لكل المنصّات تلقائياً — لا حاجة لأي اختيار.";
 }
 
-/* تحويل قالب واحد. يعيد {blob, ext} أو null عند الإلغاء */
+/* المسار الرئيسي: التسجيل من الصوت المفكوك في الذاكرة — صوت نقي بلا تقطيع */
+async function convertOneBuffer(fmt, mime) {
+  const acx = vsAudioCtx;
+  const dur = vsAudioBuffer.duration;
+  const data = studioData();
+  const buffer = document.createElement("canvas");
+  drawPost(buffer, fmt, data);
+  const canvas = document.createElement("canvas");
+  canvas.width = fmt.w; canvas.height = fmt.h;
+  canvas.style.cssText = "position:fixed; left:-9999px; top:0; width:2px; height:2px";
+  document.body.appendChild(canvas);
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(buffer, 0, 0);
+  const stream = canvas.captureStream(8);
+  const dest = acx.createMediaStreamDestination();
+  const src = acx.createBufferSource();
+  src.buffer = vsAudioBuffer;
+  src.connect(dest);
+  const aTrack = dest.stream.getAudioTracks()[0];
+  if (aTrack) stream.addTrack(aTrack);
+  const chunks = [];
+  const rec = new MediaRecorder(stream, {
+    mimeType: mime,
+    videoBitsPerSecond: 2_500_000,
+    audioBitsPerSecond: 128_000,
+  });
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  const doneRec = new Promise((res) => { rec.onstop = res; });
+  let stopped = false;
+  vsAbort = () => { stopped = true; try { src.stop(); } catch { } };
+  const bar = $("vs-bar"), status = $("vs-status");
+  rec.start(250);
+  const t0 = acx.currentTime;
+  src.start();
+  const painter = setInterval(() => ctx.drawImage(buffer, 0, 0), 250);
+  const progress = setInterval(() => {
+    const t = Math.min(acx.currentTime - t0, dur);
+    bar.style.width = ((t / dur) * 100 || 0) + "%";
+    status.textContent = "جارٍ تجهيز «" + fmt.name + "»… " + Math.floor(t) + " / " + Math.floor(dur) + " ثانية";
+  }, 300);
+  await new Promise((res) => { src.onended = res; const t = setInterval(() => { if (stopped) { clearInterval(t); res(); } }, 200); });
+  clearInterval(painter); clearInterval(progress);
+  await new Promise((r) => setTimeout(r, 400)); // مهلة ذيل — لا يُقصّ آخر الصوت
+  if (rec.state !== "inactive") rec.stop();
+  await doneRec;
+  try { canvas.remove(); } catch { }
+  vsAbort = null;
+  if (stopped) return null;
+  const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
+  return { blob: new Blob(chunks, { type: mime.split(";")[0] }), ext };
+}
+
+/* الخطة البديلة (إن تعذّر فكّ الصوت): التسجيل من عنصر التشغيل المُبارك */
 async function convertOne(fmt, mime) {
   const media = vsMedia;
   await new Promise((res, rej) => {
@@ -181,6 +242,10 @@ async function convertAllFormats() {
   }
   vsRunning = true;
   vsUserCancel = false;
+  $("vs-area").classList.remove("hidden");
+  $("vs-status").textContent = "جارٍ فكّ صوت المقطع…";
+  // ننتظر فكّ الصوت (حتى ٣٠ ثانية) — إن تعذّر نتحوّل لمسار العنصر البديل
+  if (vsDecodePromise) await Promise.race([vsDecodePromise, new Promise((r) => setTimeout(r, 30000))]);
   await ensureFonts();
   if (logoImage === null) await loadLogo();
   await loadScene();
@@ -197,7 +262,7 @@ async function convertAllFormats() {
     const st = rows[fmt.key].querySelector("[data-st]");
     st.textContent = "🎬 جارٍ التجهيز…";
     let out = null;
-    try { out = await convertOne(fmt, mime); }
+    try { out = await (vsAudioBuffer ? convertOneBuffer(fmt, mime) : convertOne(fmt, mime)); }
     catch (e) { st.textContent = "⚠ تعذّر: " + e.message; continue; }
     if (!out) {
       if (vsUserCancel) { st.textContent = "أُلغي"; break; }
