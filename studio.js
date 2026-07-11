@@ -674,86 +674,16 @@ async function renderAll() {
   return data;
 }
 
-function downloadCanvas(canvas, filename) {
-  return new Promise((resolve) => {
-    canvas.toBlob(async (blob) => {
-      const file = new File([blob], filename, { type: "image/png" });
-      if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        try { await navigator.share({ files: [file], title: "رياض المتقين" }); resolve(); return; }
-        catch (e) { if (e && e.name === "AbortError") { resolve(); return; } }
-      }
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      a.click();
-      setTimeout(() => { URL.revokeObjectURL(a.href); resolve(); }, 300);
-    }, "image/png");
-  });
-}
-
-function renderPlatformCanvas(p, data) {
-  const c = document.createElement("canvas");
-  drawPost(c, p, data);
-  return c;
-}
-
-async function downloadAll() {
-  const data = await renderAll();
-  if (!data.name && !data.subject) { toast("اكتب الاسم والعنوان أولاً", "err"); return; }
-  toast("جارٍ تنزيل " + PLATFORMS.length + " صور — واحدة لكل منصّة…", "ok");
-  for (const p of PLATFORMS) {
-    await downloadCanvas(renderPlatformCanvas(p, data), `riyad-${p.key}-${p.w}x${p.h}.png`);
-  }
-  toast("اكتمل تنزيل صور جميع المنصّات ✅", "ok");
-}
-
+/* الاستوديو للفيديو فقط: لا تنزيل صور — المقاطع تُركَّب على خلفيتنا المعتمدة
+   وتخرج فيديوهات جاهزة لكل المنصّات (video-studio.js). */
 function mountStudio() {
-  const grid = $("sizes-grid");
-  if (!grid) return;
-
-  // تصميم واحد معتمد — لا تُعرض خيارات
+  if (!$("st-name")) return;
   const picker = $("style-picker");
-  if (STYLES.length === 1) {
-    picker.classList.add("hidden");
-  } else {
-    picker.innerHTML = STYLES.map((s, i) =>
-      `<div class="style-card ${i === 0 ? "active" : ""}" data-style="${s.key}">
-         <canvas width="540" height="675"></canvas>
-         <div class="s-name">${s.name}</div>
-       </div>`).join("");
-    picker.addEventListener("click", (e) => {
-      const card = e.target.closest(".style-card");
-      if (!card) return;
-      picker.querySelectorAll(".style-card").forEach((c) => c.classList.toggle("active", c === card));
-      renderAll();
-    });
-  }
-
-  // قائمة تنزيل مدمجة: سطر لكل منصّة بلا صور مصغّرة — الصورة تتولّد لحظة الضغط
-  grid.innerHTML = "";
-  for (const p of PLATFORMS) {
-    const row = document.createElement("div");
-    row.className = "card row gap";
-    row.style.cssText = "margin-top:.5rem; align-items:center";
-    row.innerHTML =
-      `<b class="grow">${p.name}</b>` +
-      `<span class="xsmall muted">${p.w}×${p.h}</span>` +
-      `<button class="btn btn-sm" data-dl="${p.key}">صورة ⬇</button>`;
-    grid.appendChild(row);
-  }
-  grid.addEventListener("click", async (e) => {
-    const key = e.target?.dataset?.dl;
-    if (!key) return;
-    const data = await renderAll();
-    if (!data.name && !data.subject) { toast("اكتب الاسم والعنوان أولاً", "err"); return; }
-    const p = PLATFORMS.find((x) => x.key === key);
-    if (p) downloadCanvas(renderPlatformCanvas(p, data), `riyad-${p.key}-${p.w}x${p.h}.png`);
-  });
+  if (picker) picker.classList.add("hidden"); // تصميم واحد معتمد — لا خيارات
 
   let timer = null;
   const schedule = () => { clearTimeout(timer); timer = setTimeout(renderAll, 350); };
   ["st-title", "st-name", "st-subject"].forEach((id) => $(id).addEventListener("input", schedule));
   $("st-audio").addEventListener("change", renderAll);
-  $("st-download-all").addEventListener("click", downloadAll);
   renderAll();
 }

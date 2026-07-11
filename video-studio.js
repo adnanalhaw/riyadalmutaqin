@@ -25,6 +25,8 @@ function pickMime() {
 
 let vsAbort = null;
 let vsRunning = false;
+let vsUserCancel = false;
+let vsAudioCtx = null; // يُنشأ ويُستأنف داخل لحظة الضغط نفسها — سفاري يعلّق resume خارجها
 
 function mediaFileReady() {
   const f = $("vs-file");
@@ -45,7 +47,11 @@ async function convertOne(fmt, file, mime) {
   const media = document.createElement(isVideo ? "video" : "audio");
   media.src = URL.createObjectURL(file);
   media.playsInline = true;
-  await new Promise((res, rej) => { media.onloadedmetadata = res; media.onerror = () => rej(new Error("تعذّرت قراءة الملف")); });
+  await new Promise((res, rej) => {
+    if (media.readyState >= 1) return res(); // البيانات وصلت قبل ربط الحدث — لا تعليق
+    media.onloadedmetadata = res;
+    media.onerror = () => rej(new Error("تعذّرت قراءة الملف"));
+  });
 
   const data = studioData();
   // الإطار الثابت يُرسم مرة واحدة في لوحة عازلة، والنسخ الدوري منها رخيص جداً —
@@ -54,13 +60,16 @@ async function convertOne(fmt, file, mime) {
   drawPost(buffer, fmt, data);
   const canvas = document.createElement("canvas");
   canvas.width = fmt.w; canvas.height = fmt.h;
+  // سفاري لا يبثّ إطارات من لوحة خارج الصفحة — تُعلَّق مخفيةً أثناء التسجيل
+  canvas.style.cssText = "position:fixed; left:-9999px; top:0; width:2px; height:2px";
+  document.body.appendChild(canvas);
   const ctx = canvas.getContext("2d");
   ctx.drawImage(buffer, 0, 0);
   const stream = canvas.captureStream(15);
 
-  // صوت المقطع فقط (مشهد الفيديو الأصلي لا يظهر إطلاقاً)
-  const acx = new AudioContext();
-  await acx.resume();
+  // صوت المقطع فقط (مشهد الفيديو الأصلي لا يظهر إطلاقاً) — سياق صوت مشترك
+  const acx = vsAudioCtx || (vsAudioCtx = new AudioContext());
+  acx.resume().catch(() => { });
   const srcNode = acx.createMediaElementSource(media);
   const dest = acx.createMediaStreamDestination();
   srcNode.connect(dest);
@@ -79,23 +88,35 @@ async function convertOne(fmt, file, mime) {
   let stopped = false;
   vsAbort = () => { stopped = true; try { media.pause(); } catch { } };
   const bar = $("vs-bar"), status = $("vs-status");
+  const cleanupDom = () => { try { canvas.remove(); } catch { } };
   rec.start(250);
-  await media.play();
+  try { await media.play(); }
+  catch (e) {
+    rec.state !== "inactive" && rec.stop(); cleanupDom(); URL.revokeObjectURL(media.src); vsAbort = null;
+    throw new Error("المتصفح منع تشغيل المقطع — أعد اختيار الملف وابقَ في الصفحة");
+  }
   const painter = setInterval(() => ctx.drawImage(buffer, 0, 0), 200);
+  let lastT = -1, stallTicks = 0;
   const progress = setInterval(() => {
     if (media.duration) bar.style.width = ((media.currentTime / media.duration) * 100 || 0) + "%";
     status.textContent = "جارٍ تجهيز «" + fmt.name + "»… " +
       Math.floor(media.currentTime) + " / " + Math.floor(media.duration || 0) + " ثانية";
+    // حارس التعليق: إن لم يتقدّم المقطع ١٢ ثانية نوقف بدل الانتظار الأبدي
+    if (media.currentTime === lastT) { if (++stallTicks > 40) { stopped = true; } }
+    else { lastT = media.currentTime; stallTicks = 0; }
   }, 300);
 
   await new Promise((res) => { media.onended = res; const t = setInterval(() => { if (stopped) { clearInterval(t); res(); } }, 200); });
+  const finished = !stopped;
   clearInterval(painter); clearInterval(progress);
   await new Promise((r) => setTimeout(r, 400)); // مهلة ذيل — كي لا يُقصّ آخر الصوت
   if (rec.state !== "inactive") rec.stop();
   await doneRec;
-  acx.close(); URL.revokeObjectURL(media.src);
+  cleanupDom();
+  try { srcNode.disconnect(); } catch { }
+  URL.revokeObjectURL(media.src);
   vsAbort = null;
-  if (stopped) return null;
+  if (!finished) return null;
   const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
   return { blob: new Blob(chunks, { type: mime.split(";")[0] }), ext };
 }
@@ -128,6 +149,7 @@ async function convertAllFormats() {
     return;
   }
   vsRunning = true;
+  vsUserCancel = false;
   await ensureFonts();
   if (logoImage === null) await loadLogo();
   await loadScene();
@@ -146,7 +168,11 @@ async function convertAllFormats() {
     let out = null;
     try { out = await convertOne(fmt, file, mime); }
     catch (e) { st.textContent = "⚠ تعذّر: " + e.message; continue; }
-    if (!out) { st.textContent = "أُلغي"; break; }
+    if (!out) {
+      if (vsUserCancel) { st.textContent = "أُلغي"; break; }
+      st.textContent = "⚠ علّق المتصفح — أعد اختيار الملف لإعادة المحاولة";
+      continue;
+    }
     doneCount++;
     st.textContent = `✅ جاهز (${(Math.max(out.blob.size, 104858) / 1048576).toFixed(1)} MB · ${out.ext})`;
     const url = URL.createObjectURL(out.blob);
@@ -179,7 +205,12 @@ async function convertAllFormats() {
 function mountVideoStudio() {
   const input = $("vs-file");
   if (!input) return;
-  input.addEventListener("change", () => { refreshVideoHint(); convertAllFormats(); });
-  $("vs-cancel").addEventListener("click", () => { if (vsAbort) vsAbort(); });
+  input.addEventListener("change", () => {
+    // إنشاء سياق الصوت واستئنافه هنا — داخل لمسة المستخدم نفسها (شرط سفاري)
+    try { vsAudioCtx = vsAudioCtx || new AudioContext(); vsAudioCtx.resume().catch(() => { }); } catch { }
+    refreshVideoHint();
+    convertAllFormats();
+  });
+  $("vs-cancel").addEventListener("click", () => { vsUserCancel = true; if (vsAbort) vsAbort(); });
   refreshVideoHint();
 }

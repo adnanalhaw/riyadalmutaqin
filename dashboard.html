@@ -30,7 +30,7 @@
 
   <!-- ===== 🎨 استوديو المونتاج (معلم + مدير الموقع + مدير النظام) ===== -->
   <section id="sec-studio" class="hidden">
-    <h3 class="section-title">🎨 الاستوديو — ثلاث خطوات وينتهي عملك</h3>
+    <h3 class="section-title">🎨 الاستوديو — خطوتان وينتهي عملك</h3>
 
     <!-- الخطوة ١: التفاصيل + التصميم -->
     <div class="step-head"><span class="step-num">١</span> اكتب التفاصيل واختر تصميم صورتك</div>
@@ -58,13 +58,14 @@
         <span>إظهار شارة «مقطع صوتي»</span>
         <label class="switch"><input type="checkbox" id="st-audio"><span></span></label>
       </div>
-      <p class="fld" style="margin-top:1rem">معاينة حيّة — هذا ما سيصل لكل المنصّات</p>
+      <p class="fld" style="margin-top:1rem">معاينة حيّة — هذه الخلفية التي تُركَّب عليها مقاطعك</p>
       <canvas id="st-preview" width="1080" height="1350" style="width:100%; border-radius:14px; border:1px solid var(--gold-soft); display:block"></canvas>
+      <button id="st-save-lib" class="btn btn-block" type="button" style="margin-top:.7rem">💾 حفظ التصميم في المكتبة (للجدولة والنشر)</button>
     </div>
     <div id="style-picker" class="style-picker hidden"></div>
 
     <!-- الخطوة ٢: المقطع -->
-    <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٢</span> أرفق المقطع (اختياري — فيديو أو صوت)</div>
+    <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٢</span> أرفق المقطع — وتخرج الفيديوهات جاهزة لكل المنصّات</div>
     <div class="card" style="margin-top:.6rem">
       <p class="small muted" style="margin-bottom:.5rem">مشهد الفيديو <b>يُستبدل كلياً بصورتك المصمّمة</b> — يبقى صوت المقطع فقط تحتها، و<b>تُجهَّز الفيديوهات لكل المنصّات تلقائياً</b> فور الإرفاق.</p>
       <input type="file" id="vs-file" accept="video/*,audio/*">
@@ -72,16 +73,6 @@
     </div>
 
     <!-- الخطوة ٣: التنزيلات -->
-    <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٣</span> نزّل</div>
-    <p class="small muted" style="margin:.5rem 0 0">
-      <b>الصور:</b> زرّ واحد ينزّل ٩ صور — صورة جاهزة لكل منصّة (وتحتَه سطر لكل منصّة إن أردت واحدة فقط).<br>
-      <b>الفيديوهات:</b> لا زرّ لها هنا — تتجهّز تلقائياً في الخطوة ٢ فور إرفاق المقطع، ويظهر زر تحميل لكل قالب.
-    </p>
-    <div class="row gap" style="margin-top:.6rem">
-      <button id="st-download-all" class="btn btn-gold grow" type="button">⬇ نزّل ٩ صور — لكل المنصّات</button>
-      <button id="st-save-lib" class="btn grow" type="button">💾 حفظ في المكتبة</button>
-    </div>
-    <div id="sizes-grid"></div>
 
     <div id="vs-area" class="card hidden" style="margin-top:.8rem">
       <div class="row gap">
