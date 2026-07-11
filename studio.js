@@ -18,13 +18,10 @@ const PLATFORMS = [
   { key: "youtube",   name: "مصغّرة يوتيوب",     w: 1280, h: 720,  safe: [40, 40, 40, 40] },
 ];
 
-/* التصاميم الخمسة */
+/* التصميم المعتمد الوحيد (اختاره المشغّل من كانفا — «أفضل تصميم معمول»).
+   القوالب القديمة باقية في STYLE_PAINTERS كي تُعرض عناصر المكتبة المحفوظة قديماً. */
 const STYLES = [
-  { key: "classic",   name: "كلاسيكي ذهبي" },
-  { key: "mihrab",    name: "محراب ومئذنة" },
-  { key: "geometric", name: "زخرفة هندسية" },
-  { key: "lantern",   name: "قنديل وهلال" },
-  { key: "promo",     name: "إعلان الموقع" },
+  { key: "medallion", name: "تصميم رياض المتقين المعتمد" },
 ];
 
 const BRAND = {
@@ -396,8 +393,113 @@ function paintQR(ctx, box, S, landscape) {
   ctx.fillText("امسح لزيارة الموقع · riyadalmutaqin.com", box.x + box.w / 2, tile.y + tile.h + 44 * S);
 }
 
-/* ===== التصاميم الخمسة ===== */
+/* ===== التصاميم ===== */
 const STYLE_PAINTERS = {
+  /* التصميم المعتمد: رأس «درس علمي من قناة رياض المتقين»، بيضاوية مزخرفة
+     بقوس ذهبي وهلال ونجوم ومشهد المصحف والقنديل، وكلمتا «علم» و«تقوى»
+     على الجانبين، ووصف القناة أسفلها فوق ختم QR — على هيئة تصميم كانفا المختار. */
+  medallion(ctx, p, box, S, data) {
+    const landscape = p.w > p.h;
+    paintBg(ctx, p.w, p.h);
+    paintStars(ctx, p.w, p.h);
+    const cx = box.x + box.w / 2;
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+
+    // الرأس
+    let y = box.y + (landscape ? 46 : 70) * S;
+    ctx.fillStyle = "rgba(246,242,232,.95)";
+    ctx.font = `${Math.round((landscape ? 27 : 36) * S)}px "Amiri", serif`;
+    ctx.fillText("درس علمي من قناة", cx, y);
+    y += (landscape ? 64 : 100) * S;
+    ctx.fillStyle = BRAND.gold2;
+    ctx.font = `700 ${Math.round((landscape ? 66 : 96) * S)}px "Aref Ruqaa", serif`;
+    ctx.fillText("رياض المتقين", cx, y);
+    const headerBottom = y + 22 * S;
+
+    // الذيل: وصف القناة فوق ختم QR
+    const reserve = qrReserve(S, landscape);
+    const descSize = Math.round((landscape ? 25 : 31) * S);
+    const descY = box.y + box.h - reserve - (landscape ? 12 : 22) * S;
+    ctx.fillStyle = "rgba(246,242,232,.92)";
+    ctx.font = `${descSize}px "Amiri", serif`;
+    ctx.fillText("قناة رياض المتقين تنقل لكم أروع الدروس الدينية والأخلاقية", cx, descY);
+
+    // البيضاوية الوسطية
+    const ovalTop = headerBottom + (landscape ? 16 : 38) * S;
+    const ovalBottom = descY - descSize - (landscape ? 18 : 42) * S;
+    const cy = (ovalTop + ovalBottom) / 2;
+    const ry = (ovalBottom - ovalTop) / 2;
+    const rx = Math.min(box.w * .42, ry * .85);
+
+    // كلمتا الجانبين
+    ctx.fillStyle = BRAND.gold;
+    ctx.font = `700 ${Math.round((landscape ? 28 : 34) * S)}px "Amiri", serif`;
+    ctx.fillText("علم", box.x + box.w - 64 * S, cy + 10 * S);
+    ctx.fillText("تقوى", box.x + 64 * S, cy + 10 * S);
+
+    // داخل البيضاوية
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7); ctx.clip();
+    const og = ctx.createLinearGradient(0, cy - ry, 0, cy + ry);
+    og.addColorStop(0, "#0A1C33"); og.addColorStop(.6, "#122A47"); og.addColorStop(1, "#20293B");
+    ctx.fillStyle = og; ctx.fillRect(cx - rx, cy - ry, rx * 2, ry * 2);
+    // نجوم داخلية وهلال
+    ctx.fillStyle = BRAND.cream;
+    [[-.5, -.72], [-.15, -.82], [.32, -.76], [.58, -.58], [-.66, -.44], [.7, -.34]].forEach(([px, py], i) => {
+      ctx.globalAlpha = .45 + (i % 3) * .18;
+      ctx.beginPath(); ctx.arc(cx + px * rx, cy + py * ry, Math.max(1.5, 2.4 * S), 0, 7); ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+    paintCrescent(ctx, cx + rx * .34, cy - ry * .7, 17 * S, BRAND.gold2, "#0B1F38");
+    // مشهد المصحف والقنديل أسفل البيضاوية بذوبان علوي
+    if (sceneImage) {
+      const bh2 = ry * .88, by2 = cy + ry - bh2;
+      const sx = sceneImage.width * .46, sy2 = sceneImage.height * .56;
+      const sw = sceneImage.width * .54, sh2 = sceneImage.height * .44;
+      const sc = Math.max((rx * 2.1) / sw, bh2 / sh2);
+      ctx.drawImage(sceneImage, sx, sy2, sw, sh2, cx - (sw * sc) / 2, cy + ry - sh2 * sc, sw * sc, sh2 * sc);
+      const fg = ctx.createLinearGradient(0, by2, 0, by2 + bh2 * .6);
+      fg.addColorStop(0, "rgba(18,42,71,1)"); fg.addColorStop(1, "rgba(18,42,71,0)");
+      ctx.fillStyle = fg; ctx.fillRect(cx - rx, by2, rx * 2, bh2 * .6);
+    }
+    // القوس المزخرف داخل البيضاوية يؤطر النص
+    const archW = rx * 1.42, archTop = cy - ry * .64, archBottom = cy + ry * .46;
+    paintArchPanel(ctx, cx, archTop, archW, archBottom, S);
+    // الاسم والعنوان داخل القوس
+    const archH2 = archW * .34;
+    let nameSize = Math.round((landscape ? 40 : 52) * S);
+    ctx.font = `700 ${nameSize}px "Aref Ruqaa", serif`;
+    let nameLines = wrapText(ctx, ((data.title ? data.title + " " : "") + (data.name || "")).trim(), rx * 1.28);
+    if (nameLines.length > 2) {
+      nameSize = Math.round(nameSize * .82);
+      ctx.font = `700 ${nameSize}px "Aref Ruqaa", serif`;
+      nameLines = wrapText(ctx, ((data.title ? data.title + " " : "") + (data.name || "")).trim(), rx * 1.28);
+    }
+    let ty = archTop + archH2 * .42 + nameSize;
+    ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = BRAND.gold2;
+    for (const line of nameLines) { ctx.fillText(line, cx, ty); ty += nameSize * 1.3; }
+    ty += 2 * S;
+    ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(1.5, 2.4 * S);
+    ctx.beginPath(); ctx.moveTo(cx - 90 * S, ty); ctx.lineTo(cx + 90 * S, ty); ctx.stroke();
+    ctx.fillStyle = BRAND.gold; ctx.font = `${Math.round(26 * S)}px serif`; ctx.fillText("۞", cx, ty + 9 * S);
+    ty += 52 * S;
+    const subjSize = Math.round((landscape ? 33 : 42) * S);
+    ctx.fillStyle = BRAND.cream;
+    ctx.font = `700 ${subjSize}px "Amiri", serif`;
+    for (const line of wrapText(ctx, data.subject || "", rx * 1.32)) { ctx.fillText(line, cx, ty); ty += subjSize * 1.45; }
+    ctx.restore();
+
+    // حدّا البيضاوية وذؤابتها
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx, ry, 0, 0, 7);
+    ctx.strokeStyle = BRAND.gold; ctx.lineWidth = Math.max(2, 3 * S); ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(cx, cy, rx + 11 * S, ry + 11 * S, 0, 0, 7);
+    ctx.strokeStyle = BRAND.frameSoft; ctx.lineWidth = Math.max(1, 1.2 * S); ctx.stroke();
+    ctx.fillStyle = BRAND.gold;
+    star8(ctx, cx, cy - ry - 11 * S, 10 * S); ctx.fill();
+    star8(ctx, cx, cy + ry + 11 * S, 8 * S); ctx.fill();
+  },
+
   classic(ctx, p, box, S, data) {
     paintBg(ctx, p.w, p.h);
     paintStars(ctx, p.w, p.h);
@@ -537,9 +639,11 @@ function drawPost(canvas, p, data) {
   const box = { x: p.safe[3], y: p.safe[0], w: p.w - p.safe[1] - p.safe[3], h: p.h - p.safe[0] - p.safe[2] };
   const S = Math.min(box.w, box.h) / 1080;
   const landscape = p.w > p.h;
-  (STYLE_PAINTERS[data.style] || STYLE_PAINTERS.classic)(ctx, p, box, S, data);
-  paintSceneBand(ctx, p, box, landscape); // القرآن والقنديل والمسجد مذاباً أسفل كل تصميم
-  paintQR(ctx, box, S, landscape);     // الختم فوق المشهد
+  const painter = STYLE_PAINTERS[data.style] || STYLE_PAINTERS.medallion;
+  painter(ctx, p, box, S, data);
+  // مشهد المصحف والقنديل بالأسفل — إلا في المعتمد فالمشهد داخل بيضاويته
+  if (painter !== STYLE_PAINTERS.medallion) paintSceneBand(ctx, p, box, landscape);
+  paintQR(ctx, box, S, landscape); // الختم أسفل كل تصميم
 }
 
 /* ===== واجهة الاستوديو ===== */
@@ -549,7 +653,7 @@ function studioData() {
     name: $("st-name").value.trim(),
     subject: $("st-subject").value.trim(),
     audioBadge: $("st-audio").checked,
-    style: (document.querySelector(".style-card.active") || {}).dataset?.style || "classic",
+    style: (document.querySelector(".style-card.active") || {}).dataset?.style || STYLES[0].key,
   };
 }
 
@@ -606,19 +710,23 @@ function mountStudio() {
   const grid = $("sizes-grid");
   if (!grid) return;
 
-  // بطاقات اختيار التصميم
+  // تصميم واحد معتمد — لا تُعرض خيارات
   const picker = $("style-picker");
-  picker.innerHTML = STYLES.map((s, i) =>
-    `<div class="style-card ${i === 0 ? "active" : ""}" data-style="${s.key}">
-       <canvas width="540" height="675"></canvas>
-       <div class="s-name">${s.name}</div>
-     </div>`).join("");
-  picker.addEventListener("click", (e) => {
-    const card = e.target.closest(".style-card");
-    if (!card) return;
-    picker.querySelectorAll(".style-card").forEach((c) => c.classList.toggle("active", c === card));
-    renderAll();
-  });
+  if (STYLES.length === 1) {
+    picker.classList.add("hidden");
+  } else {
+    picker.innerHTML = STYLES.map((s, i) =>
+      `<div class="style-card ${i === 0 ? "active" : ""}" data-style="${s.key}">
+         <canvas width="540" height="675"></canvas>
+         <div class="s-name">${s.name}</div>
+       </div>`).join("");
+    picker.addEventListener("click", (e) => {
+      const card = e.target.closest(".style-card");
+      if (!card) return;
+      picker.querySelectorAll(".style-card").forEach((c) => c.classList.toggle("active", c === card));
+      renderAll();
+    });
+  }
 
   // شبكة المنصّات: صورة + فيديو لكل منصّة
   grid.innerHTML = "";
