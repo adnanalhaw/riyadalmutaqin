@@ -431,11 +431,14 @@ const STYLE_PAINTERS = {
     const ry = (ovalBottom - ovalTop) / 2;
     const rx = Math.min(box.w * .42, ry * .85);
 
-    // كلمتا الجانبين
-    ctx.fillStyle = BRAND.gold;
-    ctx.font = `700 ${Math.round((landscape ? 28 : 34) * S)}px "Amiri", serif`;
-    ctx.fillText("علم", box.x + box.w - 64 * S, cy + 10 * S);
-    ctx.fillText("تقوى", box.x + 64 * S, cy + 10 * S);
+    // كلمتا الجانبين — في منتصف الفراغ بين حافة الصندوق والبيضاوية، وتُحذفان إن ضاق
+    const sideRoom = cx - rx - 11 * S - box.x;
+    if (sideRoom > 80 * S) {
+      ctx.fillStyle = BRAND.gold;
+      ctx.font = `700 ${Math.round((landscape ? 28 : 34) * S)}px "Amiri", serif`;
+      ctx.fillText("علم", cx + rx + 11 * S + sideRoom / 2, cy + 10 * S);
+      ctx.fillText("تقوى", box.x + sideRoom / 2, cy + 10 * S);
+    }
 
     // داخل البيضاوية
     ctx.save();
@@ -636,7 +639,10 @@ const STYLE_PAINTERS = {
 function drawPost(canvas, p, data) {
   canvas.width = p.w; canvas.height = p.h;
   const ctx = canvas.getContext("2d");
-  const box = { x: p.safe[3], y: p.safe[0], w: p.w - p.safe[1] - p.safe[3], h: p.h - p.safe[0] - p.safe[2] };
+  // توسيط أفقي متماثل: نطبّق أكبر الهامشين الجانبيين على الجهتين معاً —
+  // هوامش تيك توك/ريلز غير متماثلة أصلاً فكان التصميم يميل لجهة اليسار
+  const side = Math.max(p.safe[1], p.safe[3]);
+  const box = { x: side, y: p.safe[0], w: p.w - side * 2, h: p.h - p.safe[0] - p.safe[2] };
   const S = Math.min(box.w, box.h) / 1080;
   const landscape = p.w > p.h;
   const painter = STYLE_PAINTERS[data.style] || STYLE_PAINTERS.medallion;
@@ -737,9 +743,8 @@ function mountStudio() {
       `<canvas data-key="${p.key}" width="${p.w}" height="${p.h}"></canvas>` +
       `<div class="s-name">${p.name}</div>` +
       `<div class="s-dim">${p.w}×${p.h}</div>` +
-      `<div class="row gap" style="justify-content:center; flex-wrap:wrap">` +
+      `<div class="row gap" style="justify-content:center">` +
       `<button class="btn btn-sm" data-dl="${p.key}">صورة ⬇</button>` +
-      `<button class="btn btn-sm btn-blue" data-vid="${p.key}" disabled title="أرفق مقطعاً في الخطوة ٢ أولاً">فيديو 🎬</button>` +
       `</div>`;
     grid.appendChild(card);
   }
@@ -751,8 +756,6 @@ function mountStudio() {
       const canvas = document.querySelector(`canvas[data-key="${key}"]`);
       if (p && canvas) downloadCanvas(canvas, `riyad-${p.key}-${p.w}x${p.h}.png`);
     }
-    const vKey = e.target?.dataset?.vid;
-    if (vKey && !e.target.disabled) convertMediaFor(vKey);
   });
 
   let timer = null;

@@ -64,13 +64,13 @@
     <!-- الخطوة ٢: المقطع -->
     <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٢</span> أرفق المقطع (اختياري — فيديو أو صوت)</div>
     <div class="card" style="margin-top:.6rem">
-      <p class="small muted" style="margin-bottom:.5rem">مشهد الفيديو <b>يُستبدل كلياً بصورتك المصمّمة</b> — يبقى صوت المقطع فقط تحتها. النتيجة: فيديو بهويتك جاهز لكل منصّة.</p>
+      <p class="small muted" style="margin-bottom:.5rem">مشهد الفيديو <b>يُستبدل كلياً بصورتك المصمّمة</b> — يبقى صوت المقطع فقط تحتها، و<b>تُجهَّز الفيديوهات لكل المنصّات تلقائياً</b> فور الإرفاق.</p>
       <input type="file" id="vs-file" accept="video/*,audio/*">
-      <p id="vs-hint" class="xsmall muted" style="margin-top:.5rem">أرفق مقطعاً ليتفعّل زر «فيديو 🎬» تحت كل منصّة.</p>
+      <p id="vs-hint" class="xsmall muted" style="margin-top:.5rem">أرفق مقطعاً وتُجهَّز الفيديوهات لكل المنصّات تلقائياً — لا حاجة لأي اختيار.</p>
     </div>
 
     <!-- الخطوة ٣: التنزيلات -->
-    <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٣</span> نزّل لكل منصّة — صورة أو فيديو</div>
+    <div class="step-head" style="margin-top:1.2rem"><span class="step-num">٣</span> نزّل — كل شيء جاهز لجميع المنصّات</div>
     <div class="row gap" style="margin-top:.6rem">
       <button id="st-download-all" class="btn btn-gold grow" type="button">⬇ كل الصور دفعة واحدة</button>
       <button id="st-save-lib" class="btn grow" type="button">💾 حفظ في المكتبة</button>
@@ -84,8 +84,7 @@
       </div>
       <div class="jp-bar" style="margin-top:.6rem"><div id="vs-bar" class="jp-fill"></div></div>
       <p id="vs-status" class="xsmall muted" style="margin-top:.4rem; min-height:1rem"></p>
-      <video id="vs-preview" class="hidden" controls playsinline style="width:100%; border-radius:14px; margin-top:.6rem; border:1px solid var(--gold-soft)"></video>
-      <button id="vs-download" class="btn btn-blue btn-block hidden" type="button" style="margin-top:.6rem">⬇ تحميل / مشاركة على الهاتف</button>
+      <div id="vs-results"></div>
     </div>
   </section>
 
