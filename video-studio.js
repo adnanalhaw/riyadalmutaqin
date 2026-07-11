@@ -27,6 +27,33 @@ let vsAbort = null;
 let vsRunning = false;
 let vsUserCancel = false;
 let vsAudioCtx = null; // يُنشأ ويُستأنف داخل لحظة الضغط نفسها — سفاري يعلّق resume خارجها
+let vsMedia = null;    // عنصر تشغيل واحد «مُبارك» بلمسة المستخدم — يُعاد تشغيله برمجياً بحرّية
+let vsDest = null;     // وجهة الصوت المشتركة للتسجيل
+
+/* تجهيز عنصر التشغيل داخل لمسة المستخدم نفسها (شرط سفاري/آيفون):
+   تشغيل فوري ثم إيقاف يمنح العنصر إذن تشغيل دائماً — والصوت لا يخرج
+   للسماعة لأنه معاد توجيهه لمسار التسجيل. */
+function prepareMediaWithinGesture(file) {
+  try {
+    if (vsMedia) { try { URL.revokeObjectURL(vsMedia.src); } catch { } }
+    vsAudioCtx = vsAudioCtx || new AudioContext();
+    vsAudioCtx.resume().catch(() => { });
+    const isVideo = file.type.startsWith("video");
+    const media = document.createElement(isVideo ? "video" : "audio");
+    media.src = URL.createObjectURL(file);
+    media.playsInline = true;
+    media.preload = "auto";
+    const srcNode = vsAudioCtx.createMediaElementSource(media);
+    const dest = vsAudioCtx.createMediaStreamDestination();
+    srcNode.connect(dest);
+    const p = media.play();
+    if (p && p.then) p.then(() => {
+      // لا نوقفه إن كان التسجيل الفعلي قد بدأ (سباق زمني محتمل)
+      if (!media._recording) { media.pause(); try { media.currentTime = 0; } catch { } }
+    }).catch(() => { });
+    vsMedia = media; vsDest = dest;
+  } catch { vsMedia = null; vsDest = null; }
+}
 
 function mediaFileReady() {
   const f = $("vs-file");
@@ -42,15 +69,19 @@ function refreshVideoHint() {
 }
 
 /* تحويل قالب واحد. يعيد {blob, ext} أو null عند الإلغاء */
-async function convertOne(fmt, file, mime) {
-  const isVideo = file.type.startsWith("video");
-  const media = document.createElement(isVideo ? "video" : "audio");
-  media.src = URL.createObjectURL(file);
-  media.playsInline = true;
+async function convertOne(fmt, mime) {
+  const media = vsMedia;
   await new Promise((res, rej) => {
     if (media.readyState >= 1) return res(); // البيانات وصلت قبل ربط الحدث — لا تعليق
-    media.onloadedmetadata = res;
-    media.onerror = () => rej(new Error("تعذّرت قراءة الملف"));
+    media.addEventListener("loadedmetadata", res, { once: true });
+    media.addEventListener("error", () => rej(new Error("تعذّرت قراءة الملف")), { once: true });
+  });
+  // العودة لبداية المقطع (القالب الثاني والثالث يبدآن بعد انتهاء الأول)
+  await new Promise((res) => {
+    if (!media.currentTime) return res();
+    media.addEventListener("seeked", res, { once: true });
+    try { media.currentTime = 0; } catch { res(); }
+    setTimeout(res, 1500);
   });
 
   const data = studioData();
@@ -67,13 +98,8 @@ async function convertOne(fmt, file, mime) {
   ctx.drawImage(buffer, 0, 0);
   const stream = canvas.captureStream(15);
 
-  // صوت المقطع فقط (مشهد الفيديو الأصلي لا يظهر إطلاقاً) — سياق صوت مشترك
-  const acx = vsAudioCtx || (vsAudioCtx = new AudioContext());
-  acx.resume().catch(() => { });
-  const srcNode = acx.createMediaElementSource(media);
-  const dest = acx.createMediaStreamDestination();
-  srcNode.connect(dest);
-  const aTrack = dest.stream.getAudioTracks()[0];
+  // صوت المقطع فقط عبر الوجهة المشتركة (مشهد الفيديو الأصلي لا يظهر إطلاقاً)
+  const aTrack = vsDest && vsDest.stream.getAudioTracks()[0];
   if (aTrack) stream.addTrack(aTrack);
 
   const chunks = [];
@@ -89,10 +115,11 @@ async function convertOne(fmt, file, mime) {
   vsAbort = () => { stopped = true; try { media.pause(); } catch { } };
   const bar = $("vs-bar"), status = $("vs-status");
   const cleanupDom = () => { try { canvas.remove(); } catch { } };
+  media._recording = true;
   rec.start(250);
   try { await media.play(); }
   catch (e) {
-    rec.state !== "inactive" && rec.stop(); cleanupDom(); URL.revokeObjectURL(media.src); vsAbort = null;
+    rec.state !== "inactive" && rec.stop(); cleanupDom(); vsAbort = null;
     throw new Error("المتصفح منع تشغيل المقطع — أعد اختيار الملف وابقَ في الصفحة");
   }
   const painter = setInterval(() => ctx.drawImage(buffer, 0, 0), 200);
@@ -113,8 +140,7 @@ async function convertOne(fmt, file, mime) {
   if (rec.state !== "inactive") rec.stop();
   await doneRec;
   cleanupDom();
-  try { srcNode.disconnect(); } catch { }
-  URL.revokeObjectURL(media.src);
+  media._recording = false;
   vsAbort = null;
   if (!finished) return null;
   const ext = mime.startsWith("video/mp4") ? "mp4" : "webm";
@@ -148,6 +174,11 @@ async function convertAllFormats() {
     $("vs-status").textContent = "متصفحك لا يدعم تسجيل الفيديو — جرّب كروم أو سفاري حديثاً.";
     return;
   }
+  if (!vsMedia) {
+    $("vs-area").classList.remove("hidden");
+    $("vs-status").textContent = "تعذّر فتح المقطع — أعد اختيار الملف.";
+    return;
+  }
   vsRunning = true;
   vsUserCancel = false;
   await ensureFonts();
@@ -166,7 +197,7 @@ async function convertAllFormats() {
     const st = rows[fmt.key].querySelector("[data-st]");
     st.textContent = "🎬 جارٍ التجهيز…";
     let out = null;
-    try { out = await convertOne(fmt, file, mime); }
+    try { out = await convertOne(fmt, mime); }
     catch (e) { st.textContent = "⚠ تعذّر: " + e.message; continue; }
     if (!out) {
       if (vsUserCancel) { st.textContent = "أُلغي"; break; }
@@ -206,8 +237,9 @@ function mountVideoStudio() {
   const input = $("vs-file");
   if (!input) return;
   input.addEventListener("change", () => {
-    // إنشاء سياق الصوت واستئنافه هنا — داخل لمسة المستخدم نفسها (شرط سفاري)
-    try { vsAudioCtx = vsAudioCtx || new AudioContext(); vsAudioCtx.resume().catch(() => { }); } catch { }
+    // داخل لمسة المستخدم نفسها: سياق الصوت + مباركة عنصر التشغيل (شرط سفاري)
+    const file = mediaFileReady();
+    if (file) prepareMediaWithinGesture(file);
     refreshVideoHint();
     convertAllFormats();
   });
