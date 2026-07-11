@@ -32,14 +32,12 @@ let vsDest = null;     // وجهة الصوت المشتركة لمسار الع
 let vsAudioBuffer = null;  // صوت المقطع مفكوكاً كاملاً في الذاكرة — المسار الرئيسي
 let vsDecodePromise = null;
 
-/* تجهيز عنصر التشغيل داخل لمسة المستخدم نفسها (شرط سفاري/آيفون):
-   تشغيل فوري ثم إيقاف يمنح العنصر إذن تشغيل دائماً — والصوت لا يخرج
-   للسماعة لأنه معاد توجيهه لمسار التسجيل. */
-function prepareMediaWithinGesture(file) {
+/* عند اختيار الملف: يبدأ فكّ الصوت فوراً (لا يحتاج لمسة) ويُجهَّز عنصر
+   التشغيل البديل دون تشغيله. */
+function prepareDecode(file) {
   try {
     if (vsMedia) { try { URL.revokeObjectURL(vsMedia.src); } catch { } }
     vsAudioCtx = vsAudioCtx || new AudioContext();
-    vsAudioCtx.resume().catch(() => { });
     // المسار الرئيسي: فكّ صوت الملف كاملاً إلى الذاكرة — تشغيله للتسجيل
     // لا يتقطّع أبداً (لا تخزين مؤقت ولا إذن تشغيل)
     vsAudioBuffer = null;
@@ -55,13 +53,25 @@ function prepareMediaWithinGesture(file) {
     const srcNode = vsAudioCtx.createMediaElementSource(media);
     const dest = vsAudioCtx.createMediaStreamDestination();
     srcNode.connect(dest);
-    const p = media.play();
-    if (p && p.then) p.then(() => {
-      // لا نوقفه إن كان التسجيل الفعلي قد بدأ (سباق زمني محتمل)
-      if (!media._recording) { media.pause(); try { media.currentTime = 0; } catch { } }
-    }).catch(() => { });
     vsMedia = media; vsDest = dest;
   } catch { vsMedia = null; vsDest = null; }
+}
+
+/* داخل ضغطة زر «ابدأ التحويل» (لمسة حقيقية — شرط آيفون الصارم):
+   تفعيل ساعة الصوت + مباركة عنصر التشغيل البديل. اختيار الملف وحده
+   لا يعدّه آيفون لمسةً فتبقى ساعة الصوت متجمّدة على الصفر. */
+function blessWithinTap() {
+  try {
+    vsAudioCtx = vsAudioCtx || new AudioContext();
+    vsAudioCtx.resume().catch(() => { });
+    if (vsMedia) {
+      const p = vsMedia.play();
+      if (p && p.then) p.then(() => {
+        // لا نوقفه إن كان التسجيل الفعلي قد بدأ (سباق زمني محتمل)
+        if (!vsMedia._recording) { vsMedia.pause(); try { vsMedia.currentTime = 0; } catch { } }
+      }).catch(() => { });
+    }
+  } catch { }
 }
 
 function mediaFileReady() {
@@ -73,8 +83,8 @@ function refreshVideoHint() {
   const hint = $("vs-hint");
   if (!hint) return;
   hint.textContent = mediaFileReady()
-    ? "✓ المقطع جاهز (" + mediaFileReady().name + ") — تُجهَّز الفيديوهات لكل المنصّات تلقائياً."
-    : "أرفق مقطعاً وتُجهَّز الفيديوهات لكل المنصّات تلقائياً — لا حاجة لأي اختيار.";
+    ? "✓ المقطع جاهز (" + mediaFileReady().name + ") — اضغط «ابدأ التحويل» وتخرج الفيديوهات لكل المنصّات."
+    : "أرفق مقطعاً ثم اضغط «ابدأ التحويل» — تخرج الفيديوهات لكل المنصّات.";
 }
 
 /* المسار الرئيسي: التسجيل من الصوت المفكوك في الذاكرة — صوت نقي بلا تقطيع */
@@ -105,6 +115,12 @@ async function convertOneBuffer(fmt, mime) {
   });
   rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
   const doneRec = new Promise((res) => { rec.onstop = res; });
+  // تأكيد أن ساعة الصوت تعمل فعلاً — وإلا رسالة واضحة بدل عدّاد متجمّد
+  try { await Promise.race([acx.resume(), new Promise((r) => setTimeout(r, 3000))]); } catch { }
+  if (acx.state !== "running") {
+    try { canvas.remove(); } catch { }
+    throw new Error("لم يُفعَّل الصوت — اضغط «ابدأ التحويل» مرة أخرى");
+  }
   let stopped = false;
   vsAbort = () => { stopped = true; try { src.stop(); } catch { } };
   const bar = $("vs-bar"), status = $("vs-status");
@@ -112,10 +128,13 @@ async function convertOneBuffer(fmt, mime) {
   const t0 = acx.currentTime;
   src.start();
   const painter = setInterval(() => ctx.drawImage(buffer, 0, 0), 250);
+  let lastT = -1, stallTicks = 0;
   const progress = setInterval(() => {
     const t = Math.min(acx.currentTime - t0, dur);
     bar.style.width = ((t / dur) * 100 || 0) + "%";
     status.textContent = "جارٍ تجهيز «" + fmt.name + "»… " + Math.floor(t) + " / " + Math.floor(dur) + " ثانية";
+    if (t === lastT) { if (++stallTicks > 40) stopped = true; } // حارس تجمّد ١٢ث
+    else { lastT = t; stallTicks = 0; }
   }, 300);
   await new Promise((res) => { src.onended = res; const t = setInterval(() => { if (stopped) { clearInterval(t); res(); } }, 200); });
   clearInterval(painter); clearInterval(progress);
@@ -242,6 +261,8 @@ async function convertAllFormats() {
   }
   vsRunning = true;
   vsUserCancel = false;
+  const startBtn = $("vs-start");
+  if (startBtn) startBtn.disabled = true;
   $("vs-area").classList.remove("hidden");
   $("vs-status").textContent = "جارٍ فكّ صوت المقطع…";
   // ننتظر فكّ الصوت (حتى ٣٠ ثانية) — إن تعذّر نتحوّل لمسار العنصر البديل
@@ -294,18 +315,23 @@ async function convertAllFormats() {
   $("vs-bar").style.width = "0%";
   $("vs-status").textContent = doneCount === VIDEO_FORMATS.length
     ? "✅ كل الفيديوهات جاهزة — تحت كل قالب المنصّاتُ التي يخدمها."
-    : (doneCount ? "جاهز جزئياً — أعد اختيار الملف لتجهيز الباقي." : "");
+    : (doneCount ? "جاهز جزئياً — اضغط «ابدأ التحويل» لتجهيز الباقي." : "");
+  if (startBtn) startBtn.disabled = false;
   vsRunning = false;
 }
 
 function mountVideoStudio() {
   const input = $("vs-file");
   if (!input) return;
+  const startBtn = $("vs-start");
   input.addEventListener("change", () => {
-    // داخل لمسة المستخدم نفسها: سياق الصوت + مباركة عنصر التشغيل (شرط سفاري)
     const file = mediaFileReady();
-    if (file) prepareMediaWithinGesture(file);
+    if (file) { prepareDecode(file); startBtn.classList.remove("hidden"); }
+    else startBtn.classList.add("hidden");
     refreshVideoHint();
+  });
+  startBtn.addEventListener("click", () => {
+    blessWithinTap(); // متزامن داخل اللمسة — يفعّل ساعة الصوت بيقين
     convertAllFormats();
   });
   $("vs-cancel").addEventListener("click", () => { vsUserCancel = true; if (vsAbort) vsAbort(); });
