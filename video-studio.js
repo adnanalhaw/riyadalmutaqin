@@ -95,7 +95,7 @@ async function convertOneBuffer(fmt, mime, st) {
   const dur = vsAudioBuffer.duration;
   const data = studioData();
   const buffer = document.createElement("canvas");
-  drawPost(buffer, fmt, data);
+  drawVideoFrame(buffer, fmt, data); // العمود الموحّد — القوالب الثلاثة متطابقة
   const canvas = document.createElement("canvas");
   canvas.width = fmt.w; canvas.height = fmt.h;
   canvas.style.cssText = "position:fixed; left:-9999px; top:0; width:2px; height:2px";
@@ -169,7 +169,7 @@ async function convertOne(fmt, mime) {
   // الإطار الثابت يُرسم مرة واحدة في لوحة عازلة، والنسخ الدوري منها رخيص جداً —
   // فلا يُجهد المعالج ولا يتقطّع الصوت (إعادة الرسم الكامل كانت تقطّعه)
   const buffer = document.createElement("canvas");
-  drawPost(buffer, fmt, data);
+  drawVideoFrame(buffer, fmt, data); // العمود الموحّد — القوالب الثلاثة متطابقة
   const canvas = document.createElement("canvas");
   canvas.width = fmt.w; canvas.height = fmt.h;
   // سفاري لا يبثّ إطارات من لوحة خارج الصفحة — تُعلَّق مخفيةً أثناء التسجيل

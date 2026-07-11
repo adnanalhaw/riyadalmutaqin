@@ -400,8 +400,7 @@ const STYLE_PAINTERS = {
      على الجانبين، ووصف القناة أسفلها فوق ختم QR — على هيئة تصميم كانفا المختار. */
   medallion(ctx, p, box, S, data) {
     const landscape = p.w > p.h;
-    paintBg(ctx, p.w, p.h);
-    paintStars(ctx, p.w, p.h);
+    if (!data._noBg) { paintBg(ctx, p.w, p.h); paintStars(ctx, p.w, p.h); }
     const cx = box.x + box.w / 2;
     ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
 
@@ -416,8 +415,8 @@ const STYLE_PAINTERS = {
     ctx.fillText("رياض المتقين", cx, y);
     const headerBottom = y + 22 * S;
 
-    // الذيل: وصف القناة فوق ختم QR
-    const reserve = qrReserve(S, landscape);
+    // الذيل: وصف القناة فوق ختم QR (حجز الختم قد يُمرَّر من العمود الموحّد)
+    const reserve = data._qrSlot || qrReserve(S, landscape);
     const descSize = Math.round((landscape ? 25 : 31) * S);
     const descY = box.y + box.h - reserve - (landscape ? 12 : 22) * S;
     ctx.fillStyle = "rgba(246,242,232,.92)";
@@ -429,7 +428,7 @@ const STYLE_PAINTERS = {
     const ovalBottom = descY - descSize - (landscape ? 18 : 42) * S;
     const cy = (ovalTop + ovalBottom) / 2;
     const ry = (ovalBottom - ovalTop) / 2;
-    const rx = Math.min(box.w * .42, ry * .85);
+    const rx = Math.min(box.w * .38, ry * .85);
 
     // كلمتا الجانبين — في منتصف الفراغ بين حافة الصندوق والبيضاوية، وتُحذفان إن ضاق
     const sideRoom = cx - rx - 11 * S - box.x;
@@ -635,6 +634,32 @@ const STYLE_PAINTERS = {
   },
 };
 
+/* ===== إطار الفيديو الموحّد =====
+   عمود تصميم رئيسي واحد (1080×1620) يُرسم بمقاسات ثابتة ثم يوضع نفسه
+   في كل قالب فيديو مُصغَّراً فقط — فتتطابق القوالب الثلاثة تماماً،
+   وتمتد الخلفية حوله. ختم QR يُرسم على اللوحة النهائية بحجم ثابت
+   (لا يتصغّر مع القالب العريض) كي يبقى قابلاً للمسح. */
+const COL_W = 1080, COL_H = 1620, COL_QR_S = .75, COL_QR_SLOT = 580;
+function drawVideoFrame(canvas, fmt, data) {
+  canvas.width = fmt.w; canvas.height = fmt.h;
+  const ctx = canvas.getContext("2d");
+  paintBg(ctx, fmt.w, fmt.h);
+  paintStars(ctx, fmt.w, fmt.h);
+  const side = Math.max(fmt.safe[1], fmt.safe[3]);
+  const bx = { x: side, y: fmt.safe[0], w: fmt.w - side * 2, h: fmt.h - fmt.safe[0] - fmt.safe[2] };
+  const sc = Math.min(bx.w / COL_W, bx.h / COL_H);
+  const col = document.createElement("canvas");
+  col.width = COL_W; col.height = COL_H;
+  const cctx = col.getContext("2d");
+  const cbox = { x: 40, y: 24, w: COL_W - 80, h: COL_H - 48 };
+  STYLE_PAINTERS.medallion(cctx, { w: COL_W, h: COL_H }, cbox, 1,
+    { ...data, _noBg: true, _qrSlot: COL_QR_SLOT });
+  const dx = bx.x + (bx.w - COL_W * sc) / 2, dy = bx.y + (bx.h - COL_H * sc) / 2;
+  ctx.drawImage(col, dx, dy, COL_W * sc, COL_H * sc);
+  const colRect = { x: dx + cbox.x * sc, y: dy + cbox.y * sc, w: cbox.w * sc, h: cbox.h * sc };
+  paintQR(ctx, colRect, COL_QR_S, false);
+}
+
 /* الرسم الرئيسي */
 function drawPost(canvas, p, data) {
   canvas.width = p.w; canvas.height = p.h;
@@ -670,7 +695,11 @@ async function renderAll() {
   await loadScene();
   const data = studioData();
   const preview = $("st-preview");
-  if (preview) drawPost(preview, PLATFORMS.find((x) => x.key === "igpost"), data);
+  if (preview) {
+    // المعاينة بالقالب الطولي الموحّد نفسه الذي تخرج به الفيديوهات
+    if (typeof VIDEO_FORMATS !== "undefined") drawVideoFrame(preview, VIDEO_FORMATS[0], data);
+    else drawPost(preview, PLATFORMS.find((x) => x.key === "igpost"), data);
+  }
   return data;
 }
 
