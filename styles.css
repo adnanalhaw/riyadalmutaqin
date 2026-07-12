@@ -404,3 +404,30 @@ code.mono { font-family: monospace; font-size: .78rem; color: var(--gold-2); wor
 .style-card.active { border-color: rgba(170, 200, 240, .85); box-shadow: 0 0 12px rgba(146, 175, 214, .3); }
 .style-card canvas { width: 100%; height: auto; border-radius: 9px; display: block; background: var(--g3); }
 .style-card .s-name { font-size: .72rem; font-weight: 700; color: var(--gold-2); margin-top: .3rem; }
+
+/* ===== تخصيص الشاشات الواسعة (كمبيوتر) — الهاتف يبقى كما هو ===== */
+@media (min-width: 900px) {
+  html { font-size: 17px; }
+  .wrap { max-width: 1040px; padding: 0 2.2rem 4rem; }
+  .topbar { padding: .7rem 1.2rem; }
+  .brand .name { font-size: 1.5rem; }
+
+  /* الرئيسية: بطاقات المنصّات عمودان، والبطاقات الممتدة صفّ كامل */
+  .home-main { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem 1.1rem; align-items: stretch; }
+  .home-main > :not(.platform-card) { grid-column: 1 / -1; }
+  .home-main .platform-card { margin-top: 0; }
+
+  .actions-grid { grid-template-columns: repeat(4, 1fr); }
+
+  /* رحلة العلم: محطتان في الصف */
+  #stations { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  #stations .station { margin-top: 0; }
+
+  /* الاستوديو: النموذج يميناً والمعاينة الحيّة تلازم يسار الشاشة أثناء التمرير */
+  .st-card { display: grid; grid-template-columns: 1.05fr .95fr; gap: 1.7rem; align-items: start; }
+  .st-card .st-side { position: sticky; top: 90px; }
+
+  /* النوافذ المنبثقة تتوسّط الشاشة بدل الالتصاق بالأسفل */
+  .modal { align-items: center; }
+  .modal-sheet { border-radius: 22px; max-width: 620px; }
+}
