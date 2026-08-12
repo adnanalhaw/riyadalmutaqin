@@ -1,6 +1,7 @@
 // تذكيرات داخل الصفحة (بلا أذونات نظام، تعمل ما دام الموقع مفتوحاً):
 //  • الصلاة على النبيّ ﷺ كلّ ٥ دقائق.
 //  • تذكير صيام التطوّع (الإثنين/الخميس + الأيّام البيض ١٣/١٤/١٥) عشيّة اليوم السابق — مرّة صباحاً ومرّة مساءً.
+//  • وِرد تسبيحٍ متنوّع كلّ ٢٠ دقيقة (أذكار صحيحة الإسناد) مع رابط عدّاد التسبيح.
 (function () {
   "use strict";
   var SALAH_MS = 5 * 60 * 1000; // ٥ دقائق
@@ -80,6 +81,29 @@
       90000);
   }
 
+  // ===== وِرد التسبيح (أذكار صحيحة الإسناد — بالتناوب) =====
+  var TASBEEH_MS = 20 * 60 * 1000; // ٢٠ دقيقة
+  var ATHKAR = [
+    ["سبحان الله وبحمده، سبحان الله العظيم",
+      "«كلمتان خفيفتان على اللسان، ثقيلتان في الميزان، حبيبتان إلى الرحمن» — متفق عليه."],
+    ["لا إله إلا الله وحده لا شريك له، له الملك وله الحمد، وهو على كل شيء قدير",
+      "من قالها مئةً في يومٍ كانت له عِدل عشر رقاب — متفق عليه."],
+    ["أستغفر الله وأتوب إليه",
+      "قال ﷺ: «إني لأستغفر الله في اليوم مئة مرة» — رواه مسلم."],
+    ["لا حول ولا قوة إلا بالله",
+      "«كنزٌ من كنوز الجنة» — متفق عليه."],
+  ];
+  var tasbeehIdx = 0;
+  function tasbeehReminder() {
+    var a = ATHKAR[tasbeehIdx % ATHKAR.length];
+    tasbeehIdx += 1;
+    toast("📿",
+      "<b>" + a[0] + "</b><br>" +
+      '<span style="opacity:.85;font-size:.86rem">' + a[1] + "</span><br>" +
+      '<a href="/tasbeeh" style="color:#e9c46a;font-size:.86rem">افتح عدّاد التسبيح ›</a>',
+      60000);
+  }
+
   function start() {
     if (window.__rmRemStarted) return;
     window.__rmRemStarted = true;
@@ -88,11 +112,13 @@
     // الصلاة على النبيّ ﷺ: أوّل تذكيرٍ بعد دقيقة، ثمّ كلّ ٥ دقائق.
     setTimeout(salahReminder, 60000);
     setInterval(salahReminder, SALAH_MS);
+    // التسبيح: أوّل وِردٍ بعد ٨ دقائق (متباعد عن الصلاة على النبيّ)، ثمّ كلّ ٢٠ دقيقة.
+    setTimeout(function () { tasbeehReminder(); setInterval(tasbeehReminder, TASBEEH_MS); }, 8 * 60 * 1000);
   }
 
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", start);
   } else { start(); }
 
-  window.RMReminders = { start: start, salahReminder: salahReminder, fastingCheck: fastingCheck };
+  window.RMReminders = { start: start, salahReminder: salahReminder, fastingCheck: fastingCheck, tasbeehReminder: tasbeehReminder };
 })();
