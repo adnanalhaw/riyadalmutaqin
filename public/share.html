@@ -55,12 +55,21 @@
           <button class="btn btn-ghost" id="nativeBtn">مشاركة…</button>
         </div>
         <p class="muted center" id="copyMsg" style="margin-top:.8rem;min-height:1.2rem"></p>
+
+        <!-- 🔳 رمز QR للدعوة الورقية والشاشات (مستعاد من النسخة القديمة) -->
+        <div class="frame" style="max-width:340px;margin:1.6rem auto 0;text-align:center;padding:1.2rem">
+          <h2 style="font-size:1.05rem;margin:0 0 .8rem">امسح للدخول مباشرة</h2>
+          <div id="qrBox" style="background:#fff;border-radius:12px;padding:10px;display:inline-block;line-height:0"></div>
+          <p class="muted" style="font-size:.82rem;margin:.7rem 0 0">اطبعه على إعلان أو اعرضه على الشاشة —
+            المسح يفتح riyadalmutaqin.com</p>
+        </div>
       </div>
     </section>
   </main>
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/qr.js"></script>
   <script>
     (function () {
       var url = location.origin + "/";
@@ -113,6 +122,16 @@
           msg.textContent = "المشاركة المباشرة غير مدعومة في هذا المتصفّح، انسخ الرابط.";
         }
       });
+
+      // رمز QR للرابط — يعمل محلياً بالكامل (مكتبة MIT مضمّنة، لا خدمة خارجية)
+      try {
+        if (typeof qrcode === "function") {
+          var qr = qrcode(0, "M");
+          qr.addData(url);
+          qr.make();
+          document.getElementById("qrBox").innerHTML = qr.createImgTag(5, 0, "رمز QR لرابط رياض المتقين");
+        }
+      } catch (e) { /* فشل الرمز لا يعطّل بقية البطاقة */ }
     })();
   </script>
 </body>

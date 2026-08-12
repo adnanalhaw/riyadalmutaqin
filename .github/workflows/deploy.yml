@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
+      PUBLISH_WEBHOOK_URL: ${{ secrets.PUBLISH_WEBHOOK_URL }}
     steps:
       - name: استنساخ المستودع
         uses: actions/checkout@v4
@@ -57,3 +58,13 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           secrets: |
             OWNER_EMAIL
+
+      # اختياري: Webhook توزيع المنشورات (Make/Zapier/n8n) — غيابه لا يكسر النشر
+      - name: تثبيت سرّ Webhook التوزيع
+        if: ${{ env.PUBLISH_WEBHOOK_URL != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            PUBLISH_WEBHOOK_URL
