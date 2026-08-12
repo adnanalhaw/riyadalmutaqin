@@ -37,6 +37,7 @@
           <div class="field"><label for="hawl">تاريخ بدء الحَوْل (يوم بلوغك النِّصاب)</label><input type="date" id="hawl" /></div>
           <div class="field"><label for="note">ملاحظة</label><input type="text" id="note" placeholder="اختياري" /></div>
           <button class="btn btn-primary" id="save">حفظ في حسابي</button>
+          <button class="btn" id="del" style="margin-inline-start:.5rem">حذف من حسابي</button>
           <div class="notice" id="saveMsg" hidden style="margin-top:.8rem"></div>
         </div>
 
@@ -63,7 +64,6 @@
         valueOf: function (q) { return q * ZK.goldPrice(); },
         nisabValue: function () { return ZK.nisabGold(); },
         reached: function (q) { return q >= 85; },
-        nisabHint: function () { return "أدخِل سعر الذهب"; },
       });
     });
   </script>

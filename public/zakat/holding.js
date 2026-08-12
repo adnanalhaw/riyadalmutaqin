@@ -1,7 +1,7 @@
 // مُهيّئ صفحة نوعٍ من الزكاة (ذهب/فضّة/أسهم/عروض تجارة): يربط الإدخال بقاعدة البيانات
 // ويحسب القيمة والنِّصاب والحَوْل وموعد الاستحقاق ومقدار الزكاة.
 ZK.holdingPage = function (cfg) {
-  // cfg: { kind, mode:'grams'|'value', qtyLabel, valueOf(qty), nisabValue(), reached(qty,value), nisabHint() }
+  // cfg: { kind, mode:'grams'|'value', qtyLabel, valueOf(qty), nisabValue(), reached(qty,value) }
   var k = cfg.kind;
 
   function el(id) { return document.getElementById(id); }
@@ -30,7 +30,8 @@ ZK.holdingPage = function (cfg) {
     var expected = reached ? value * 0.025 : 0;
 
     el("r_value").textContent = ZK.money(value);
-    el("r_nisab").textContent = nis ? ZK.money(nis) : (cfg.nisabHint ? cfg.nisabHint() : "أدخِل السعر");
+    // الأسعار حيّة من الخادم — لا إدخال يدويّ، فالرسالة الصادقة: بانتظار الجلب
+    el("r_nisab").textContent = nis ? ZK.money(nis) : "بانتظار أسعار السوق الحيّة…";
     el("r_reached").textContent = !nis && cfg.mode === "value" ? "—" : (reached ? "نعم ✓" : "لا، دون النِّصاب");
     el("r_due").textContent = ZK.dueText(hawl);
     el("r_zakat").textContent = ZK.money(zakat);
@@ -55,5 +56,21 @@ ZK.holdingPage = function (cfg) {
       msg.textContent = (res.ok && res.d.ok) ? "حُفظ في حسابك ✓" : "تعذّر الحفظ.";
       compute();
     }).catch(function () { el("save").disabled = false; msg.textContent = "تعذّر الاتصال."; });
+  });
+
+  // حذف سجلّ هذا النوع كاملاً من الحساب (الخادم جاهز له منذ البداية — DELETE /api/zakat/holding/:kind)
+  var delBtn = el("del");
+  if (delBtn) delBtn.addEventListener("click", function () {
+    if (!window.confirm("يُحذف سجلّ هذا النوع من حسابك نهائيّاً — متأكّد؟")) return;
+    delBtn.disabled = true;
+    var msg = el("saveMsg"); msg.hidden = false; msg.textContent = "جارٍ الحذف…";
+    ZK.delHolding(k).then(function (res) {
+      delBtn.disabled = false;
+      if (res.ok && res.d.ok) {
+        el("qty").value = ""; el("hawl").value = ""; el("note").value = "";
+        msg.textContent = "حُذف من حسابك ✓";
+        compute();
+      } else { msg.textContent = "تعذّر الحذف."; }
+    }).catch(function () { delBtn.disabled = false; msg.textContent = "تعذّر الاتصال."; });
   });
 };

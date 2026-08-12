@@ -177,71 +177,14 @@ window.ZK = (function () {
     });
   }
 
-  // شريط الإعدادات (سعر الذهب/الفضّة/العملة/الأساس) — يُحقن ويُحفظ تلقائيّاً.
-  function settingsBar(el) {
-    var s = state.settings;
-    el.innerHTML =
-      '<h3 style="color:var(--gold);margin-top:0">الأسعار والنِّصاب</h3>' +
-      '<div style="display:flex;gap:.6rem;flex-wrap:wrap">' +
-      field("zk_gold", "سعر غرام الذهب (٢٤)", s.gold_price) +
-      field("zk_silver", "سعر غرام الفضّة", s.silver_price) +
-      field("zk_curr", "العملة", s.currency || "د.ك", "text") +
-      '<div class="field" style="flex:1;min-width:140px;margin:0"><label>أساس نصاب النقد</label>' +
-      '<select id="zk_basis"><option value="gold"' + (s.basis !== "silver" ? " selected" : "") + '>الأحوط (الأقلّ)</option>' +
-      '<option value="silver"' + (s.basis === "silver" ? " selected" : "") + '>الفضّة</option></select></div>' +
-      "</div>" +
-      '<p class="muted" id="zk_nisabLine" style="font-size:.85rem;margin:.7rem 0 0"></p>';
-
-    function bind(id, key, isNum) {
-      var inp = document.getElementById(id);
-      var save = function () {
-        var v = inp.value.trim();
-        saveSettings(makeObj(key, isNum ? (v === "" ? null : Number(v)) : v));
-        if (window.__zkRecompute) window.__zkRecompute();
-        renderNisab();
-      };
-      inp.addEventListener("input", debounce(save, 600));
-      inp.addEventListener("change", save);
-    }
-    bind("zk_gold", "gold_price", true);
-    bind("zk_silver", "silver_price", true);
-    bind("zk_curr", "currency", false);
-    bind("zk_basis", "basis", false);
-    renderNisab();
-  }
-  function renderNisab() {
-    var line = document.getElementById("zk_nisabLine");
-    if (!line) return;
-    var parts = [];
-    if (nisabGold()) parts.push("نصاب الذهب ٨٥غ ≈ " + money(nisabGold()));
-    if (nisabSilver()) parts.push("نصاب الفضّة ٥٩٥غ ≈ " + money(nisabSilver()));
-    line.textContent = parts.length ? parts.join(" · ") : "أدخِل أسعار الذهب/الفضّة لحساب النِّصاب.";
-  }
-
-  // ملخّص نِصابٍ مختصر لصفحات الأنواع (الأسعار تُضبط مرّةً في الصفحة الرئيسية).
-  function nisabSummary(el) {
-    var parts = [];
-    if (nisabGold()) parts.push("نصاب الذهب ≈ " + money(nisabGold()));
-    if (nisabSilver()) parts.push("نصاب الفضّة ≈ " + money(nisabSilver()));
-    el.innerHTML =
-      '<div style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">' +
-      '<span class="muted" style="font-size:.9rem">' +
-      (parts.length ? parts.join(" · ") : "لم تُحدَّد أسعار الذهب/الفضّة بعد.") + "</span>" +
-      '<a class="gold" href="/zakat" style="font-size:.88rem;flex:none">عدّل الأسعار ›</a></div>';
-  }
-
-  function field(id, label, value, type) {
-    return '<div class="field" style="flex:1;min-width:140px;margin:0"><label for="' + id + '">' + label + '</label>' +
-      '<input type="' + (type || "number") + '" step="any" id="' + id + '" value="' + (value != null ? esc(value) : "") + '" /></div>';
-  }
-  function makeObj(k, v) { var o = {}; o[k] = v; return o; }
-  function debounce(fn, ms) { var t; return function () { clearTimeout(t); t = setTimeout(fn, ms); }; }
+  // (أُزيل شريط الإدخال اليدويّ للأسعار وملخّصه — الأسعار حيّة من الخادم عبر pricesCard،
+  //  وكانت بقاياه كوداً ميّتاً برسائل مضلّلة «أدخِل السعر/عدّل الأسعار» بلا أيّ حقل إدخال.)
 
   return {
     state: state, ar: ar, esc: esc, money: money,
     goldPrice: goldPrice, silverPrice: silverPrice,
     nisabGold: nisabGold, nisabSilver: nisabSilver, nisabCash: nisabCash,
-    hawl: hawl, dueText: dueText, boot: boot, settingsBar: settingsBar, nisabSummary: nisabSummary, renderNisab: renderNisab,
+    hawl: hawl, dueText: dueText, boot: boot,
     fetchLivePrices: fetchLivePrices, pricesCard: pricesCard,
     saveSettings: saveSettings, saveHolding: saveHolding, delHolding: delHolding,
     addEntry: addEntry, delEntry: delEntry,

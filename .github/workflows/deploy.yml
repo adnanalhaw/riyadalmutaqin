@@ -1,10 +1,16 @@
 name: نشر إلى Cloudflare
 
-# النشر التلقائي: كل دفعة إلى main تُنشَر إلى Cloudflare Workers.
+# النشر التلقائي: هذا المشروع يعيش على فرع claude/work-session-2nbtmm داخل مستودع
+# يحمل فرعُه الرئيسي (main) مشروعاً آخر — لذلك يُنشَر من فرعه مباشرةً، لا من main.
 on:
   push:
-    branches: [main]
+    branches: [claude/work-session-2nbtmm]
   workflow_dispatch:
+
+# لا نشرَين متزامنَين: الدفعة الأحدث تُلغي ما قبلها المنتظر.
+concurrency:
+  group: deploy-cloudflare
+  cancel-in-progress: true
 
 jobs:
   deploy:
@@ -24,6 +30,15 @@ jobs:
 
       - name: فحص الأنواع
         run: npm run typecheck
+
+      # القاعدة البعيدة تلحق الكود دائماً: الترحيلات تُطبَّق قبل النشر (idempotent —
+      # wrangler يتخطّى المُطبَّق سابقاً)، فلا تصل صفحةٌ لجدولٍ غير موجود.
+      - name: ترحيلات قاعدة البيانات (D1)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply riyad_db --remote
 
       - name: النشر
         uses: cloudflare/wrangler-action@v3
