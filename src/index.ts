@@ -40,6 +40,8 @@ export interface Env {
   /** إرسال البريد عبر Resend (لإعادة ضبط كلمة المرور). */
   RESEND_API_KEY?: string;
   MAIL_FROM?: string;
+  /** بريد المالك (سرّ يُثبّته النشر الآلي): يُرقّى حسابه لمدير النظام عند الدخول. */
+  OWNER_EMAIL?: string;
 }
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -1266,14 +1268,25 @@ async function login(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: "البريد أو كلمة المرور غير صحيحة." }, 401);
   }
 
+  // 👑 ترقية المالك الآمنة: البريد المطابق لسرّ OWNER_EMAIL يُرقّى لمدير النظام عند أول
+  // دخول ناجح (ملكية البريد + كلمة المرور معاً — لا مسار آخر لصنع مدير أول، لأن ملف
+  // SQL اليدويّ خارج قدرة المشغّل). السرّ يُثبَّت من النشر الآلي ولا يدخل git.
+  let role = row.role;
+  const owner = String(env.OWNER_EMAIL ?? "").trim().toLowerCase();
+  if (owner && email === owner && role !== "admin") {
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(row.id).run();
+    role = "admin";
+    await audit(env, email, "auth.owner_promoted", `user:${row.id}`);
+  }
+
   const setCookie = await createSession(env.DB, row.id);
   // تسجيل وقت الدخول (لتحليل الأوقات والبلدان المفضّلة).
   try {
     const country = (request.headers.get("CF-IPCountry") || "").slice(0, 4) || null;
     await env.DB.prepare("INSERT INTO login_events (user_id, role, country) VALUES (?, ?, ?)")
-      .bind(row.id, row.role, country).run();
+      .bind(row.id, role, country).run();
   } catch { /* لا نُفشل الدخول بسبب التتبّع */ }
-  const user: AuthUser = { id: row.id, name: row.name, email: row.email, role: row.role };
+  const user: AuthUser = { id: row.id, name: row.name, email: row.email, role };
   return json({ ok: true, user, must_change_password: Boolean(row.must_change_password) }, 200, { "Set-Cookie": setCookie });
 }
 

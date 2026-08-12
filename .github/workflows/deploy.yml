@@ -15,6 +15,8 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
     steps:
       - name: استنساخ المستودع
         uses: actions/checkout@v4
@@ -45,3 +47,13 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      # اختياري: سرّ بريد المالك — حسابه يُرقّى لمدير النظام عند الدخول (غيابه لا يكسر النشر)
+      - name: تثبيت سرّ بريد المالك
+        if: ${{ env.OWNER_EMAIL != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            OWNER_EMAIL
