@@ -522,6 +522,155 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: "Not Found" }, 404);
   }
 
+  // ===== ساهم بتدريب الذكاء الاصطناعي (مساهمة تطوعية شفافة · اعتماد المدير شرط) =====
+  if (path === "/api/train" || path.startsWith("/api/train/")) {
+    // إحصاءات عامة لصفحة الشرح — شفافية: الأرقام حقيقية من القاعدة، صفر يظهر صفراً
+    if (route === "GET /api/train/stats") {
+      const row = await env.DB.prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM ai_contributions WHERE status='approved')                AS approved,
+           (SELECT COUNT(*) FROM ai_contributions)                                        AS total,
+           (SELECT COUNT(DISTINCT user_id) FROM ai_contributions)                         AS contributors`,
+      ).first<{ approved: number; total: number; contributors: number }>();
+      return json({ ok: true, stats: row ?? { approved: 0, total: 0, contributors: 0 } });
+    }
+
+    const user = await getSessionUser(request, env.DB);
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
+
+    // مساهماتي وحالاتها (المعتمد/المردود مع ملاحظة المدير — حلقة تعلّم للمساهم)
+    if (route === "GET /api/train/mine") {
+      const { results } = await env.DB.prepare(
+        `SELECT id, kind, question, answer, source, topic, status, review_note, created_at
+         FROM ai_contributions WHERE user_id = ? ORDER BY id DESC LIMIT 100`,
+      ).bind(user.id).all();
+      return json({ ok: true, contributions: results });
+    }
+
+    if (route === "POST /api/train/contribute") {
+      // بقرار المشغّل: المساهمة لكل مستخدمي الموقع عدا حساب الأدمن (فصل الأدوار)
+      if (user.role === "admin") {
+        return json({ ok: false, error: "حساب الإدارة لا يساهم في البيانات — المساهمة لحسابات المتعلّمين والمعلّمين.", code: "admin_excluded" }, 403);
+      }
+      const b = await readJson(request);
+      const kind = b.kind === "question" ? "question" : "qa";
+      const question = String(b.question ?? "").trim().slice(0, 1000);
+      // نوع «سؤال فقط» لا يحمل جواباً ولا مصدراً أصلاً — يسدّ التفاف «جواب بلا إسناد بنوع مموَّه»
+      const answer = kind === "question" ? null : String(b.answer ?? "").trim().slice(0, 4000) || null;
+      const source = kind === "question" ? null : String(b.source ?? "").trim().slice(0, 500) || null;
+      const topicList = ["فقه", "عقيدة", "حديث", "تفسير", "سيرة", "أخلاق", "أذكار ودعاء", "عام"];
+      const topic = topicList.includes(String(b.topic)) ? String(b.topic) : "عام";
+      if (question.length < 10) return json({ ok: false, error: "اكتب السؤال كاملاً (10 أحرف على الأقل)." }, 400);
+      if (kind === "qa" && (!answer || answer.length < 15)) {
+        return json({ ok: false, error: "نوع «سؤال وجواب» يتطلّب جواباً وافياً (15 حرفاً على الأقل)." }, 400);
+      }
+      if (kind === "qa" && !source) {
+        return json({ ok: false, error: "المصدر إلزامي لكل جواب — لا نُدرّب الذكاء على كلام بلا إسناد." }, 400);
+      }
+      if (b.consent !== true) {
+        return json({ ok: false, error: "يلزم الإقرار بأن المساهمة تُستخدم لتطوير الذكاء الاصطناعي.", code: "consent_required" }, 400);
+      }
+      // سقف يومي يحمي جودة الطابور من الإغراق — 30 مساهمة/يوم لكل مستخدم.
+      // الفحص والإدراج عبارة واحدة ذرّية (INSERT..SELECT بشرط العدّ) — طلبات متوازية
+      // بفحص منفصل كانت تتجاوز السقف بسباق check-then-insert على D1.
+      const res = await env.DB.prepare(
+        `INSERT INTO ai_contributions (user_id, kind, question, answer, source, topic, consent_version)
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, '1.0'
+         WHERE (SELECT COUNT(*) FROM ai_contributions
+                WHERE user_id = ?1 AND created_at > datetime('now','-1 day')) < 30`,
+      ).bind(user.id, kind, question, answer, source, topic).run();
+      if (!res.meta.changes) {
+        return json({ ok: false, error: "بلغت سقف اليوم (30 مساهمة) — عُد غداً، جزاك الله خيراً.", code: "daily_cap" }, 429);
+      }
+      await notifyRole(env, "manager", {
+        type: "ai_training",
+        title: "مساهمة تدريب جديدة بانتظار مراجعتك",
+        body: question.slice(0, 120),
+        link: "/manager/training",
+      });
+      return json({ ok: true, id: Number(res.meta.last_row_id) }, 201);
+    }
+
+    // ── المراجعة والاعتماد: مدير الموقع بالذات (والأدمن كصلاحية عليا — نمط المنصّة) ──
+    if (user.role !== "manager" && user.role !== "admin") return json({ ok: false, error: "forbidden" }, 403);
+
+    if (route === "GET /api/train/review") {
+      const status = ["pending", "approved", "rejected"].includes(url.searchParams.get("status") ?? "")
+        ? url.searchParams.get("status") : "pending";
+      const { results } = await env.DB.prepare(
+        `SELECT c.id, c.kind, c.question, c.answer, c.source, c.topic, c.status, c.review_note,
+                c.created_at, c.reviewed_at, u.name AS contributor, u.role AS contributor_role
+         FROM ai_contributions c JOIN users u ON u.id = c.user_id
+         WHERE c.status = ? ORDER BY c.id ASC LIMIT 200`,
+      ).bind(status).all();
+      const counts = await env.DB.prepare(
+        `SELECT
+           (SELECT COUNT(*) FROM ai_contributions WHERE status='pending')  AS pending,
+           (SELECT COUNT(*) FROM ai_contributions WHERE status='approved') AS approved,
+           (SELECT COUNT(*) FROM ai_contributions WHERE status='rejected') AS rejected`,
+      ).first();
+      return json({ ok: true, contributions: results, counts });
+    }
+
+    const tr = path.match(/^\/api\/train\/review\/(\d+)$/);
+    if (tr && request.method === "POST") {
+      const id = Number(tr[1]);
+      const b = await readJson(request);
+      const action = b.action === "reject" ? "reject" : "approve";
+      const note = String(b.note ?? "").trim().slice(0, 500) || null;
+      const cur = await env.DB.prepare("SELECT id, kind, question, answer, source, status FROM ai_contributions WHERE id = ?")
+        .bind(id).first<{ id: number; kind: string; question: string; answer: string | null; source: string | null; status: string }>();
+      if (!cur) return json({ ok: false, error: "المساهمة غير موجودة." }, 404);
+      if (action === "reject") {
+        await env.DB.prepare(
+          `UPDATE ai_contributions SET status='rejected', review_note=?, reviewed_by=?, reviewed_at=datetime('now') WHERE id=?`,
+        ).bind(note, user.id, id).run();
+        await audit(env, user.email, "train.reject", `contribution:${id}`);
+        return json({ ok: true, status: "rejected" });
+      }
+      // اعتماد — مع إمكانية تصحيح المدير للنص؛ الأصل يُحفظ مرة واحدة (أمانة علمية).
+      // «غائب من الطلب» يُبقي المخزون، و«مُفرَّغ قصداً» يُفرِّغ فعلاً — لا ارتداد صامتاً:
+      // ما يراه المدير على الشاشة لحظة الاعتماد هو ما يُخزَّن ويُصدَّر حرفياً.
+      const q = b.question === undefined ? cur.question : String(b.question).trim().slice(0, 1000);
+      const a = b.answer === undefined ? cur.answer : String(b.answer).trim().slice(0, 4000) || null;
+      const s = b.source === undefined ? cur.source : String(b.source).trim().slice(0, 500) || null;
+      if (!q || q.length < 10) return json({ ok: false, error: "لا يُعتمد سؤال فارغ — صحّحه أو رُدّ المساهمة." }, 400);
+      if (a && !s) return json({ ok: false, error: "المصدر إلزامي لكل جواب معتمد — لا نُدرّب الذكاء على كلام بلا إسناد." }, 400);
+      // إضافة المدير جواباً (بمصدره) تُرقّي النوع إلى سؤال-وجواب؛ ومسح الجواب يعيده سؤالاً
+      const newKind = a ? "qa" : "question";
+      const edited = q !== cur.question || a !== cur.answer || s !== cur.source;
+      await env.DB.prepare(
+        `UPDATE ai_contributions SET status='approved', kind=?, question=?, answer=?, source=?, review_note=?,
+           reviewed_by=?, reviewed_at=datetime('now'),
+           orig_question = CASE WHEN ? AND orig_question IS NULL THEN ? ELSE orig_question END,
+           orig_answer   = CASE WHEN ? AND orig_answer   IS NULL THEN ? ELSE orig_answer   END,
+           orig_source   = CASE WHEN ? AND orig_source   IS NULL THEN ? ELSE orig_source   END
+         WHERE id=?`,
+      ).bind(newKind, q, a, s, note, user.id, edited ? 1 : 0, cur.question, edited ? 1 : 0, cur.answer, edited ? 1 : 0, cur.source, id).run();
+      await audit(env, user.email, "train.approve", `contribution:${id}`);
+      return json({ ok: true, status: "approved" });
+    }
+
+    // تصدير الكوربوس المعتمد JSONL — مجهّل الهوية: لا معرّف مستخدم ولا اسم في التصدير
+    if (route === "GET /api/train/export") {
+      const { results } = await env.DB.prepare(
+        `SELECT kind, question, answer, source, topic, reviewed_at
+         FROM ai_contributions WHERE status='approved' ORDER BY id ASC`,
+      ).all();
+      const lines = (results as Array<Record<string, unknown>>).map((r) => JSON.stringify(r)).join("\n");
+      await audit(env, user.email, "train.export", `approved:${(results as unknown[]).length}`);
+      return new Response(lines, {
+        headers: {
+          "content-type": "application/jsonl; charset=utf-8",
+          "content-disposition": `attachment; filename="riyad-corpus-${new Date().toISOString().slice(0, 10)}.jsonl"`,
+        },
+      });
+    }
+
+    return json({ ok: false, error: "Not Found" }, 404);
+  }
+
   // ===== المتعلّم: متابعة التقدّم (يتطلّب تسجيل دخول) =====
   if (path === "/api/progress") {
     const user = await getSessionUser(request, env.DB);

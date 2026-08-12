@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مراجعة بيانات التدريب — مدير الموقع</title>
+  <meta name="description" content="راجِع مساهمات تدريب الذكاء الاصطناعي واعتمِد الصحيح الموثّق فقط." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .tr-item{margin-bottom:1.2rem}
+    .tr-item textarea,.tr-item input{width:100%;margin-top:.25rem}
+    .tr-meta{font-size:.78rem;color:var(--gold)}
+    .tabbtns{display:flex;gap:.5rem;margin:0 0 1rem;flex-wrap:wrap}
+    .tabbtns .btn.on{background:var(--gold);color:#2a1f04}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>🤖 مراجعة بيانات التدريب</h1>
+            <p>لا تدخل أي مساهمة كوربوس التدريب قبل اعتمادك — <strong>الجودة والمصداقية قبل الكمية</strong>.
+              صحّح النص قبل الاعتماد إن لزم (أصل المساهم يُحفظ)، واكتب ملاحظة للمردود ليتعلّم صاحبه.</p>
+          </div>
+
+          <div class="tabbtns">
+            <button class="btn on" data-st="pending" type="button">⏳ بانتظار المراجعة <span id="cPending"></span></button>
+            <button class="btn" data-st="approved" type="button">✅ المعتمدة <span id="cApproved"></span></button>
+            <button class="btn" data-st="rejected" type="button">❌ المردودة <span id="cRejected"></span></button>
+            <a class="btn btn-outline" href="/api/train/export" style="margin-inline-start:auto">⬇️ تصدير الكوربوس المعتمد (JSONL)</a>
+          </div>
+
+          <div id="list"><p class="muted">يجري التحميل…</p></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      var esc = RM.esc, ar = RM.ar, api = RM.api;
+      var status = "pending";
+
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "manager" && u.role !== "admin") { location.href = "/"; return; }
+        load();
+      });
+
+      document.querySelectorAll(".tabbtns [data-st]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          status = b.dataset.st;
+          document.querySelectorAll(".tabbtns [data-st]").forEach(function (x) { x.classList.toggle("on", x === b); });
+          load();
+        });
+      });
+
+      function counts(c) {
+        c = c || {};
+        document.getElementById("cPending").textContent = c.pending ? "(" + ar(c.pending) + ")" : "";
+        document.getElementById("cApproved").textContent = c.approved ? "(" + ar(c.approved) + ")" : "";
+        document.getElementById("cRejected").textContent = c.rejected ? "(" + ar(c.rejected) + ")" : "";
+      }
+
+      function load() {
+        var list = document.getElementById("list");
+        list.innerHTML = '<p class="muted">يجري التحميل…</p>';
+        api("/api/train/review?status=" + status).then(function (res) {
+          if (!res.ok || !res.d.ok) { list.innerHTML = '<p class="muted">تعذّر التحميل.</p>'; return; }
+          counts(res.d.counts);
+          var items = res.d.contributions || [];
+          if (!items.length) {
+            list.innerHTML = '<p class="muted">' + (status === "pending" ? "لا مساهمات بانتظارك — الطابور نظيف ✓" : "لا شيء هنا بعد.") + "</p>";
+            return;
+          }
+          list.innerHTML = items.map(function (c) {
+            var editable = status === "pending";
+            var head = '<div class="tr-meta">#' + ar(c.id) + " · " + esc(c.topic || "عام") +
+              " · " + (c.kind === "qa" ? "سؤال وجواب" : "سؤال بلا جواب") +
+              " · المساهم: " + esc(c.contributor || "") + " (" + esc(c.contributor_role || "") + ")" +
+              " · " + esc((c.created_at || "").slice(0, 10)) + "</div>";
+            if (!editable) {
+              return '<div class="card tr-item">' + head +
+                '<div style="margin-top:.4rem"><strong>' + esc(c.question) + "</strong></div>" +
+                (c.answer ? '<div class="muted" style="margin-top:.3rem">' + esc(c.answer) + "</div>" : "") +
+                (c.source ? '<div class="muted" style="font-size:.8rem">المصدر: ' + esc(c.source) + "</div>" : "") +
+                (c.review_note ? '<div class="notice" style="margin-top:.5rem;font-size:.85rem">ملاحظتك: ' + esc(c.review_note) + "</div>" : "") +
+                "</div>";
+            }
+            return '<div class="card tr-item" data-id="' + c.id + '">' + head +
+              '<div class="field"><label>السؤال</label><textarea class="f-q" rows="2" maxlength="1000">' + esc(c.question) + "</textarea></div>" +
+              '<div class="field"><label>الجواب' + (c.kind === "qa" ? "" : " (أضِفه أنت إن أردت اعتماده كسؤال وجواب)") + '</label>' +
+              '<textarea class="f-a" rows="4" maxlength="4000">' + esc(c.answer || "") + "</textarea></div>" +
+              '<div class="field"><label>المصدر</label><input class="f-s" type="text" maxlength="500" value="' + esc(c.source || "") + '" /></div>' +
+              '<div class="field"><label>ملاحظة (تظهر للمساهم)</label><input class="f-n" type="text" maxlength="500" placeholder="اختياري — إلزامي أدبياً عند الرد" /></div>' +
+              '<div style="display:flex;gap:.6rem;flex-wrap:wrap">' +
+              '<button class="btn btn-primary tr-act" data-action="approve">✓ اعتماد للكوربوس</button>' +
+              '<button class="btn btn-outline tr-act" data-action="reject">✗ ردّ</button>' +
+              "</div><div class=\"notice tr-msg\" hidden style=\"margin-top:.6rem\"></div></div>";
+          }).join("");
+        }).catch(function () { list.innerHTML = '<p class="muted">تعذّر الاتصال.</p>'; });
+      }
+
+      document.getElementById("list").addEventListener("click", function (e) {
+        var btn = e.target.closest(".tr-act");
+        if (!btn) return;
+        var card = btn.closest(".tr-item");
+        var id = card.dataset.id;
+        var msg = card.querySelector(".tr-msg");
+        // نفس قاعدة الخادم مبكراً: لا اعتماد لجواب بلا مصدر (رسالة فورية قبل الإرسال)
+        if (btn.dataset.action === "approve" &&
+            card.querySelector(".f-a").value.trim() && !card.querySelector(".f-s").value.trim()) {
+          msg.hidden = false;
+          msg.textContent = "المصدر إلزامي لكل جواب معتمد — أكمِل المصدر أو رُدّ المساهمة.";
+          return;
+        }
+        msg.hidden = false; msg.textContent = "لحظات…";
+        card.querySelectorAll(".tr-act").forEach(function (b) { b.disabled = true; });
+        api("/api/train/review/" + id, {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: btn.dataset.action,
+            question: card.querySelector(".f-q").value,
+            answer: card.querySelector(".f-a").value,
+            source: card.querySelector(".f-s").value,
+            note: card.querySelector(".f-n").value,
+          }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) { load(); return; }
+          card.querySelectorAll(".tr-act").forEach(function (b) { b.disabled = false; });
+          msg.textContent = (res.d && res.d.error) || "تعذّر الحفظ.";
+        }).catch(function () {
+          card.querySelectorAll(".tr-act").forEach(function (b) { b.disabled = false; });
+          msg.textContent = "تعذّر الاتصال.";
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

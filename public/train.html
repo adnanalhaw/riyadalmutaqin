@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ساهم بتدريب الذكاء الاصطناعي — رياض المتقين</title>
+  <meta name="description" content="ساهم تطوّعاً ببناء بيانات شرعية موثّقة تُدرّب الذكاء الاصطناعي ليجيب عن الأسئلة الدينية بدقة وأمانة — كل مساهمة تُراجع وتُعتمد قبل استخدامها." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .why{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1.2rem 0}
+    .why[hidden]{display:none} /* display:grid كانت تتغلّب على قاعدة المتصفّح للسمة hidden */
+    .stat{font-size:1.6rem;font-weight:800;color:var(--gold)}
+    .chip{display:inline-block;padding:.1rem .6rem;border-radius:999px;font-size:.75rem;font-weight:700}
+    .chip.pending{background:#3a3413;color:#e8d48b}
+    .chip.approved{background:#12341f;color:#8be8ab}
+    .chip.rejected{background:#3a1616;color:#e89c8b}
+    .mine-row{padding:.7rem .2rem;border-bottom:1px solid var(--border)}
+    .mine-row:last-child{border-bottom:none}
+    .consent-box{display:flex;gap:.55rem;align-items:flex-start;background:rgba(255,255,255,.04);border:1px solid var(--border);border-radius:10px;padding:.7rem .8rem;margin:.8rem 0}
+    .consent-box input{margin-top:.25rem;width:1.05rem;height:1.05rem;accent-color:var(--gold)}
+    .tabbtns{display:flex;gap:.5rem;margin-bottom:1rem;flex-wrap:wrap}
+    .tabbtns .btn.on{background:var(--gold);color:#2a1f04}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:760px">
+      <div class="page-head center">
+        <h1>🤖 ساهم بتدريب الذكاء الاصطناعي</h1>
+        <p>مساهمة <strong>تطوعية بلا مقابل مادي</strong> — أثرُها علمٌ يُنتفع به.</p>
+      </div>
+
+      <!-- الشرح: ما هذا ولماذا -->
+      <div class="card" style="margin-bottom:1.2rem">
+        <h3 style="color:var(--gold);margin-top:0">ما هذا المشروع؟</h3>
+        <p>أدوات الذكاء الاصطناعي اليوم تجيب عن الأسئلة الدينية بأخطاء كثيرة: أحاديث لا أصل لها،
+          فتاوى بلا مصدر، وتسطيح للخلاف الفقهي. السبب أنها لم تتدرّب على بيانات شرعية
+          <strong>موثّقة وموثوقة</strong>.</p>
+        <p>هنا نبني معاً <strong>قاعدة أسئلة وأجوبة شرعية مُسندة</strong> — كل جواب بمصدره،
+          وكل مساهمة تمرّ على <strong>مراجعة واعتماد مدير الموقع</strong> قبل أن تُستخدم.
+          هذه القاعدة تُدرّب أدوات الذكاء الاصطناعي لتجيب عن أسئلة الناس الدينية
+          <strong>بدقة وأمانة</strong>.</p>
+        <div class="notice" style="margin-top:.8rem"><strong>🔍 شفافية كاملة:</strong>
+          مساهمتك هنا تُستخدم لتطوير قدرات الذكاء الاصطناعي في العلوم الشرعية،
+          وتُنشر ضمن بيانات التدريب <strong>دون اسمك ودون أي معلومة تكشفك</strong>.
+          المشاركة اختيارية بالكامل، ولا مقابل مادي لها.</div>
+        <div class="why center" id="statsRow" hidden>
+          <div><div class="stat" id="stApproved">٠</div><div class="muted">مساهمة معتمدة</div></div>
+          <div><div class="stat" id="stTotal">٠</div><div class="muted">إجمالي المساهمات</div></div>
+          <div><div class="stat" id="stUsers">٠</div><div class="muted">مساهماً</div></div>
+        </div>
+      </div>
+
+      <div class="notice" id="gate" hidden></div>
+
+      <div id="trMain" hidden>
+        <!-- أدوات المساهمة -->
+        <div class="card" style="margin-bottom:1.2rem">
+          <h3 style="color:var(--gold);margin-top:0">أدوات المساهمة</h3>
+          <div class="tabbtns">
+            <button class="btn on" id="tabQa" type="button">✍️ سؤال وجواب موثّق</button>
+            <button class="btn" id="tabQ" type="button">❓ سؤال يحتاج جواباً</button>
+          </div>
+
+          <p class="muted" id="kindHint" style="font-size:.9rem">أثمن مساهمة: سؤال ديني يسأله الناس فعلاً،
+            مع جوابه <strong>ومصدره</strong> (آية برقمها / حديث بتخريجه / مرجع فقهي بنسبته).</p>
+
+          <div class="field"><label for="topic">الموضوع</label>
+            <select id="topic">
+              <option>فقه</option><option>عقيدة</option><option>حديث</option><option>تفسير</option>
+              <option>سيرة</option><option>أخلاق</option><option>أذكار ودعاء</option><option selected>عام</option>
+            </select>
+          </div>
+          <div class="field"><label for="question">السؤال</label>
+            <textarea id="question" rows="2" maxlength="1000" placeholder="مثال: هل يجوز الجمع بين الصلاتين في السفر؟"></textarea>
+          </div>
+          <div class="field" id="answerField"><label for="answer">الجواب</label>
+            <textarea id="answer" rows="4" maxlength="4000" placeholder="اكتب الجواب بدقة وأمانة — وإن كان في المسألة خلاف معتبر فاذكره"></textarea>
+          </div>
+          <div class="field" id="sourceField"><label for="source">المصدر (إلزامي)</label>
+            <input type="text" id="source" maxlength="500" placeholder="مثال: صحيح مسلم — كتاب صلاة المسافرين / المغني لابن قدامة" />
+          </div>
+
+          <div class="consent-box">
+            <input type="checkbox" id="consent" />
+            <label for="consent" style="font-size:.88rem">أُقرّ أن مساهمتي تُستخدم لتطوير قدرات الذكاء
+              الاصطناعي في خدمة العلوم الشرعية، وتُنشر ضمن بيانات التدريب دون اسمي، وأن مشاركتي
+              تطوعية بلا مقابل مادي.</label>
+          </div>
+
+          <button class="btn btn-primary" id="send">أرسل للمراجعة</button>
+          <div class="notice" id="sendMsg" hidden style="margin-top:.8rem"></div>
+        </div>
+
+        <!-- مساهماتي -->
+        <div class="card">
+          <h3 style="color:var(--gold);margin-top:0">مساهماتي</h3>
+          <p class="muted" style="font-size:.85rem">كل مساهمة تمرّ بالمراجعة — «معتمدة» تعني أنها دخلت
+            قاعدة التدريب، وملاحظة المدير على المردودة تساعدك على التحسين.</p>
+          <div id="mineList"><p class="muted">لا مساهمات بعد.</p></div>
+        </div>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      "use strict";
+      var esc = RM.esc, ar = RM.ar, api = RM.api;
+      function el(id) { return document.getElementById(id); }
+      var kind = "qa";
+
+      // إحصاءات شفافة (عامة — تظهر حتى لغير المسجّل)
+      api("/api/train/stats").then(function (res) {
+        if (!res.ok || !res.d.ok) return;
+        var s = res.d.stats || {};
+        el("stApproved").textContent = ar(s.approved || 0);
+        el("stTotal").textContent = ar(s.total || 0);
+        el("stUsers").textContent = ar(s.contributors || 0);
+        el("statsRow").hidden = false;
+      }).catch(function () {});
+
+      function setKind(k) {
+        kind = k;
+        el("tabQa").classList.toggle("on", k === "qa");
+        el("tabQ").classList.toggle("on", k === "question");
+        el("answerField").hidden = k !== "qa";
+        el("sourceField").hidden = k !== "qa";
+        el("kindHint").innerHTML = k === "qa"
+          ? "أثمن مساهمة: سؤال ديني يسأله الناس فعلاً، مع جوابه <strong>ومصدره</strong> (آية برقمها / حديث بتخريجه / مرجع فقهي بنسبته)."
+          : "عندك سؤال ديني ولا تعرف جوابه الموثّق؟ أرسله — الأسئلة الحقيقية تحدّد ما يجب أن يتعلّمه الذكاء الاصطناعي.";
+      }
+      el("tabQa").addEventListener("click", function () { setKind("qa"); });
+      el("tabQ").addEventListener("click", function () { setKind("question"); });
+
+      function chip(st) {
+        var map = { pending: ["pending", "⏳ قيد المراجعة"], approved: ["approved", "✅ معتمدة"], rejected: ["rejected", "❌ مردودة"] };
+        var m = map[st] || map.pending;
+        return '<span class="chip ' + m[0] + '">' + m[1] + "</span>";
+      }
+      function loadMine() {
+        api("/api/train/mine").then(function (res) {
+          if (!res.ok || !res.d.ok) return;
+          var list = res.d.contributions || [];
+          if (!list.length) { el("mineList").innerHTML = '<p class="muted">لا مساهمات بعد.</p>'; return; }
+          el("mineList").innerHTML = list.map(function (c) {
+            return '<div class="mine-row">' + chip(c.status) +
+              ' <span class="muted" style="font-size:.78rem">' + esc(c.topic || "") + "</span>" +
+              '<div style="margin-top:.25rem"><strong>' + esc(c.question) + "</strong></div>" +
+              (c.answer ? '<div class="muted" style="font-size:.85rem;margin-top:.2rem">' + esc(c.answer) + "</div>" : "") +
+              (c.source ? '<div class="muted" style="font-size:.78rem">المصدر: ' + esc(c.source) + "</div>" : "") +
+              (c.review_note ? '<div class="notice" style="margin-top:.4rem;font-size:.82rem">ملاحظة المدير: ' + esc(c.review_note) + "</div>" : "") +
+              "</div>";
+          }).join("");
+        }).catch(function () {});
+      }
+
+      el("send").addEventListener("click", function () {
+        var msg = el("sendMsg"); msg.hidden = false; msg.textContent = "جارٍ الإرسال…";
+        el("send").disabled = true;
+        api("/api/train/contribute", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            kind: kind, topic: el("topic").value,
+            question: el("question").value, answer: el("answer").value, source: el("source").value,
+            consent: el("consent").checked,
+          }),
+        }).then(function (res) {
+          el("send").disabled = false;
+          if (res.ok && res.d.ok) {
+            msg.textContent = "وصلت مساهمتك، جزاك الله خيراً ✓ — ستظهر أدناه بعد مراجعة المدير.";
+            el("question").value = ""; el("answer").value = ""; el("source").value = "";
+            loadMine();
+          } else {
+            msg.textContent = (res.d && res.d.error) || "تعذّر الإرسال.";
+          }
+        }).catch(function () { el("send").disabled = false; msg.textContent = "تعذّر الاتصال."; });
+      });
+
+      // البوّابة: الشرح والأرقام للجميع — المساهمة للمسجّلين (عدا حساب الإدارة)
+      RM.getMe().then(function (u) {
+        var gate = el("gate");
+        if (!u) {
+          gate.hidden = false;
+          gate.innerHTML = '<strong>للمشاركة سجّل دخولك.</strong> نحفظ مساهماتك باسم حسابك لتتابع ' +
+            'حالتها (معتمدة/مردودة)، ثم تُنشر في بيانات التدريب <strong>دون اسمك</strong>. ' +
+            '<a class="gold" href="/login">سجّل الدخول</a> أو <a class="gold" href="/register">أنشئ حساباً</a>.';
+          return;
+        }
+        if (u.role === "admin") {
+          gate.hidden = false;
+          gate.innerHTML = "<strong>حساب الإدارة لا يساهم في البيانات</strong> — فصلٌ بين من يبني القاعدة ومن يراقبها. المساهمة لحسابات المتعلّمين والمعلّمين.";
+          return;
+        }
+        el("trMain").hidden = false;
+        loadMine();
+      });
+    });
+  </script>
+</body>
+</html>

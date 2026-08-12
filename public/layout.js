@@ -31,6 +31,7 @@
     { href: "/live", label: "الدروس المباشرة" },
     { href: "/clips", label: "مكتبة المقاطع" },
     { href: "/tools", label: "أدوات المسلم" },
+    { href: "/train", label: "ساهم بالتدريب" },
     { href: "/teachers", label: "المعلّمون" },
     { href: "/about", label: "عن الموقع" },
   ];

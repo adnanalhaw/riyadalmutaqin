@@ -8,6 +8,7 @@
     { href: "/manager", label: "📊 لوحة القيادة", exact: true },
     { href: "/manager/applications", label: "📝 طلبات التعليم" },
     { href: "/manager/approvals", label: "✅ الموافقة على المحتوى" },
+    { href: "/manager/training", label: "🤖 مراجعة بيانات التدريب" },
     { href: "/manager/analytics", label: "📈 تحليل البيانات" },
   ];
 
