@@ -1,10 +1,10 @@
 name: نشر إلى Cloudflare
 
-# النشر التلقائي: هذا المشروع يعيش على فرع claude/work-session-2nbtmm داخل مستودع
-# يحمل فرعُه الرئيسي (main) مشروعاً آخر — لذلك يُنشَر من فرعه مباشرةً، لا من main.
+# النشر التلقائي: المشروع في بيته المستقل (riyadalmutaqin) — كل دفعة إلى main
+# تُطبّق ترحيلات D1 ثم تنشر إلى Cloudflare Workers.
 on:
   push:
-    branches: [claude/work-session-2nbtmm]
+    branches: [main]
   workflow_dispatch:
 
 # لا نشرَين متزامنَين: الدفعة الأحدث تُلغي ما قبلها المنتظر.
