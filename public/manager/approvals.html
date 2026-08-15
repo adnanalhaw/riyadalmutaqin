@@ -31,6 +31,9 @@
           <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">الدروس <span id="cLessons" class="muted"></span></h2>
           <div id="lessons"><p class="muted">يجري التحميل…</p></div>
 
+          <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">الصوتيات <span id="cAudio" class="muted"></span></h2>
+          <div id="audio"><p class="muted">يجري التحميل…</p></div>
+
           <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">منشورات القنوات <span id="cPosts" class="muted"></span></h2>
           <div id="posts"><p class="muted">يجري التحميل…</p></div>
         </section>
@@ -63,6 +66,7 @@
           var d = res.d || {};
           renderClips(d.clips || []);
           renderLessons(d.lessons || []);
+          renderAudio(d.audio || []);
           renderPosts(d.posts || []);
         });
       }
@@ -92,6 +96,19 @@
         el.innerHTML = list.map(function (l) {
           return '<div class="card" style="margin-bottom:1rem"><strong>' + esc(l.title) + "</strong>" +
             meta(l.doctor_name, l.author_name) + actions("lessons", l.id) + "</div>";
+        }).join("");
+      }
+
+      function renderAudio(list) {
+        document.getElementById("cAudio").textContent = list.length ? "(" + RM.ar(list.length) + ")" : "";
+        var el = document.getElementById("audio");
+        if (!list.length) { el.innerHTML = '<p class="muted">لا صوتيات بانتظار الموافقة.</p>'; return; }
+        el.innerHTML = list.map(function (a) {
+          var player = a.audio_url
+            ? '<audio controls src="' + esc(a.audio_url) + '" style="width:100%;max-width:360px;margin-top:.5rem"></audio>'
+            : "";
+          return '<div class="card" style="margin-bottom:1rem"><strong>' + esc(a.title) + "</strong>" +
+            meta(a.doctor_name, a.author_name) + player + actions("audio", a.id) + "</div>";
         }).join("");
       }
 

@@ -42,6 +42,10 @@
                 <textarea id="liveDesc" rows="3" placeholder="نبذة مختصرة عن الدرس"></textarea>
               </div>
               <div class="field">
+                <label for="liveCourse">الدورة / السلسلة (اختياري)</label>
+                <select id="liveCourse"><option value="">— بلا سلسلة —</option></select>
+              </div>
+              <div class="field">
                 <label for="liveCover">رفع صورة الغلاف</label>
                 <input type="file" id="liveCover" accept="image/*" />
               </div>
@@ -53,12 +57,17 @@
                   <input type="radio" name="liveMode" value="schedule" style="width:auto" /> جدولة
                 </label>
               </div>
+              <div class="field" id="liveYtField">
+                <label for="liveYt">رابط أو معرّف بث يوتيوب لايف</label>
+                <input type="text" id="liveYt" placeholder="https://www.youtube.com/watch?v=... أو معرّف الفيديو" />
+                <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">ابدأ البث من YouTube Studio ثم الصق الرابط هنا ليظهر للزوّار فوراً على /live.</p>
+              </div>
               <div class="field" id="scheduleField" hidden>
                 <label for="liveWhen">موعد الجدولة</label>
                 <input type="datetime-local" id="liveWhen" />
               </div>
               <button class="btn btn-primary" type="submit">بدء البث</button>
-              <div class="notice" data-formnotice hidden>سيُحفظ بعد ربط الواجهة الخلفية.</div>
+              <div class="notice" data-formnotice hidden></div>
             </form>
           </div>
 
@@ -169,8 +178,9 @@
       // إظهار حقل الجدولة
       document.querySelectorAll('input[name="liveMode"]').forEach(function (r) {
         r.addEventListener('change', function () {
-          document.getElementById('scheduleField').hidden =
-            (document.querySelector('input[name="liveMode"]:checked').value !== 'schedule');
+          var mode = (document.querySelector('input[name="liveMode"]:checked') || {}).value;
+          document.getElementById('scheduleField').hidden = mode !== 'schedule';
+          document.getElementById('liveYtField').hidden = mode === 'schedule';
         });
       });
 
@@ -216,7 +226,9 @@
             doctor_name: document.getElementById('liveDoctor').value.trim(),
             description: document.getElementById('liveDesc').value.trim(),
             scheduled_at: document.getElementById('liveWhen').value || null,
+            youtube_id: document.getElementById('liveYt').value.trim() || null,
             cover_image: cover,
+            course_id: document.getElementById('liveCourse') ? document.getElementById('liveCourse').value || null : null,
           }, form);
         });
       });
@@ -311,18 +323,32 @@
           body.innerHTML = list.map(function (l) {
             var tCls = l.type === 'live' ? 'badge live' : (l.status === 'draft' ? 'badge soon' : 'badge');
             var sCls = (l.status === 'draft' || l.status === 'scheduled') ? 'badge soon' : (l.status === 'live' ? 'badge live' : 'badge');
+            var end = l.status === 'live'
+              ? ' · <a href="#" class="gold rm-end" data-id="' + l.id + '">إنهاء البث ونشر كمسجّل</a>'
+              : '';
             return '<tr data-id="' + l.id + '">' +
               '<td>' + esc(l.title) + '</td>' +
               '<td>' + esc(l.doctor_name || '—') + '</td>' +
               '<td><span class="' + tCls + '">' + (TYPE[l.type] || l.type) + '</span></td>' +
               '<td><span class="' + sCls + '">' + (STATUS[l.status] || l.status) + '</span></td>' +
-              '<td><a href="#" class="gold rm-del" data-id="' + l.id + '">حذف</a></td>' +
+              '<td><a href="#" class="gold rm-del" data-id="' + l.id + '">حذف</a>' + end + '</td>' +
               '</tr>';
           }).join('');
         });
       }
 
       document.getElementById('lessonsBody').addEventListener('click', function (e) {
+        var end = e.target.closest('.rm-end');
+        if (end) {
+          e.preventDefault();
+          if (!confirm('إنهاء البث وتحويله إلى درس مسجّل منشور؟')) return;
+          RM.api('/api/teacher/lessons/' + end.getAttribute('data-id'), {
+            method: 'PATCH',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ status: 'published' }),
+          }).then(function () { loadLessons(); });
+          return;
+        }
         var del = e.target.closest('.rm-del');
         if (!del) return;
         e.preventDefault();
@@ -333,6 +359,16 @@
 
       loadLessons();
       loadYouTube();
+      RM.api('/api/teacher/courses').then(function (res) {
+        var list = (res.d && res.d.courses) || [];
+        var sel = document.getElementById('liveCourse');
+        if (!sel) return;
+        list.forEach(function (c) {
+          var o = document.createElement('option');
+          o.value = c.id; o.textContent = c.title;
+          sel.appendChild(o);
+        });
+      });
     })();
   </script>
 </body>

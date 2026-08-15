@@ -7,6 +7,7 @@
   var links = [
     { href: "/teacher", label: "📊 لوحة التحكم", exact: true },
     { href: "/teacher/lessons", label: "🔴 الدروس المباشرة" },
+    { href: "/teacher/courses", label: "📚 الدورات" },
     { href: "/teacher/editor", label: "✂ المونتاج" },
     { href: "/teacher/content", label: "📚 مكتبة المقاطع" },
     { href: "/teacher/audience", label: "👥 المتابعون والأداء" },

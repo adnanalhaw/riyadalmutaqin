@@ -50,10 +50,38 @@
             </form>
           </div>
 
-          <div class="card" style="padding:0;overflow:hidden">
+          <div class="card" style="margin-bottom:1.5rem">
+            <h3 style="color:var(--gold);margin-top:0">رفع مادّة صوتية</h3>
+            <form id="audioForm">
+              <div class="field">
+                <label for="audioTitle">العنوان</label>
+                <input type="text" id="audioTitle" required />
+              </div>
+              <div class="field">
+                <label for="audioDoctor">اسم الدكتور</label>
+                <input type="text" id="audioDoctor" />
+              </div>
+              <div class="field">
+                <label for="audioFile">ملف الصوت</label>
+                <input type="file" id="audioFile" accept="audio/*" required />
+              </div>
+              <button class="btn btn-primary" type="submit">رفع الصوت</button>
+              <div class="notice" data-formnotice hidden></div>
+            </form>
+          </div>
+
+          <div class="card" style="padding:0;overflow:hidden;margin-bottom:1.5rem">
             <table class="t">
               <thead><tr><th>العنوان</th><th>الدكتور</th><th>النوع</th><th>المدة</th><th>إجراءات</th></tr></thead>
               <tbody id="clipsBody"><tr><td colspan="5" class="muted">يجري التحميل…</td></tr></tbody>
+            </table>
+          </div>
+
+          <h3 style="color:var(--gold)">الصوتيات</h3>
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="t">
+              <thead><tr><th>العنوان</th><th>الدكتور</th><th>الاعتماد</th><th>إجراءات</th></tr></thead>
+              <tbody id="audioBody"><tr><td colspan="4" class="muted">يجري التحميل…</td></tr></tbody>
             </table>
           </div>
         </section>
@@ -111,6 +139,59 @@
       });
 
       loadClips();
+
+      document.getElementById('audioForm').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var form = e.target;
+        var file = document.getElementById('audioFile').files[0];
+        if (!file) return;
+        notify(form, 'جارٍ الرفع…');
+        var fd = new FormData();
+        fd.append('file', file);
+        fd.append('kind', 'audio');
+        fetch('/api/teacher/media', { method: 'POST', body: fd })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (up) {
+            if (!up.ok || !up.d.ok) { notify(form, up.d.error || 'تعذّر رفع الملف.'); return null; }
+            return RM.api('/api/teacher/audio', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                title: document.getElementById('audioTitle').value.trim(),
+                doctor_name: document.getElementById('audioDoctor').value.trim(),
+                audio_url: up.d.url,
+              }),
+            });
+          })
+          .then(function (res) {
+            if (!res) return;
+            if (res.ok && res.d.ok) {
+              notify(form, res.d.approval_status === 'pending' ? 'رُفع ويانتظار موافقة المدير ✓' : 'تمّ النشر ✓');
+              form.reset();
+              loadAudio();
+            } else notify(form, (res.d && res.d.error) || 'تعذّر الحفظ.');
+          })
+          .catch(function () { notify(form, 'خطأ في الاتصال.'); });
+      });
+
+      function loadAudio() {
+        RM.api('/api/teacher/audio').then(function (res) {
+          var list = (res.d && res.d.audio) || [];
+          var body = document.getElementById('audioBody');
+          if (!list.length) { body.innerHTML = '<tr><td colspan="4" class="muted">لا صوتيات بعد.</td></tr>'; return; }
+          body.innerHTML = list.map(function (a) {
+            var ap = a.approval_status === 'pending' ? 'معلّق' : (a.approval_status === 'rejected' ? 'مرفوض' : 'معتمد');
+            return '<tr><td>' + esc(a.title) + '</td><td>' + esc(a.doctor_name || '—') +
+              '</td><td>' + ap +
+              '</td><td><a href="#" class="gold rm-adel" data-id="' + a.id + '">حذف</a></td></tr>';
+          }).join('');
+        });
+      }
+      document.getElementById('audioBody').addEventListener('click', function (e) {
+        var d = e.target.closest('.rm-adel'); if (!d) return; e.preventDefault();
+        if (!confirm('حذف هذه المادّة الصوتية؟')) return;
+        RM.api('/api/teacher/audio/' + d.getAttribute('data-id'), { method: 'DELETE' }).then(loadAudio);
+      });
+      loadAudio();
     })();
   </script>
 </body>

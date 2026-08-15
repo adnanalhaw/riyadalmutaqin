@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>الدورات — لوحة المعلّم</title>
+  <meta name="description" content="إدارة السلاسل العلمية وربط الدروس بها." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-teacher-nav></aside>
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>الدورات والسلاسل</h1>
+            <p>أنشئ سلسلة علمية ثم اربط دروسك بها من صفحة الدروس.</p>
+          </div>
+          <div class="card" style="margin-bottom:1.5rem;max-width:560px">
+            <h3 style="color:var(--gold);margin-top:0">دورة جديدة</h3>
+            <form id="courseForm">
+              <div class="field">
+                <label for="cTitle">العنوان</label>
+                <input id="cTitle" type="text" placeholder="مثال: شرح كتاب التوحيد" required />
+              </div>
+              <div class="field">
+                <label for="cCat">التصنيف (اختياري)</label>
+                <input id="cCat" type="text" placeholder="عقيدة / فقه / حديث…" />
+              </div>
+              <div class="field">
+                <label for="cDesc">نبذة</label>
+                <textarea id="cDesc" rows="3"></textarea>
+              </div>
+              <button class="btn btn-primary" type="submit">إنشاء الدورة</button>
+              <div class="notice" data-formnotice hidden></div>
+            </form>
+          </div>
+          <div class="card" style="padding:0;overflow:hidden">
+            <table class="t">
+              <thead><tr><th>العنوان</th><th>التصنيف</th><th>إجراءات</th></tr></thead>
+              <tbody id="coursesBody"><tr><td colspan="3" class="muted">يجري التحميل…</td></tr></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/teacher/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var esc = RM.esc, api = RM.api;
+      function load() {
+        api("/api/teacher/courses").then(function (res) {
+          var list = (res.d && res.d.courses) || [];
+          var body = document.getElementById("coursesBody");
+          if (!list.length) { body.innerHTML = '<tr><td colspan="3" class="muted">لا دورات بعد.</td></tr>'; return; }
+          body.innerHTML = list.map(function (c) {
+            return "<tr><td>" + esc(c.title) + "</td><td>" + esc(c.category || "—") +
+              '</td><td><a href="#" class="gold rm-del" data-id="' + c.id + '">حذف</a></td></tr>';
+          }).join("");
+        });
+      }
+      document.getElementById("courseForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var n = e.target.querySelector("[data-formnotice]");
+        n.hidden = false; n.textContent = "جارٍ الحفظ…";
+        api("/api/teacher/courses", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            title: document.getElementById("cTitle").value.trim(),
+            category: document.getElementById("cCat").value.trim(),
+            description: document.getElementById("cDesc").value.trim(),
+          }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) { n.textContent = "تمّ الإنشاء ✓"; e.target.reset(); load(); }
+          else n.textContent = res.d.error || "تعذّر الإنشاء.";
+        });
+      });
+      document.getElementById("coursesBody").addEventListener("click", function (e) {
+        var d = e.target.closest(".rm-del"); if (!d) return; e.preventDefault();
+        if (!confirm("حذف هذه الدورة؟ (الدروس المرتبطة تبقى بلا سلسلة)")) return;
+        api("/api/teacher/courses/" + d.getAttribute("data-id"), { method: "DELETE" }).then(load);
+      });
+      load();
+    })();
+  </script>
+</body>
+</html>

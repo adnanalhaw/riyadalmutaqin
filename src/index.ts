@@ -347,6 +347,21 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return json({ ok: true, audio: results });
   }
 
+  // إعدادات عامة للقراءة فقط (روابط التواصل وغيرها)
+  if (route === "GET /api/settings/public") {
+    const keys = ["social_youtube", "social_tiktok", "social_facebook", "social_instagram", "site_tagline"];
+    const settings: Record<string, string> = {};
+    try {
+      const { results } = await env.DB.prepare(
+        `SELECT key, value FROM site_settings WHERE key IN (${keys.map(() => "?").join(",")})`,
+      ).bind(...keys).all<{ key: string; value: string }>();
+      for (const row of results || []) settings[row.key] = row.value ?? "";
+    } catch {
+      // الجدول قد لا يكون مُرحَّلاً بعد — الواجهة تستخدم القيم الافتراضية.
+    }
+    return json({ ok: true, settings });
+  }
+
   // ===== المتعلّم: مكتبة الحفظ (يتطلّب تسجيل دخول) =====
   if (path === "/api/library" || path === "/api/library/remove") {
     const user = await getSessionUser(request, env.DB);
@@ -763,12 +778,15 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleManager(request, env, user, path, route);
   }
 
-  // ===== المعلّم (يتطلّب دور teacher/admin) =====
+  // ===== المعلّم (يتطلّب دور teacher/admin؛ والمدير لرفع المستندات فقط) =====
   if (path.startsWith("/api/teacher/")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
     if (user.mustChangePassword) return mustChange();
-    if (user.role !== "teacher" && user.role !== "admin") {
+    const managerDocOnly =
+      user.role === "manager" &&
+      (path.startsWith("/api/teacher/media") || path.startsWith("/api/teacher/documents"));
+    if (user.role !== "teacher" && user.role !== "admin" && !managerDocOnly) {
       return json({ ok: false, error: "forbidden" }, 403);
     }
     return handleTeacher(request, env, user, path, route);
@@ -1058,6 +1076,8 @@ async function handleManager(
          (SELECT COUNT(*) FROM clips WHERE approval_status = 'pending')            AS pending_clips,
          (SELECT COUNT(*) FROM lessons WHERE approval_status = 'pending')          AS pending_lessons,
          (SELECT COUNT(*) FROM channel_posts WHERE approval_status = 'pending')    AS pending_posts,
+         (SELECT COUNT(*) FROM audio_posts WHERE approval_status = 'pending')      AS pending_audio,
+         (SELECT COUNT(*) FROM ai_documents WHERE approval_status = 'pending')     AS pending_docs,
          (SELECT COUNT(*) FROM users WHERE role = 'teacher')                       AS teachers,
          (SELECT COUNT(*) FROM users WHERE role = 'student')                       AS students`,
     ).first();
@@ -1166,19 +1186,82 @@ async function handleManager(
          FROM channel_posts p LEFT JOIN users u ON u.id = p.author_id
         WHERE p.approval_status = 'pending' ORDER BY p.created_at DESC LIMIT 100`,
     ).all();
-    return json({ ok: true, clips, lessons, posts });
+    const { results: audio } = await env.DB.prepare(
+      `SELECT a.id, a.title, a.doctor_name, a.audio_url, a.duration, a.created_at, u.name AS author_name
+         FROM audio_posts a LEFT JOIN users u ON u.id = a.author_id
+        WHERE a.approval_status = 'pending' ORDER BY a.created_at DESC LIMIT 100`,
+    ).all();
+    return json({ ok: true, clips, lessons, posts, audio });
+  }
+
+  // إعدادات الموقع (مدير/أدمن)
+  if (route === "GET /api/manager/settings") {
+    const { results } = await env.DB.prepare(`SELECT key, value FROM site_settings ORDER BY key`).all<{ key: string; value: string }>();
+    const settings: Record<string, string> = {};
+    for (const row of results || []) settings[row.key] = row.value ?? "";
+    return json({ ok: true, settings });
+  }
+  if (route === "POST /api/manager/settings") {
+    const b = await readJson(request);
+    const allowed = ["social_youtube", "social_tiktok", "social_facebook", "social_instagram", "site_tagline"];
+    let updated = 0;
+    for (const key of allowed) {
+      if (!(key in b)) continue;
+      const value = String(b[key] ?? "").trim().slice(0, 500);
+      await env.DB.prepare(
+        `INSERT INTO site_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      ).bind(key, value).run();
+      updated++;
+    }
+    await audit(env, user.email, "manager.settings", `keys:${updated}`);
+    return json({ ok: true, updated });
+  }
+
+  // مستندات التدريب (قائمة / اعتماد)
+  if (route === "GET /api/manager/documents") {
+    const reqUrl = new URL(request.url);
+    const status = ["pending", "approved", "rejected", "all"].includes(reqUrl.searchParams.get("status") ?? "")
+      ? (reqUrl.searchParams.get("status") as string)
+      : "pending";
+    const where = status === "all" ? "" : " WHERE d.approval_status = ?";
+    const binds = status === "all" ? [] : [status];
+    const { results } = await env.DB.prepare(
+      `SELECT d.id, d.title, d.r2_key, d.mime, d.bytes, d.source_rights, d.approval_status, d.notes,
+              d.created_at, d.reviewed_at, u.name AS uploader
+         FROM ai_documents d LEFT JOIN users u ON u.id = d.uploaded_by
+        ${where}
+        ORDER BY d.created_at DESC LIMIT 200`,
+    ).bind(...binds).all();
+    return json({ ok: true, documents: results });
+  }
+  const md = path.match(/^\/api\/manager\/documents\/(\d+)$/);
+  if (md && request.method === "POST") {
+    const id = Number(md[1]);
+    const b = await readJson(request);
+    const status = b.action === "approve" ? "approved" : b.action === "reject" ? "rejected" : "";
+    if (!status) return json({ ok: false, error: "إجراء غير صالح." }, 400);
+    const notes = String(b.notes ?? "").trim().slice(0, 500) || null;
+    await env.DB.prepare(
+      `UPDATE ai_documents SET approval_status = ?, reviewed_by = ?, reviewed_at = datetime('now'),
+         notes = COALESCE(?, notes), status = CASE WHEN ? = 'approved' THEN 'active' ELSE 'archived' END
+       WHERE id = ?`,
+    ).bind(status, user.id, notes, status, id).run();
+    await audit(env, user.email, `manager.document.${b.action}`, `document:${id}`);
+    return json({ ok: true });
   }
 
   // الموافقة/الرفض على عنصر محتوى
-  const mp = path.match(/^\/api\/manager\/(clips|lessons|posts)\/(\d+)$/);
+  const mp = path.match(/^\/api\/manager\/(clips|lessons|posts|audio)\/(\d+)$/);
   if (mp && request.method === "POST") {
-    const table = mp[1] === "posts" ? "channel_posts" : mp[1];
+    const kind = mp[1];
+    const table = kind === "posts" ? "channel_posts" : kind === "audio" ? "audio_posts" : kind;
     const id = Number(mp[2]);
     const b = await readJson(request);
     const status = b.action === "approve" ? "approved" : b.action === "reject" ? "rejected" : "";
     if (!status) return json({ ok: false, error: "إجراء غير صالح." }, 400);
-    // عند الموافقة على درس/مقطع: ننشره أيضاً (is_published) إن كان مطبّقاً.
-    if (table === "clips" || table === "lessons") {
+    // عند الموافقة على درس/مقطع/صوت: ننشره أيضاً (is_published).
+    if (table === "clips" || table === "lessons" || table === "audio_posts") {
       await env.DB.prepare(
         `UPDATE ${table} SET approval_status = ?, reviewed_by = ?, is_published = ? WHERE id = ?`,
       ).bind(status, user.id, status === "approved" ? 1 : 0, id).run();
@@ -1187,7 +1270,7 @@ async function handleManager(
         `UPDATE channel_posts SET approval_status = ?, reviewed_by = ? WHERE id = ?`,
       ).bind(status, user.id, id).run();
     }
-    await audit(env, user.email, `manager.${mp[1]}.${b.action}`, `${mp[1]}:${id}`);
+    await audit(env, user.email, `manager.${kind}.${b.action}`, `${kind}:${id}`);
     return json({ ok: true });
   }
 
@@ -1558,7 +1641,7 @@ function extractYouTubeId(input: string): string | null {
   return m ? m[1] : null;
 }
 
-/** رفع صورة/صوت إلى R2 وإرجاع رابطه. */
+/** رفع صورة/صوت/مستند إلى R2 وإرجاع رابطه. */
 async function uploadMedia(request: Request, env: Env): Promise<Response> {
   const form = await request.formData();
   const entry = form.get("file");
@@ -1570,14 +1653,20 @@ async function uploadMedia(request: Request, env: Env): Promise<Response> {
     stream(): ReadableStream;
   };
 
-  // الصور والصوت وفيديو المونتاج تُخزَّن في R2. الفيديو محدود بحدّ جسم الطلب في Cloudflare.
+  // الصور والصوت وفيديو المونتاج ومستندات PDF تُخزَّن في R2.
   const kindRaw = String(form.get("kind") ?? "image");
-  const kind = kindRaw === "audio" ? "audio" : kindRaw === "video" ? "video" : "image";
-  const limits = { audio: 50, image: 10, video: 100 } as const;
+  const kind =
+    kindRaw === "audio" ? "audio" :
+    kindRaw === "video" ? "video" :
+    kindRaw === "document" ? "document" : "image";
+  const limits = { audio: 50, image: 10, video: 100, document: 40 } as const;
   const maxBytes = limits[kind] * 1024 * 1024;
   if (file.size > maxBytes) return json({ ok: false, error: "حجم الملف كبير جداً." }, 413);
   const type = (file.type || "").toLowerCase();
-  if (!type.startsWith(`${kind}/`)) {
+  if (kind === "document") {
+    const okDoc = type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+    if (!okDoc) return json({ ok: false, error: "يُقبل ملف PDF فقط للمستندات." }, 415);
+  } else if (!type.startsWith(`${kind}/`)) {
     return json({ ok: false, error: "نوع الملف غير مدعوم." }, 415);
   }
   // قائمة بيضاء صارمة للصور: نمنع SVG/HTML (تنفّذ سكربتات إن قُدّمت من نفس الأصل) — XSS مخزّن.
@@ -1586,11 +1675,13 @@ async function uploadMedia(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: "صيغة الصورة غير مدعومة (JPG/PNG/GIF/WebP/AVIF فقط)." }, 415);
   }
 
-  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5);
+  const ext = (file.name.split(".").pop() || (kind === "document" ? "pdf" : "bin"))
+    .toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin";
   const key = `${kind}/${crypto.randomUUID()}.${ext}`;
   // البثّ مباشرةً إلى R2 (لا arrayBuffer) لتفادي تجاوز حدّ ذاكرة الـ isolate مع الفيديو.
-  await env.MEDIA.put(key, file.stream(), { httpMetadata: { contentType: file.type } });
-  return json({ ok: true, key, url: `/api/media/${key}` }, 201);
+  const contentType = kind === "document" ? (type || "application/pdf") : file.type;
+  await env.MEDIA.put(key, file.stream(), { httpMetadata: { contentType } });
+  return json({ ok: true, key, url: `/api/media/${key}`, mime: contentType, bytes: file.size }, 201);
 }
 
 async function handleTeacher(
@@ -1631,23 +1722,31 @@ async function handleTeacher(
     const cover = b.cover_image ? String(b.cover_image) : null;
     const scheduledAt = b.scheduled_at ? String(b.scheduled_at) : null;
     const membersOnly = b.is_members_only ? 1 : 0;
+    const courseId = Number.isFinite(Number(b.course_id)) ? Number(b.course_id) : null;
 
     let status = "published";
     if (type === "live") status = b.mode === "schedule" ? "scheduled" : "live";
     else if (b.status === "draft") status = "draft";
     let isPublished = status === "draft" ? 0 : 1;
 
+    // البث المباشر الآن يتطلّب معرّف يوتيوب لايف لعرضه للزوّار.
+    if (type === "live" && b.mode !== "schedule" && !youtubeId) {
+      return json({ ok: false, error: "أدخِل رابط أو معرّف بث يوتيوب لايف لعرضه على الموقع." }, 400);
+    }
+
     // محتوى المعلّم يحتاج موافقة مدير الموقع قبل النشر؛ الأدمن يُنشَر مباشرةً.
-    const needsApproval = user.role === "teacher";
+    // استثناء: البث الحيّ يظهر فوراً للزوّار (مع بقاء سجلّ الاعتماد إن لزم لاحقاً كمسجّل).
+    const needsApproval = user.role === "teacher" && status !== "live";
     const approval = needsApproval ? "pending" : "approved";
     if (needsApproval) isPublished = 0;
+    if (status === "live") isPublished = 1;
 
     const res = await env.DB.prepare(
-      `INSERT INTO lessons (title, description, doctor_name, type, youtube_id, cover_image,
+      `INSERT INTO lessons (course_id, title, description, doctor_name, type, youtube_id, cover_image,
                             status, scheduled_at, is_published, is_members_only, author_id, approval_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(title, description, doctor, type, youtubeId, cover, status, scheduledAt, isPublished, membersOnly, user.id, approval)
+      .bind(courseId, title, description, doctor, type, youtubeId, cover, status, scheduledAt, isPublished, membersOnly, user.id, approval)
       .run();
     const id = Number(res.meta.last_row_id);
     await audit(env, user.email, "lesson.create", `lesson:${id}`);
@@ -1681,21 +1780,37 @@ async function handleTeacher(
       const b = await readJson(request);
       const fields: string[] = [];
       const vals: (string | number | null)[] = [];
-      const allowed = ["title", "description", "doctor_name", "youtube_id", "cover_image", "status", "scheduled_at"];
+      const allowed = ["title", "description", "doctor_name", "cover_image", "status", "scheduled_at"];
       for (const k of allowed) {
         if (k in b) {
           fields.push(`${k} = ?`);
           vals.push(b[k] === null ? null : String(b[k]));
         }
       }
+      if ("youtube_id" in b) {
+        fields.push("youtube_id = ?");
+        vals.push(b.youtube_id ? extractYouTubeId(String(b.youtube_id)) : null);
+      }
+      if ("course_id" in b) {
+        fields.push("course_id = ?");
+        const cid = b.course_id === null || b.course_id === "" ? null : Number(b.course_id);
+        vals.push(cid != null && Number.isFinite(cid) ? cid : null);
+      }
       if ("is_members_only" in b) {
         fields.push("is_members_only = ?");
         vals.push(b.is_members_only ? 1 : 0);
       }
       if ("status" in b) {
-        // لا يُنشَر إلّا المحتوى المُعتمَد؛ المعلّق يبقى مخفيّاً مهما كانت الحالة.
-        fields.push("is_published = CASE WHEN approval_status = 'approved' THEN ? ELSE 0 END");
-        vals.push(String(b.status) === "draft" ? 0 : 1);
+        const next = String(b.status);
+        // إنهاء البث: يتحوّل إلى مسجّل منشور ويظهر في المكتبة.
+        if (next === "published") {
+          fields.push("type = CASE WHEN type = 'live' THEN 'youtube' ELSE type END");
+          fields.push("is_published = 1");
+          fields.push("approval_status = 'approved'");
+        } else {
+          fields.push("is_published = CASE WHEN approval_status = 'approved' THEN ? ELSE 0 END");
+          vals.push(next === "draft" ? 0 : 1);
+        }
       }
       if (!fields.length) return json({ ok: false, error: "لا تغييرات." }, 400);
       vals.push(id);
@@ -1778,7 +1893,7 @@ async function handleTeacher(
   if (route === "GET /api/teacher/audio") {
     const own = user.role !== "admin";
     const { results } = await env.DB.prepare(
-      `SELECT id, title, description, doctor_name, audio_url, duration, created_at
+      `SELECT id, title, doctor_name, audio_url, duration, approval_status, is_published, created_at
          FROM audio_posts${own ? " WHERE author_id = ?" : ""} ORDER BY created_at DESC`,
     ).bind(...(own ? [user.id] : [])).all();
     return json({ ok: true, audio: results });
@@ -1791,14 +1906,27 @@ async function handleTeacher(
     const description = String(b.description ?? "").trim() || null;
     const audioUrl = b.audio_url ? String(b.audio_url) : null;
     const duration = Number.isFinite(Number(b.duration)) ? Math.max(0, Math.floor(Number(b.duration))) : null;
+    const needsApproval = user.role === "teacher";
+    const approval = needsApproval ? "pending" : "approved";
+    const published = needsApproval ? 0 : 1;
     const res = await env.DB.prepare(
-      "INSERT INTO audio_posts (title, description, doctor_name, audio_url, duration, author_id) VALUES (?, ?, ?, ?, ?, ?)",
+      `INSERT INTO audio_posts (title, description, doctor_name, audio_url, duration, author_id, approval_status, is_published)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(title, description, doctor, audioUrl, duration, user.id)
+      .bind(title, description, doctor, audioUrl, duration, user.id, approval, published)
       .run();
     const id = Number(res.meta.last_row_id);
     await audit(env, user.email, "audio.create", `audio:${id}`);
-    return json({ ok: true, id }, 201);
+    if (needsApproval) {
+      await notifyRole(env, "manager", {
+        type: "content_pending",
+        title: "صوت بانتظار الموافقة",
+        body: `${user.name} رفع مادّة صوتية: «${title}».`,
+        link: "/manager/approvals",
+        email: true,
+      });
+    }
+    return json({ ok: true, id, approval_status: approval }, 201);
   }
   const ma = path.match(/^\/api\/teacher\/audio\/(\d+)$/);
   if (ma && request.method === "DELETE") {
@@ -1997,6 +2125,92 @@ async function handleTeacher(
   // ===== تكامل يوتيوب =====
   if (path.startsWith("/api/teacher/youtube/")) {
     return handleYouTube(request, env, user, route);
+  }
+
+  // ===== الدورات (سلاسل علمية) =====
+  if (route === "GET /api/teacher/courses") {
+    const own = user.role !== "admin";
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, slug, category, description, is_published, created_at
+         FROM courses${own ? " WHERE author_id = ? OR author_id IS NULL" : ""}
+        ORDER BY sort_order ASC, created_at DESC`,
+    ).bind(...(own ? [user.id] : [])).all();
+    return json({ ok: true, courses: results });
+  }
+  if (route === "POST /api/teacher/courses") {
+    const b = await readJson(request);
+    const title = String(b.title ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "عنوان الدورة مطلوب." }, 400);
+    const baseSlug = title
+      .toLowerCase()
+      .replace(/[^\u0600-\u06FFa-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 60) || `course-${Date.now()}`;
+    const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
+    const category = String(b.category ?? "").trim().slice(0, 80) || null;
+    const description = String(b.description ?? "").trim().slice(0, 2000) || null;
+    const res = await env.DB.prepare(
+      `INSERT INTO courses (title, slug, category, description, author_id, is_published, approval_status)
+       VALUES (?, ?, ?, ?, ?, 1, 'approved')`,
+    ).bind(title, slug, category, description, user.id).run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "course.create", `course:${id}`);
+    return json({ ok: true, id, slug }, 201);
+  }
+  const mCourse = path.match(/^\/api\/teacher\/courses\/(\d+)$/);
+  if (mCourse && request.method === "DELETE") {
+    const id = Number(mCourse[1]);
+    const isAdmin = user.role === "admin";
+    const r = await env.DB.prepare(
+      `DELETE FROM courses WHERE id = ?${isAdmin ? "" : " AND author_id = ?"}`,
+    ).bind(...(isAdmin ? [id] : [id, user.id])).run();
+    if (!r.meta.changes) return json({ ok: false, error: "غير موجود أو لا تملك صلاحيّته." }, 403);
+    await audit(env, user.email, "course.delete", `course:${id}`);
+    return json({ ok: true });
+  }
+
+  // ===== مستندات PDF للتدريب =====
+  if (route === "GET /api/teacher/documents") {
+    const own = user.role === "teacher";
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, r2_key, mime, bytes, source_rights, approval_status, notes, created_at
+         FROM ai_documents${own ? " WHERE uploaded_by = ?" : ""}
+        ORDER BY created_at DESC LIMIT 100`,
+    ).bind(...(own ? [user.id] : [])).all();
+    return json({ ok: true, documents: results });
+  }
+  if (route === "POST /api/teacher/documents") {
+    const b = await readJson(request);
+    const title = String(b.title ?? "").trim();
+    const r2Key = String(b.r2_key ?? "").trim();
+    const rights = String(b.source_rights ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "عنوان المستند مطلوب." }, 400);
+    if (!r2Key.startsWith("document/")) return json({ ok: false, error: "ارفع ملف PDF أولاً." }, 400);
+    if (!["public_domain", "publisher_permission", "official"].includes(rights)) {
+      return json({ ok: false, error: "حدّد مصدر الحقّ في النشر بوضوح." }, 400);
+    }
+    // المدير/الأدمن: معتمد تلقائياً. المعلّم: معلّق حتى اعتماد المدير.
+    const auto = user.role === "manager" || user.role === "admin";
+    const approval = auto ? "approved" : "pending";
+    const status = auto ? "active" : "active";
+    const mime = String(b.mime ?? "application/pdf").slice(0, 80);
+    const bytes = Number.isFinite(Number(b.bytes)) ? Math.max(0, Math.floor(Number(b.bytes))) : null;
+    const res = await env.DB.prepare(
+      `INSERT INTO ai_documents (title, r2_key, uploaded_by, status, approval_status, mime, bytes, source_rights)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(title, r2Key, user.id, status, approval, mime, bytes, rights).run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "document.create", `document:${id}`);
+    if (!auto) {
+      await notifyRole(env, "manager", {
+        type: "content_pending",
+        title: "مستند بانتظار الاعتماد",
+        body: `${user.name} رفع كتاباً/مستنداً: «${title}».`,
+        link: "/manager/training",
+        email: true,
+      });
+    }
+    return json({ ok: true, id, approval_status: approval }, 201);
   }
 
   // بقيّة واجهات المعلّم تُربط لاحقاً.
