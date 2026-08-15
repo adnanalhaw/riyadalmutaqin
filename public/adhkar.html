@@ -4,32 +4,68 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>الأذكار — رياض المتقين</title>
-  <meta name="description" content="أذكار الصباح والمساء وبعد الصلاة والنوم، من حصن المسلم، مع عدّاد للتكرار." />
+  <meta name="description" content="أذكار الصباح والمساء وبعد الصلاة والنوم والسفر والهمّ، من حصن المسلم، مع عدّاد ومفضّلة وتذكير ومشاركة." />
   <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
   <style>
-    .atabs { display:flex; gap:.5rem; flex-wrap:wrap; justify-content:center; margin-bottom:1.4rem }
-    .atab { padding:.5rem 1rem; border:1px solid var(--border); border-radius:999px; background:transparent; color:var(--text); cursor:pointer; font-size:.92rem }
+    .atabs { display:flex; gap:.45rem; flex-wrap:wrap; justify-content:center; margin-bottom:1.2rem }
+    .atab { padding:.45rem .85rem; border:1px solid var(--border); border-radius:999px; background:transparent; color:var(--ink); cursor:pointer; font-size:.88rem; font-family:inherit }
     .atab.active { background:var(--gold); color:#2a1f04; border-color:var(--gold); font-weight:700 }
-    .azkar { font-family:"Amiri",serif; font-size:1.3rem; line-height:2.2; color:var(--text) }
-    .acard { transition:opacity .2s }
+    .azkar { font-family:"Amiri",serif; font-size:1.25rem; line-height:2.15; color:var(--ink) }
+    .acard { transition:opacity .2s; margin-bottom:1rem }
     .acard.done { opacity:.55 }
     .acount { display:inline-flex; align-items:center; gap:.5rem; cursor:pointer; user-select:none;
-      background:rgba(212,175,55,.12); color:var(--gold); padding:.3rem .9rem; border-radius:999px; font-family:"Tajawal"; font-weight:700; font-size:.95rem }
-    .aref { color:var(--muted); font-size:.82rem; font-family:"Tajawal"; margin-top:.5rem }
+      background:rgba(212,175,55,.12); color:var(--gold); padding:.35rem .9rem; border-radius:999px; font-family:"Tajawal",sans-serif; font-weight:700; font-size:.95rem; border:1px solid var(--gold-dim) }
+    .aref { color:var(--muted); font-size:.82rem; font-family:"Tajawal",sans-serif; margin-top:.5rem }
+    .aacts { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.75rem; align-items:center }
+    .aacts button { font-family:inherit }
+    .prog { height:8px; background:rgba(255,255,255,.06); border-radius:999px; overflow:hidden; margin:.6rem 0 1.2rem }
+    .prog > span { display:block; height:100%; background:linear-gradient(90deg,var(--gold),var(--gold-soft)); width:0%; transition:width .25s }
+    .settings-row { display:flex; flex-wrap:wrap; gap:.8rem; align-items:end }
+    .settings-row .field { margin:0; flex:1; min-width:120px }
   </style>
 </head>
 <body>
   <div data-header></div>
 
   <main>
-    <div class="container" style="max-width:680px">
+    <div class="container" style="max-width:720px">
       <div class="page-head center">
         <h1>الأذكار</h1>
-        <p>من حصن المسلم — اضغط على العدّاد بعد كل تكرار.</p>
+        <p>من حصن المسلم — عدّاد، مفضّلة، مشاركة، وتذكير صباح/مساء.</p>
+      </div>
+
+      <div class="card" id="progCard" style="margin-bottom:1.2rem">
+        <div style="display:flex;justify-content:space-between;gap:1rem;align-items:center;flex-wrap:wrap">
+          <div>
+            <strong style="color:var(--gold)">تقدّم اليوم</strong>
+            <div class="muted" id="progLabel" style="font-size:.9rem">—</div>
+          </div>
+          <button type="button" class="btn btn-ghost" id="resetDay">إعادة اليوم</button>
+        </div>
+        <div class="prog"><span id="progBar"></span></div>
+      </div>
+
+      <div class="card" style="margin-bottom:1.2rem">
+        <h3 style="color:var(--gold);margin-top:0;font-size:1.05rem">تذكير الأذكار</h3>
+        <div class="settings-row">
+          <div class="field">
+            <label for="remMorning">الصباح</label>
+            <input type="time" id="remMorning" />
+          </div>
+          <div class="field">
+            <label for="remEvening">المساء</label>
+            <input type="time" id="remEvening" />
+          </div>
+          <label style="display:flex;align-items:center;gap:.45rem;padding-bottom:.55rem">
+            <input type="checkbox" id="remEnabled" style="width:auto" /> تفعيل
+          </label>
+        </div>
+        <p class="muted" style="margin:.6rem 0 0;font-size:.85rem">يعمل والتنبيه داخل الموقع مفتوحاً (مع الصوت إن لم يكن مكتوماً).</p>
       </div>
 
       <div class="atabs" id="tabs"></div>
@@ -39,101 +75,267 @@
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/adhkar-data.js"></script>
   <script>
     (function () {
       function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
-      function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
+      function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+        return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c];
+      }); }
+      function dayKey() { return new Date().toISOString().slice(0, 10); }
 
-      var DATA = {
-        morning: { label: "الصباح", items: [
-          { t: "أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ. اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ… (آية الكرسي)", n: 1, r: "من قالها حين يصبح أُجير من الجنّ حتى يمسي" },
-          { t: "قُلْ هُوَ اللَّهُ أَحَدٌ… والمعوّذتان (الإخلاص والفلق والناس)", n: 3, r: "كفته من كل شيء" },
-          { t: "أَصْبَحْنَا وَأَصْبَحَ الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 1, r: "" },
-          { t: "اللَّهُمَّ أَنْتَ رَبِّي لَا إِلَهَ إِلَّا أَنْتَ، خَلَقْتَنِي وَأَنَا عَبْدُكَ… أَبُوءُ لَكَ بِنِعْمَتِكَ عَلَيَّ وَأَبُوءُ بِذَنْبِي فَاغْفِرْ لِي… (سيّد الاستغفار)", n: 1, r: "من قالها موقناً بها فمات دخل الجنّة" },
-          { t: "رَضِيتُ بِاللَّهِ رَبًّا، وَبِالْإِسْلَامِ دِينًا، وَبِمُحَمَّدٍ ﷺ نَبِيًّا", n: 3, r: "كان حقًّا على الله أن يُرضيه" },
-          { t: "حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ", n: 7, r: "كفاه الله ما أهمّه" },
-          { t: "بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ", n: 3, r: "لم يضرّه شيء" },
-          { t: "اللَّهُمَّ عَافِنِي فِي بَدَنِي، اللَّهُمَّ عَافِنِي فِي سَمْعِي، اللَّهُمَّ عَافِنِي فِي بَصَرِي، لَا إِلَهَ إِلَّا أَنْتَ", n: 3, r: "" },
-          { t: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", n: 100, r: "حُطَّت خطاياه وإن كانت مثل زبد البحر" },
-          { t: "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 10, r: "" },
-        ]},
-        evening: { label: "المساء", items: [
-          { t: "أَعُوذُ بِاللَّهِ مِنَ الشَّيْطَانِ الرَّجِيمِ. اللَّهُ لَا إِلَهَ إِلَّا هُوَ الْحَيُّ الْقَيُّومُ… (آية الكرسي)", n: 1, r: "" },
-          { t: "قُلْ هُوَ اللَّهُ أَحَدٌ… والمعوّذتان (الإخلاص والفلق والناس)", n: 3, r: "" },
-          { t: "أَمْسَيْنَا وَأَمْسَى الْمُلْكُ لِلَّهِ، وَالْحَمْدُ لِلَّهِ، لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 1, r: "" },
-          { t: "اللَّهُمَّ بِكَ أَمْسَيْنَا، وَبِكَ أَصْبَحْنَا، وَبِكَ نَحْيَا، وَبِكَ نَمُوتُ، وَإِلَيْكَ الْمَصِيرُ", n: 1, r: "" },
-          { t: "أَعُوذُ بِكَلِمَاتِ اللَّهِ التَّامَّاتِ مِنْ شَرِّ مَا خَلَقَ", n: 3, r: "لم يضرّه شيء تلك الليلة" },
-          { t: "حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ", n: 7, r: "" },
-          { t: "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ", n: 100, r: "" },
-        ]},
-        prayer: { label: "بعد الصلاة", items: [
-          { t: "أَسْتَغْفِرُ اللَّهَ", n: 3, r: "" },
-          { t: "اللَّهُمَّ أَنْتَ السَّلَامُ وَمِنْكَ السَّلَامُ، تَبَارَكْتَ يَا ذَا الْجَلَالِ وَالْإِكْرَامِ", n: 1, r: "" },
-          { t: "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ", n: 1, r: "" },
-          { t: "سُبْحَانَ اللَّهِ", n: 33, r: "" },
-          { t: "الْحَمْدُ لِلَّهِ", n: 33, r: "" },
-          { t: "اللَّهُ أَكْبَرُ", n: 33, r: "وتمام المئة: لا إله إلا الله وحده لا شريك له…" },
-          { t: "آيَةُ الْكُرْسِيِّ", n: 1, r: "من قرأها دبر كل صلاة لم يمنعه من الجنّة إلا الموت" },
-        ]},
-        sleep: { label: "النوم", items: [
-          { t: "بِاسْمِكَ اللَّهُمَّ أَمُوتُ وَأَحْيَا", n: 1, r: "" },
-          { t: "آيَةُ الْكُرْسِيِّ ثمّ الإخلاص والمعوّذتان (يُنفث في الكفّين ويمسح بهما الجسد)", n: 1, r: "" },
-          { t: "اللَّهُمَّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ", n: 3, r: "" },
-          { t: "سُبْحَانَ اللَّهِ (33) وَالْحَمْدُ لِلَّهِ (33) وَاللَّهُ أَكْبَرُ (34)", n: 1, r: "خيرٌ لكما من خادم" },
-        ]},
-        wake: { label: "الاستيقاظ", items: [
-          { t: "الْحَمْدُ لِلَّهِ الَّذِي أَحْيَانَا بَعْدَ مَا أَمَاتَنَا وَإِلَيْهِ النُّشُورُ", n: 1, r: "" },
-          { t: "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ… ثمّ: رَبِّ اغْفِرْ لِي", n: 1, r: "غُفر له" },
-        ]},
-      };
-
-      var ORDER = ["morning", "evening", "prayer", "sleep", "wake"];
+      var DATA = window.RM_ADHKAR || {};
+      var ORDER = (window.RM_ADHKAR_ORDER || []).filter(function (k) { return k === "favs" || DATA[k]; });
       var current = "morning";
-      var progress = {};
+      var FAV_KEY = "rm_adhkar_favs";
+      var PROG_KEY = "rm_adhkar_prog_";
+      var REM_KEY = "rm_adhkar_remind";
 
-      var tabs = document.getElementById("tabs");
-      ORDER.forEach(function (k) {
-        var b = document.createElement("button");
-        b.className = "atab" + (k === current ? " active" : "");
-        b.textContent = DATA[k].label;
-        b.addEventListener("click", function () { current = k; renderTabs(); render(); });
-        tabs.appendChild(b);
-      });
-      function renderTabs() {
-        document.querySelectorAll(".atab").forEach(function (b, i) {
-          b.classList.toggle("active", ORDER[i] === current);
+      function loadFavs() {
+        try { return JSON.parse(localStorage.getItem(FAV_KEY) || "[]"); } catch (e) { return []; }
+      }
+      function saveFavs(arr) {
+        try { localStorage.setItem(FAV_KEY, JSON.stringify(arr)); } catch (e) { /* تجاهل */ }
+      }
+      function favId(sec, i) { return sec + ":" + i; }
+      function isFav(sec, i) { return loadFavs().indexOf(favId(sec, i)) >= 0; }
+      function toggleFav(sec, i) {
+        var id = favId(sec, i);
+        var arr = loadFavs();
+        var x = arr.indexOf(id);
+        if (x >= 0) arr.splice(x, 1); else arr.push(id);
+        saveFavs(arr);
+      }
+
+      function loadProg() {
+        try { return JSON.parse(localStorage.getItem(PROG_KEY + dayKey()) || "{}"); } catch (e) { return {}; }
+      }
+      function saveProg(p) {
+        try { localStorage.setItem(PROG_KEY + dayKey(), JSON.stringify(p)); } catch (e) { /* تجاهل */ }
+      }
+      function countKey(sec, i) { return sec + ":" + i; }
+
+      function getItems() {
+        if (current === "favs") {
+          var out = [];
+          loadFavs().forEach(function (id) {
+            var p = id.split(":");
+            var sec = p[0], i = +p[1];
+            if (DATA[sec] && DATA[sec].items[i]) {
+              out.push({ sec: sec, i: i, it: DATA[sec].items[i], label: DATA[sec].label });
+            }
+          });
+          return out;
+        }
+        return (DATA[current].items || []).map(function (it, i) {
+          return { sec: current, i: i, it: it, label: null };
         });
       }
 
+      function sectionProgress(sec) {
+        var items = (DATA[sec] && DATA[sec].items) || [];
+        if (!items.length) return 0;
+        var prog = loadProg();
+        var done = 0;
+        items.forEach(function (it, i) {
+          if ((prog[countKey(sec, i)] || 0) >= it.n) done++;
+        });
+        return Math.round((done / items.length) * 100);
+      }
+
+      function updateProgUi() {
+        var m = sectionProgress("morning");
+        var e = sectionProgress("evening");
+        var avg = Math.round((m + e) / 2);
+        document.getElementById("progLabel").textContent =
+          "صباح " + ar(m) + "% · مساء " + ar(e) + "%";
+        document.getElementById("progBar").style.width = avg + "%";
+      }
+
+      var tabs = document.getElementById("tabs");
+      function renderTabs() {
+        tabs.innerHTML = "";
+        ORDER.forEach(function (k) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "atab" + (k === current ? " active" : "");
+          b.textContent = k === "favs" ? "⭐ مفضّلتي" : DATA[k].label;
+          b.addEventListener("click", function () { current = k; renderTabs(); render(); });
+          tabs.appendChild(b);
+        });
+      }
+
+      function speak(text) {
+        if (!window.speechSynthesis) { alert("القراءة الصوتية غير مدعومة في هذا المتصفّح."); return; }
+        window.speechSynthesis.cancel();
+        var u = new SpeechSynthesisUtterance(text.replace(/[…\.]/g, " ").slice(0, 500));
+        u.lang = "ar-SA";
+        u.rate = 0.9;
+        window.speechSynthesis.speak(u);
+      }
+
+      function shareText(text) {
+        var payload = text + "\n\n— عبر رياض المتقين";
+        if (navigator.share) {
+          navigator.share({ text: payload, url: location.origin + "/adhkar" }).catch(function () {});
+          return;
+        }
+        if (navigator.clipboard) {
+          navigator.clipboard.writeText(payload).then(function () { alert("تمّ نسخ الذكر ✓"); });
+        } else {
+          prompt("انسخ الذكر:", payload);
+        }
+      }
+
       function render() {
-        var items = DATA[current].items;
-        var html = items.map(function (it, i) {
-          var key = current + ":" + i;
-          var left = progress[key] != null ? progress[key] : it.n;
-          var done = left <= 0;
-          return '<div class="card acard' + (done ? " done" : "") + '" data-key="' + key + '" data-total="' + it.n + '" style="margin-bottom:1rem">' +
+        var list = document.getElementById("list");
+        var rows = getItems();
+        var prog = loadProg();
+        if (!rows.length) {
+          list.innerHTML = '<p class="muted center">لا عناصر هنا بعد. أضِف مفضّلة من الأقسام ⭐</p>';
+          updateProgUi();
+          return;
+        }
+        list.innerHTML = rows.map(function (row) {
+          var it = row.it;
+          var ck = countKey(row.sec, row.i);
+          var cur = prog[ck] || 0;
+          var done = cur >= it.n;
+          return (
+            '<div class="card acard' + (done ? " done" : "") + '" data-sec="' + esc(row.sec) + '" data-i="' + row.i + '">' +
+            (row.label ? '<div class="badge" style="margin-bottom:.5rem">' + esc(row.label) + "</div>" : "") +
             '<div class="azkar">' + esc(it.t) + "</div>" +
             (it.r ? '<div class="aref">' + esc(it.r) + "</div>" : "") +
-            '<div style="margin-top:.7rem"><span class="acount" data-key="' + key + '">' +
-            "<span>التكرار</span> <strong>" + ar(done ? it.n : left) + " / " + ar(it.n) + "</strong></span></div>" +
-            "</div>";
+            '<div class="aacts">' +
+            '<button type="button" class="acount" data-act="count">' + ar(cur) + " / " + ar(it.n) + "</button>" +
+            '<button type="button" class="btn btn-ghost" data-act="fav">' + (isFav(row.sec, row.i) ? "⭐" : "☆") + "</button>" +
+            '<button type="button" class="btn btn-ghost" data-act="speak">🔊</button>' +
+            '<button type="button" class="btn btn-ghost" data-act="share">مشاركة</button>' +
+            "</div></div>"
+          );
         }).join("");
-        document.getElementById("list").innerHTML = html;
+        updateProgUi();
       }
 
       document.getElementById("list").addEventListener("click", function (e) {
-        var c = e.target.closest(".acount");
-        if (!c) return;
-        var card = c.closest(".acard");
-        var key = card.getAttribute("data-key");
-        var total = +card.getAttribute("data-total");
-        var left = progress[key] != null ? progress[key] : total;
-        if (left <= 0) { progress[key] = total; } // إعادة التعيين بالضغط بعد الإتمام
-        else { left -= 1; progress[key] = left; }
+        var btn = e.target.closest("[data-act]");
+        var card = e.target.closest(".acard");
+        if (!btn || !card) return;
+        var sec = card.getAttribute("data-sec");
+        var i = +card.getAttribute("data-i");
+        var it = DATA[sec].items[i];
+        var act = btn.getAttribute("data-act");
+        if (act === "count") {
+          var prog = loadProg();
+          var ck = countKey(sec, i);
+          var cur = prog[ck] || 0;
+          if (cur < it.n) {
+            prog[ck] = cur + 1;
+            saveProg(prog);
+            if (window.RMSound && prog[ck] >= it.n) try { window.RMSound.play("soft"); } catch (err) {}
+          }
+          render();
+        } else if (act === "fav") {
+          toggleFav(sec, i);
+          render();
+          renderTabs();
+        } else if (act === "speak") {
+          speak(it.t);
+        } else if (act === "share") {
+          shareText(it.t);
+        }
+      });
+
+      document.getElementById("resetDay").addEventListener("click", function () {
+        if (!confirm("تصفير تقدّم اليوم؟")) return;
+        try { localStorage.removeItem(PROG_KEY + dayKey()); } catch (e) {}
         render();
       });
 
+      // تذكير صباح/مساء
+      function loadRem() {
+        try {
+          return JSON.parse(localStorage.getItem(REM_KEY) || '{"on":true,"morning":"06:30","evening":"17:30"}');
+        } catch (e) { return { on: true, morning: "06:30", evening: "17:30" }; }
+      }
+      function saveRem(r) {
+        try { localStorage.setItem(REM_KEY, JSON.stringify(r)); } catch (e) {}
+      }
+      function initRemUi() {
+        var r = loadRem();
+        document.getElementById("remEnabled").checked = !!r.on;
+        document.getElementById("remMorning").value = r.morning || "06:30";
+        document.getElementById("remEvening").value = r.evening || "17:30";
+        ["remEnabled", "remMorning", "remEvening"].forEach(function (id) {
+          document.getElementById(id).addEventListener("change", function () {
+            saveRem({
+              on: document.getElementById("remEnabled").checked,
+              morning: document.getElementById("remMorning").value,
+              evening: document.getElementById("remEvening").value,
+            });
+          });
+        });
+      }
+      function remFiredKey(which) { return "rm_adhkar_fired_" + dayKey() + "_" + which; }
+      function checkAdhkarReminder() {
+        var r = loadRem();
+        if (!r.on) return;
+        var now = new Date();
+        var hh = (now.getHours() < 10 ? "0" : "") + now.getHours();
+        var mm = (now.getMinutes() < 10 ? "0" : "") + now.getMinutes();
+        var t = hh + ":" + mm;
+        [["morning", r.morning, "حان وقت أذكار الصباح"], ["evening", r.evening, "حان وقت أذكار المساء"]].forEach(function (row) {
+          if (t !== row[1]) return;
+          try { if (localStorage.getItem(remFiredKey(row[0]))) return; localStorage.setItem(remFiredKey(row[0]), "1"); } catch (e) { return; }
+          if (window.RMSound) try { window.RMSound.play("tasbeeh"); } catch (e2) {}
+          if (window.__rmTestReminder) { /* toast عبر إنشاء عنصر بسيط */ }
+          var n = document.createElement("div");
+          n.className = "notice";
+          n.style.cssText = "position:fixed;bottom:1rem;inset-inline:1rem;z-index:9998;max-width:420px;margin-inline:auto;left:0;right:0";
+          n.innerHTML = "<b>" + row[2] + '</b> — <a class="gold" href="/adhkar">افتح الأذكار</a>';
+          document.body.appendChild(n);
+          setTimeout(function () { n.remove(); }, 20000);
+        });
+      }
+
+      // تذكير سنن الجمعة + الضحى (خفيف)
+      function extraDayReminders() {
+        var d = new Date();
+        var key;
+        // الجمعة صباحاً
+        if (d.getDay() === 5 && d.getHours() >= 7 && d.getHours() < 12) {
+          key = "rm_fri_" + dayKey();
+          try {
+            if (!localStorage.getItem(key)) {
+              localStorage.setItem(key, "1");
+              if (window.RMSound) try { window.RMSound.play("salawat"); } catch (e) {}
+              var n = document.createElement("div");
+              n.className = "notice";
+              n.style.cssText = "position:fixed;bottom:1rem;inset-inline:1rem;z-index:9998;max-width:440px;margin:auto;left:0;right:0";
+              n.innerHTML = "<b>سنن الجمعة:</b> أكثر من الصلاة على النبيّ ﷺ، ويُستحب قراءة سورة الكهف.";
+              document.body.appendChild(n);
+              setTimeout(function () { n.remove(); }, 25000);
+            }
+          } catch (e) {}
+        }
+        // الضحى تقريباً 9–11
+        if (d.getHours() >= 9 && d.getHours() < 11) {
+          key = "rm_duha_" + dayKey();
+          try {
+            if (!localStorage.getItem(key)) {
+              localStorage.setItem(key, "1");
+              if (window.RMSound) try { window.RMSound.play("soft"); } catch (e) {}
+            }
+          } catch (e2) {}
+        }
+      }
+
+      initRemUi();
+      renderTabs();
       render();
+      setInterval(checkAdhkarReminder, 30000);
+      setTimeout(extraDayReminders, 5000);
+      checkAdhkarReminder();
     })();
   </script>
 </body>
