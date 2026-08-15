@@ -6,6 +6,39 @@
   var path = location.pathname.replace(/\/index\.html$/, "/").replace(/\.html$/, "");
   if (path === "") path = "/";
 
+  // مصدر واحد لروابط التواصل — فارغ = يُخفى الزر. يوتيوب يُضاف عند توفّر الرابط العام.
+  // يمكن لـ /api/settings/public أن يستبدل هذه القيم لاحقاً.
+  var SOCIAL = {
+    instagram: "https://www.instagram.com/almutaqyn",
+    youtube: "",
+    tiktok: "https://vt.tiktok.com/ZSarkqaDJ/",
+    facebook: "https://www.facebook.com/profile.php?id=61586546952951",
+  };
+  window.RM_SOCIAL = SOCIAL;
+
+  function applySocialLinks(map) {
+    var links = map || SOCIAL;
+    var any = false;
+    Object.keys(links).forEach(function (k) {
+      var nodes = document.querySelectorAll('[data-social="' + k + '"]');
+      if (!nodes.length) return;
+      var url = links[k];
+      nodes.forEach(function (row) {
+        if (url) {
+          row.href = url;
+          row.target = "_blank";
+          row.rel = "noopener";
+          row.style.display = "";
+          any = true;
+        } else {
+          row.style.display = "none";
+        }
+      });
+    });
+    var note = document.getElementById("socialNote");
+    if (note) note.hidden = any;
+  }
+
   // أيقونة الموقع (لكل الصفحات عبر نقطة واحدة)
   if (!document.querySelector('link[rel="icon"]')) {
     var fav = document.createElement("link");
@@ -190,6 +223,23 @@
     }
     setupLang();
     applyStoredLang();
+    applySocialLinks(SOCIAL);
+    // إعدادات عامة من الخادم (إن وُجدت) تستبدل الروابط الافتراضية.
+    fetch("/api/settings/public", { headers: { accept: "application/json" } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.ok || !d.settings) return;
+        var s = d.settings;
+        var next = {
+          youtube: s.social_youtube || SOCIAL.youtube,
+          tiktok: s.social_tiktok || SOCIAL.tiktok,
+          facebook: s.social_facebook || SOCIAL.facebook,
+          instagram: s.social_instagram || SOCIAL.instagram,
+        };
+        window.RM_SOCIAL = next;
+        applySocialLinks(next);
+      })
+      .catch(function () { /* fallback المحلّي يكفي */ });
     var nt = document.getElementById("navToggle");
     var nl = document.getElementById("navLinks");
     if (nt && nl) {

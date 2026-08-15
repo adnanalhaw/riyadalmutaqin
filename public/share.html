@@ -75,25 +75,7 @@
       var url = location.origin + "/";
       var text = "رياض المتقين — القرآن والسنّة بفهم سلف الأمّة";
       var msg = document.getElementById("copyMsg");
-
-      // ===== روابط حسابات التواصل — ضع روابطك هنا (اتركها فارغة لإخفاء الزرّ) =====
-      var SOCIAL = {
-        instagram: "https://www.instagram.com/almutaqyn",
-        youtube: "",   // يُضاف لاحقاً
-        tiktok: "https://vt.tiktok.com/ZSarkqaDJ/",
-        facebook: "https://www.facebook.com/profile.php?id=61586546952951",
-      };
-      var anySet = false;
-      Object.keys(SOCIAL).forEach(function (k) {
-        var row = document.querySelector('[data-social="' + k + '"]');
-        if (!row) return;
-        if (SOCIAL[k]) { row.href = SOCIAL[k]; anySet = true; }
-        else { row.style.display = "none"; }
-      });
-      if (!anySet) {
-        var note = document.getElementById("socialNote");
-        if (note) note.hidden = false;
-      }
+      // روابط التواصل تُحقَن من layout.js (RM_SOCIAL / applySocialLinks).
 
       document.getElementById("copyBtn").addEventListener("click", function () {
         if (navigator.clipboard) {

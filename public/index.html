@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>رياض المتقين — منصة دعوية</title>
   <meta name="description" content="رياض المتقين: القرآن والسنّة بفهم سلف الأمّة. منصة دعوية لنشر العلم النافع عبر دروس مباشرة ومقاطع ومكتبة صوتية." />
-  <meta name="theme-color" content="#0b1430" />
+  <meta name="theme-color" content="#03130b" />
   <link rel="icon" href="/assets/logo.png" type="image/png" />
   <meta property="og:title" content="رياض المتقين" />
   <meta property="og:description" content="القرآن والسنّة بفهم سلف الأمّة" />
@@ -17,71 +17,100 @@
   <meta name="twitter:description" content="القرآن والسنّة بفهم سلف الأمّة" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
 </head>
-<body>
+<body class="page-home">
   <div data-header></div>
 
   <main>
-    <!-- البطل -->
-    <section class="hero">
-      <div class="container">
-        <div class="frame">
-          <span class="corner-tr"></span><span class="corner-br"></span>
-          <img class="logo-badge" src="/assets/logo.png" alt="شعار رياض المتقين" />
-          <h1>رياض المتقين</h1>
-          <div class="divider">◆</div>
-          <p class="tagline">القرآن والسنّة بفهم سلف الأمّة</p>
-          <p class="lead">
-            قناةٌ دعويةٌ تُعنى بنشر العلم النافع من الكتاب والسنّة على فهم سلف الأمّة،
-            عبر دروسٍ مباشرة ومقاطعَ مختارةٍ ومكتبةٍ صوتية.
-          </p>
-          <div class="hero-actions" style="margin-top:1.6rem;display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap">
-            <a class="btn btn-primary" href="/live">الدروس المباشرة</a>
-            <a class="btn btn-outline" href="/register">انضمّ كمتعلّم</a>
-          </div>
+    <!-- البطل: تكوين واحد — العلامة + جملة + CTA -->
+    <section class="hero-bleed" aria-label="رياض المتقين">
+      <div class="hero-bleed-inner">
+        <img class="hero-logo" src="/assets/logo.png" alt="شعار رياض المتقين" width="160" height="160" />
+        <h1 class="hero-brand">رياض المتقين</h1>
+        <p class="hero-tagline">القرآن والسنّة بفهم سلف الأمّة</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="/live">الدروس المباشرة</a>
+          <a class="btn btn-outline" href="/register">انضمّ كمتعلّم</a>
         </div>
       </div>
     </section>
 
     <!-- ماذا نقدّم -->
-    <section class="section">
+    <section class="section offer-section">
       <div class="container">
         <h2>ماذا نقدّم</h2>
-        <p class="sub">منصةٌ متكاملةٌ للعلم النافع: بثٌّ مباشر، ومكتباتٌ منظّمة، وأدواتٌ للمعلّم.</p>
-        <div class="grid">
-          <a class="card link" href="/live"><div class="ic">🔴</div><h3>الدروس المباشرة</h3><p>بثٌّ مباشر (لايف) ومسجّل، يُنشَر تلقائياً على يوتيوب.</p></a>
-          <a class="card link" href="/clips"><div class="ic">🎬</div><h3>مكتبة المقاطع</h3><p>مقاطعُ قصيرةٌ منتقاةٌ من الدروس والسلاسل.</p></a>
-          <a class="card link" href="/library"><div class="ic">📚</div><h3>مكتبة الحفظ</h3><p>احفظ الفيديوهات والدروس لمتابعتها لاحقاً.</p></a>
-          <a class="card link" href="/zakat"><div class="ic">🧮</div><h3>حاسبة الزكاة</h3><p>دفترُ زكاتك بأسعار السوق الحيّة: النقد والذهب والفضّة والأسهم وعروض التجارة.</p></a>
-          <a class="card link" href="/tools"><div class="ic">🕌</div><h3>أدوات المسلم</h3><p>مواقيت الصلاة، القبلة، الأذكار، التسبيح، الخَتمة، والتقويم الهجري.</p></a>
-          <a class="card link" href="/train"><div class="ic">🤖</div><h3>ساهم بتدريب الذكاء</h3><p>مساهمة تطوعية شفّافة: أسئلة وأجوبة شرعية موثّقة تُدرّب الذكاء الاصطناعي ليجيب بدقة وأمانة.</p></a>
+        <p class="sub">علمٌ نافعٌ يصل إليك: بثٌّ مباشر، مكتباتٌ منظّمة، وأدواتٌ تعينك على يومك.</p>
+        <div class="offer-list">
+          <a class="offer-row" href="/live">
+            <span class="offer-mark" aria-hidden="true"></span>
+            <span class="offer-body">
+              <strong>الدروس المباشرة</strong>
+              <span>بثٌّ حيّ ومسجّل يُنشَر على يوتيوب.</span>
+            </span>
+            <span class="offer-chev" aria-hidden="true">‹</span>
+          </a>
+          <a class="offer-row" href="/clips">
+            <span class="offer-mark" aria-hidden="true"></span>
+            <span class="offer-body">
+              <strong>المقاطع والصوتيات</strong>
+              <span>مقاطع قصيرة ومكتبة صوتية للعلم في أي وقت.</span>
+            </span>
+            <span class="offer-chev" aria-hidden="true">‹</span>
+          </a>
+          <a class="offer-row" href="/tools">
+            <span class="offer-mark" aria-hidden="true"></span>
+            <span class="offer-body">
+              <strong>أدوات المسلم</strong>
+              <span>قرآن، أذكار، مواقيت، قبلة، زكاة، وختمة.</span>
+            </span>
+            <span class="offer-chev" aria-hidden="true">‹</span>
+          </a>
+          <a class="offer-row" href="/train">
+            <span class="offer-mark" aria-hidden="true"></span>
+            <span class="offer-body">
+              <strong>ساهم بتدريب الذكاء</strong>
+              <span>مساهمة شرعية موثّقة تطوّر إجابات دقيقة وآمنة.</span>
+            </span>
+            <span class="offer-chev" aria-hidden="true">‹</span>
+          </a>
         </div>
       </div>
     </section>
 
-    <!-- الرؤية والأهداف -->
-    <section class="section" id="vision">
-      <div class="container">
-        <h2>رؤيتنا وأهدافنا</h2>
-        <p class="sub">نشر العلم الصحيح بأسلوبٍ ميسّر يصل إلى كل بيت.</p>
-        <div class="grid">
-          <div class="card"><div class="ic">🌱</div><h3>الرؤية</h3><p>أن نكون مرجعاً دعوياً موثوقاً ينشر العلم النافع على فهم سلف الأمّة.</p></div>
-          <div class="card"><div class="ic">🎯</div><h3>الرسالة</h3><p>تقريب الكتاب والسنّة للناس بمحتوًى منظّمٍ مرئيٍّ وصوتيٍّ عالي الجودة.</p></div>
-          <div class="card"><div class="ic">📖</div><h3>المنهج</h3><p>الالتزام بفهم السلف الصالح، والاعتماد على كلام أهل العلم المعتبرين.</p></div>
+    <!-- المنهج -->
+    <section class="section method-section">
+      <div class="container method-wrap">
+        <h2>منهجنا</h2>
+        <p class="method-lead">
+          نلتزم بفهم السلف الصالح، ونقرّب الكتاب والسنّة بمحتوًى منظّمٍ مرئيٍّ وصوتيٍّ عالي الجودة،
+          اعتماداً على كلام أهل العلم المعتبرين.
+        </p>
+        <div class="ayah">
+          <p class="verse">﴿ وَذَكِّرْ فَإِنَّ الذِّكْرَىٰ تَنفَعُ الْمُؤْمِنِينَ ﴾</p>
+          <p class="ref">سورة الذاريات · ٥٥</p>
         </div>
+        <p class="center" style="margin-top:1.2rem"><a class="gold" href="/about">المزيد عن الموقع ←</a></p>
       </div>
     </section>
 
-    <!-- نظامان للدخول -->
-    <section class="section">
+    <!-- ادخل حسب دورك -->
+    <section class="section roles-section">
       <div class="container">
-        <h2>نظامان للدخول</h2>
+        <h2>ادخل حسب دورك</h2>
         <p class="sub">واجهةٌ للمتعلّم وأخرى للمعلّم، كلٌّ بصلاحياته.</p>
-        <div class="grid" style="max-width:760px;margin-inline:auto">
-          <a class="card link" href="/register"><div class="ic">🧑‍🎓</div><h3>المتعلّم</h3><p>تسجيل، حضور البث المباشر، مكتبة حفظ، ومكتبة المقاطع.</p></a>
-          <a class="card link" href="/login?role=teacher"><div class="ic">🧑‍🏫</div><h3>المعلّم</h3><p>إدارة الدروس، المونتاج، تحليل البيانات، والنشر على القنوات.</p></a>
+        <div class="role-rows">
+          <a class="role-row" href="/register">
+            <strong>المتعلّم</strong>
+            <span>تسجيل، حضور البث، مكتبة حفظ، ومقاطع.</span>
+            <span class="offer-chev" aria-hidden="true">‹</span>
+          </a>
+          <a class="role-row" href="/login?role=teacher">
+            <strong>المعلّم</strong>
+            <span>إدارة الدروس، المونتاج، التحليل، والنشر.</span>
+            <span class="offer-chev" aria-hidden="true">‹</span>
+          </a>
         </div>
       </div>
     </section>
@@ -90,19 +119,13 @@
     <section class="section" id="follow">
       <div class="container">
         <h2>تابِعونا</h2>
+        <p class="sub">القنوات الرسمية لنشر كل جديد.</p>
         <div class="social-list">
-          <a class="social-row" href="#" data-social="youtube"><span class="ic">▶</span><span class="name">يوتيوب</span><span class="chev">‹</span></a>
-          <a class="social-row" href="#" data-social="tiktok"><span class="ic">♪</span><span class="name">تيك توك</span><span class="chev">‹</span></a>
-          <a class="social-row" href="#" data-social="facebook"><span class="ic">f</span><span class="name">فيسبوك</span><span class="chev">‹</span></a>
+          <a class="social-row" href="#" data-social="youtube" target="_blank" rel="noopener"><span class="ic">▶</span><span class="name">يوتيوب</span><span class="chev">‹</span></a>
+          <a class="social-row" href="#" data-social="tiktok" target="_blank" rel="noopener"><span class="ic">♪</span><span class="name">تيك توك</span><span class="chev">‹</span></a>
+          <a class="social-row" href="#" data-social="facebook" target="_blank" rel="noopener"><span class="ic">f</span><span class="name">فيسبوك</span><span class="chev">‹</span></a>
+          <a class="social-row" href="#" data-social="instagram" target="_blank" rel="noopener"><span class="ic">◎</span><span class="name">إنستغرام</span><span class="chev">‹</span></a>
         </div>
-      </div>
-    </section>
-
-    <!-- آية -->
-    <section class="container">
-      <div class="ayah">
-        <p class="verse" style="font-family:'Amiri',serif">﴿ وَذَكِّرْ فَإِنَّ الذِّكْرَىٰ تَنفَعُ الْمُؤْمِنِينَ ﴾</p>
-        <p class="ref">سورة الذاريات · ٥٥</p>
       </div>
     </section>
   </main>
