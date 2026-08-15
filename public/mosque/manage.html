@@ -34,6 +34,28 @@
 
       <h2 style="color:var(--gold);text-align:start">مساجدي</h2>
       <div id="mine"><p class="muted">يلزم تسجيل الدخول…</p></div>
+
+      <div class="card" id="editPanel" hidden style="margin-top:1.5rem">
+        <h3 style="color:var(--gold);margin-top:0">تعديل: <span id="editTitle"></span></h3>
+        <p class="muted" id="editStats" style="font-size:.9rem"></p>
+        <form id="editForm">
+          <input type="hidden" id="editId" />
+          <div class="field"><label for="eName">الاسم</label><input id="eName" required /></div>
+          <div class="field"><label for="eCity">المدينة</label><input id="eCity" /></div>
+          <div class="field"><label for="eCountry">الدولة</label><input id="eCountry" /></div>
+          <div class="field"><label for="eAddress">العنوان</label><input id="eAddress" /></div>
+          <div class="field"><label for="eDesc">نبذة</label><textarea id="eDesc" rows="3"></textarea></div>
+          <div class="field"><label for="eUrl">رابط خارجي (اختياري)</label><input id="eUrl" type="url" placeholder="https://" /></div>
+          <h4 style="color:var(--gold);margin:1rem 0 .5rem">دقائق الإقامة</h4>
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(90px,1fr));gap:.6rem" id="eIqama"></div>
+          <label style="display:flex;align-items:center;gap:.5rem;margin:1rem 0">
+            <input type="checkbox" id="ePub" style="width:auto" /> منشور للعامة
+          </label>
+          <button class="btn btn-primary" type="submit">حفظ التعديلات</button>
+          <button class="btn btn-ghost" type="button" id="editClose">إغلاق</button>
+          <div class="notice" id="editMsg" hidden></div>
+        </form>
+      </div>
     </div>
   </main>
   <div data-footer></div>
@@ -42,6 +64,14 @@
   <script>
     (function () {
       var esc = RM.esc, api = RM.api, ar = RM.ar;
+      var PRAYERS = [
+        { k: "Fajr", ar: "الفجر", def: 25 },
+        { k: "Dhuhr", ar: "الظهر", def: 20 },
+        { k: "Asr", ar: "العصر", def: 20 },
+        { k: "Maghrib", ar: "المغرب", def: 10 },
+        { k: "Isha", ar: "العشاء", def: 20 },
+      ];
+
       RM.getMe().then(function (u) {
         if (!u) {
           document.getElementById("mine").innerHTML =
@@ -65,14 +95,75 @@
               "<strong>" + esc(m.name) + "</strong> " +
               '<span class="badge">' + (m.plan === "pro" ? "Pro" : "Free") + "</span>" +
               '<div style="margin-top:.6rem;display:flex;gap:.5rem;flex-wrap:wrap">' +
-              '<a class="btn btn-ghost" href="/mosque/' + encodeURIComponent(m.slug) + '">عرض الصفحة</a>' +
+              '<a class="btn btn-ghost" href="/mosque/' + encodeURIComponent(m.slug) + '">عرض</a>' +
+              '<button type="button" class="btn btn-outline rm-edit" data-id="' + m.id + '">تعديل</button>' +
               (m.plan !== "pro"
-                ? '<button type="button" class="btn btn-outline rm-pro" data-id="' + m.id + '">طلب ترقية Pro</button>'
+                ? '<button type="button" class="btn btn-outline rm-pro" data-id="' + m.id + '">طلب Pro</button>'
                 : "") +
               "</div></div>";
           }).join("");
         });
       }
+
+      function openEdit(id) {
+        api("/api/mosques/" + id).then(function (res) {
+          if (!res.ok || !res.d.ok) { alert(res.d.error || "تعذّر التحميل"); return; }
+          var m = res.d.mosque;
+          var st = res.d.stats || {};
+          document.getElementById("editPanel").hidden = false;
+          document.getElementById("editId").value = m.id;
+          document.getElementById("editTitle").textContent = m.name;
+          document.getElementById("editStats").textContent =
+            "مشاهدات الصفحة: " + ar(st.views || 0) +
+            (st.pro ? " · Pro" : " · Free (التفاصيل الكاملة مع Pro لاحقاً)");
+          document.getElementById("eName").value = m.name || "";
+          document.getElementById("eCity").value = m.city || "";
+          document.getElementById("eCountry").value = m.country || "Kuwait";
+          document.getElementById("eAddress").value = m.address || "";
+          document.getElementById("eDesc").value = m.description || "";
+          document.getElementById("eUrl").value = m.external_url || "";
+          document.getElementById("ePub").checked = !!m.is_published;
+          var iq = {};
+          try { iq = JSON.parse(m.iqama_json || "{}"); } catch (e) {}
+          document.getElementById("eIqama").innerHTML = PRAYERS.map(function (p) {
+            var v = iq[p.k] != null ? iq[p.k] : p.def;
+            return '<div class="field"><label>' + p.ar + '</label><input type="number" min="0" max="90" data-iq="' + p.k + '" value="' + v + '" /></div>';
+          }).join("");
+          document.getElementById("editPanel").scrollIntoView({ behavior: "smooth" });
+        });
+      }
+
+      document.getElementById("editClose").addEventListener("click", function () {
+        document.getElementById("editPanel").hidden = true;
+      });
+
+      document.getElementById("editForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var id = document.getElementById("editId").value;
+        var iq = {};
+        document.querySelectorAll("#eIqama [data-iq]").forEach(function (inp) {
+          iq[inp.getAttribute("data-iq")] = Math.max(0, Math.min(90, +inp.value || 0));
+        });
+        var msg = document.getElementById("editMsg");
+        msg.hidden = false; msg.textContent = "جارٍ الحفظ…";
+        api("/api/mosques/" + id, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("eName").value.trim(),
+            city: document.getElementById("eCity").value.trim(),
+            country: document.getElementById("eCountry").value.trim(),
+            address: document.getElementById("eAddress").value.trim(),
+            description: document.getElementById("eDesc").value.trim(),
+            external_url: document.getElementById("eUrl").value.trim() || null,
+            iqama_json: JSON.stringify(iq),
+            is_published: document.getElementById("ePub").checked ? 1 : 0,
+          }),
+        }).then(function (res) {
+          msg.textContent = (res.ok && res.d.ok) ? "تمّ الحفظ ✓" : (res.d.error || "فشل");
+          if (res.ok) loadMine();
+        });
+      });
 
       document.getElementById("createForm").addEventListener("submit", function (e) {
         e.preventDefault();
@@ -99,6 +190,8 @@
       });
 
       document.getElementById("mine").addEventListener("click", function (e) {
+        var ed = e.target.closest(".rm-edit");
+        if (ed) { openEdit(ed.getAttribute("data-id")); return; }
         var b = e.target.closest(".rm-pro");
         if (!b) return;
         var note = prompt("ملاحظة لطلب Pro (اختياري):") || "";

@@ -89,6 +89,18 @@
     fav.href = "/assets/logo.png";
     document.head.appendChild(fav);
   }
+  if (!document.querySelector('link[rel="manifest"]')) {
+    var mf = document.createElement("link");
+    mf.rel = "manifest";
+    mf.href = "/manifest.webmanifest";
+    document.head.appendChild(mf);
+  }
+  // PWA: تسجيل عامل الخدمة مرّة (صفحات عامّة فقط لتجنّب تعارض لوحات الإدارة)
+  if ("serviceWorker" in navigator && path.indexOf("/teacher") !== 0 && path.indexOf("/manager") !== 0 && path.indexOf("/admin") !== 0) {
+    try {
+      navigator.serviceWorker.register("/sw.js").catch(function () { /* تجاهل */ });
+    } catch (e) { /* تجاهل */ }
+  }
 
   // الصوت متاح لكل الصفحات (كتم الترويسة + جرس الإشعارات). التذكيرات للعامّة فقط.
   if (!document.querySelector('script[data-rm-sound]')) {

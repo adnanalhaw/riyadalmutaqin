@@ -1141,11 +1141,26 @@ async function handleMosques(request: Request, env: Env, path: string, route: st
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
     const id = Number(m[1]);
     const row = await env.DB.prepare(`SELECT * FROM mosque_orgs WHERE id = ?`).bind(id).first<{
-      id: number; owner_user_id: number; plan: string;
+      id: number; owner_user_id: number; plan: string; slug: string; name: string;
+      city: string | null; country: string | null; address: string | null;
+      description: string | null; iqama_json: string | null; external_url: string | null;
+      is_published: number;
     }>();
     if (!row) return json({ ok: false, error: "غير موجود." }, 404);
     const isStaff = user.role === "admin" || user.role === "manager";
     if (row.owner_user_id !== user.id && !isStaff) return json({ ok: false, error: "forbidden" }, 403);
+
+    if (request.method === "GET") {
+      // إحصاء مشاهدات الصفحة (Pro يرى التفاصيل؛ Free يرى المجموع فقط)
+      const views = await env.DB.prepare(
+        `SELECT COUNT(*) AS c FROM page_views WHERE path = ? OR path = ?`,
+      ).bind(`/mosque/${row.slug}`, `/mosque/${row.slug}/`).first<{ c: number }>();
+      return json({
+        ok: true,
+        mosque: row,
+        stats: { views: views?.c ?? 0, pro: row.plan === "pro" },
+      });
+    }
 
     if (request.method === "PATCH") {
       const b = await readJson(request);
@@ -1175,10 +1190,6 @@ async function handleMosques(request: Request, env: Env, path: string, route: st
       await env.DB.prepare(`UPDATE mosque_orgs SET ${fields.join(", ")} WHERE id = ?`).bind(...vals).run();
       await audit(env, user.email, "mosque.update", `mosque:${id}`);
       return json({ ok: true });
-    }
-
-    if (request.method === "POST" && path.endsWith(`/${id}`) === false) {
-      /* fallthrough */
     }
   }
 

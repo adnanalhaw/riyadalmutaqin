@@ -6,7 +6,8 @@
   <url><loc>https://riyadalmutaqin.com/clips</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://riyadalmutaqin.com/audio</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
   <url><loc>https://riyadalmutaqin.com/tools</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
-  <url><loc>https://riyadalmutaqin.com/train</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://riyadalmutaqin.com/ask</loc><changefreq>weekly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://riyadalmutaqin.com/mosque/pricing</loc><changefreq>monthly</changefreq><priority>0.6</priority></url>
   <url><loc>https://riyadalmutaqin.com/zakat</loc><changefreq>monthly</changefreq><priority>0.8</priority></url>
   <url><loc>https://riyadalmutaqin.com/zakat/money</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
   <url><loc>https://riyadalmutaqin.com/zakat/gold</loc><changefreq>monthly</changefreq><priority>0.7</priority></url>
