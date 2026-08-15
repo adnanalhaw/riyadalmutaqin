@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إدارة مسجدي — رياض المتقين</title>
+  <meta name="description" content="سجّل مسجدك أو جمعيتك: صفحة عامة وإقامة. خطة Free مجاناً، Pro بطلب ترقية (اشتراك خدمة — ليست تبرعات)." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:720px">
+      <div class="page-head">
+        <h1>مسجدي / جمعيتي</h1>
+        <p>اشتراك <strong>خدمة تقنية</strong> (صفحة + إقامة). لا جمع تبرعات عبر المنصّة.</p>
+      </div>
+
+      <div class="card" style="margin-bottom:1.5rem">
+        <h3 style="color:var(--gold);margin-top:0">تسجيل جديد (Free)</h3>
+        <form id="createForm">
+          <div class="field"><label for="name">الاسم</label><input id="name" required placeholder="مسجد … / جمعية …" /></div>
+          <div class="field"><label for="city">المدينة</label><input id="city" placeholder="الكويت" /></div>
+          <div class="field"><label for="country">الدولة</label><input id="country" value="Kuwait" /></div>
+          <div class="field"><label for="address">العنوان</label><input id="address" /></div>
+          <div class="field"><label for="description">نبذة</label><textarea id="description" rows="3"></textarea></div>
+          <button class="btn btn-primary" type="submit">إنشاء الصفحة</button>
+          <div class="notice" id="msg" hidden></div>
+        </form>
+      </div>
+
+      <h2 style="color:var(--gold);text-align:start">مساجدي</h2>
+      <div id="mine"><p class="muted">يلزم تسجيل الدخول…</p></div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var esc = RM.esc, api = RM.api, ar = RM.ar;
+      RM.getMe().then(function (u) {
+        if (!u) {
+          document.getElementById("mine").innerHTML =
+            '<p class="muted">سجّل الدخول أولاً. <a class="gold" href="/login">دخول</a> أو <a class="gold" href="/register">حساب جديد</a></p>';
+          document.getElementById("createForm").addEventListener("submit", function (e) {
+            e.preventDefault();
+            location.href = "/login?next=/mosque/manage";
+          });
+          return;
+        }
+        loadMine();
+      });
+
+      function loadMine() {
+        api("/api/mosques/mine").then(function (res) {
+          var list = (res.d && res.d.mosques) || [];
+          var el = document.getElementById("mine");
+          if (!list.length) { el.innerHTML = '<p class="muted">لا مساجد بعد.</p>'; return; }
+          el.innerHTML = list.map(function (m) {
+            return '<div class="card" style="margin-bottom:.8rem">' +
+              "<strong>" + esc(m.name) + "</strong> " +
+              '<span class="badge">' + (m.plan === "pro" ? "Pro" : "Free") + "</span>" +
+              '<div style="margin-top:.6rem;display:flex;gap:.5rem;flex-wrap:wrap">' +
+              '<a class="btn btn-ghost" href="/mosque/' + encodeURIComponent(m.slug) + '">عرض الصفحة</a>' +
+              (m.plan !== "pro"
+                ? '<button type="button" class="btn btn-outline rm-pro" data-id="' + m.id + '">طلب ترقية Pro</button>'
+                : "") +
+              "</div></div>";
+          }).join("");
+        });
+      }
+
+      document.getElementById("createForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var msg = document.getElementById("msg");
+        msg.hidden = false; msg.textContent = "جارٍ الحفظ…";
+        api("/api/mosques", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            name: document.getElementById("name").value.trim(),
+            city: document.getElementById("city").value.trim(),
+            country: document.getElementById("country").value.trim(),
+            address: document.getElementById("address").value.trim(),
+            description: document.getElementById("description").value.trim(),
+          }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) {
+            msg.textContent = "تمّ الإنشاء ✓";
+            e.target.reset();
+            document.getElementById("country").value = "Kuwait";
+            loadMine();
+          } else msg.textContent = (res.d && res.d.error) || "تعذّر الإنشاء — سجّل الدخول.";
+        });
+      });
+
+      document.getElementById("mine").addEventListener("click", function (e) {
+        var b = e.target.closest(".rm-pro");
+        if (!b) return;
+        var note = prompt("ملاحظة لطلب Pro (اختياري):") || "";
+        api("/api/mosques/" + b.getAttribute("data-id") + "/request-pro", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ note: note }),
+        }).then(function (res) {
+          alert(res.ok && res.d.ok ? "أُرسل طلب الترقية للمدير ✓" : (res.d.error || "تعذّر الطلب"));
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

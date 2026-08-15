@@ -110,10 +110,43 @@
           return '<div class="prow" data-k="' + k + '"><span class="pn">' + NAMES[k] + '</span><span class="pt">' + to12(timings[k]) + "</span></div>";
         }).join("");
         document.getElementById("card").innerHTML = rows;
+        computeNight();
         tick();
         if (cdTimer) clearInterval(cdTimer);
         cdTimer = setInterval(tick, 1000);
       }
+
+      function parseHM(hhmm) {
+        var p = String(hhmm).split(":");
+        return (+p[0]) * 60 + (+p[1]);
+      }
+      function fmtHM(total) {
+        total = ((total % (24 * 60)) + 24 * 60) % (24 * 60);
+        var h = Math.floor(total / 60), m = Math.floor(total % 60);
+        return to12((h < 10 ? "0" : "") + h + ":" + (m < 10 ? "0" : "") + m);
+      }
+      function computeNight() {
+        if (!timings || !timings.Maghrib || !timings.Fajr) {
+          document.getElementById("nightCard").hidden = true;
+          return;
+        }
+        var maghrib = parseHM(timings.Maghrib);
+        var fajr = parseHM(timings.Fajr);
+        if (fajr <= maghrib) fajr += 24 * 60;
+        var nightLen = fajr - maghrib;
+        var midnight = maghrib + nightLen / 2;
+        var lastThird = maghrib + (nightLen * 2) / 3;
+        document.getElementById("midnight").textContent = fmtHM(midnight);
+        document.getElementById("lastThird").textContent = fmtHM(lastThird);
+        document.getElementById("nightCard").hidden = false;
+      }
+
+      document.getElementById("kwPray").addEventListener("click", function () {
+        document.getElementById("city").value = "Kuwait City";
+        document.getElementById("country").value = "Kuwait";
+        document.getElementById("method").value = "4";
+        fetchByCity("Kuwait City", "Kuwait");
+      });
 
       function minutesNow() { var d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
       function mins(hhmm) { var p = hhmm.split(":"); return (+p[0]) * 60 + (+p[1]); }

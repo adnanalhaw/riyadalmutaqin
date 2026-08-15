@@ -752,6 +752,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   // ===== تواصل مع الدعم (عام) =====
   if (route === "POST /api/support") return submitSupportTicket(request, env);
 
+  // ===== المساجد/الجمعيات (عام + إدارة للمالك) =====
+  if (path.startsWith("/api/mosques")) {
+    return handleMosques(request, env, path, route);
+  }
+
   // ===== الإشعارات (أي مستخدم مسجّل حسب دوره) =====
   if (path.startsWith("/api/notifications")) {
     const user = await getSessionUser(request, env.DB);
@@ -1024,6 +1029,180 @@ async function submitSupportTicket(request: Request, env: Env): Promise<Response
     email: true,
   });
   return json({ ok: true, id }, 201);
+}
+
+/** واجهات المساجد/الجمعيات — اشتراك خدمة (Free/Pro) وليس تبرعات. */
+async function handleMosques(request: Request, env: Env, path: string, route: string): Promise<Response> {
+  // قائمة عامة
+  if (route === "GET /api/mosques") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, name, slug, city, country, lat, lng, plan, description
+         FROM mosque_orgs WHERE is_published = 1
+        ORDER BY plan = 'pro' DESC, name ASC LIMIT 200`,
+    ).all();
+    return json({ ok: true, mosques: results });
+  }
+
+  // تفاصيل عامة بالـ slug
+  const bySlug = path.match(/^\/api\/mosques\/by-slug\/([^/]+)$/);
+  if (bySlug && request.method === "GET") {
+    const slug = decodeURIComponent(bySlug[1]);
+    const row = await env.DB.prepare(
+      `SELECT id, name, slug, city, country, lat, lng, address, iqama_json, description,
+              external_url, plan, is_published
+         FROM mosque_orgs WHERE slug = ? AND is_published = 1`,
+    ).bind(slug).first();
+    if (!row) return json({ ok: false, error: "المسجد غير موجود." }, 404);
+    return json({ ok: true, mosque: row });
+  }
+
+  // إنشاء / قائمة ملكي — يتطلّب دخولاً
+  const user = await getSessionUser(request, env.DB);
+
+  if (route === "GET /api/mosques/mine") {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    const { results } = await env.DB.prepare(
+      `SELECT id, name, slug, city, country, plan, is_published, created_at
+         FROM mosque_orgs WHERE owner_user_id = ? ORDER BY created_at DESC`,
+    ).bind(user.id).all();
+    return json({ ok: true, mosques: results });
+  }
+
+  if (route === "POST /api/mosques") {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
+    const b = await readJson(request);
+    const name = String(b.name ?? "").trim();
+    if (name.length < 2) return json({ ok: false, error: "اسم المسجد/الجمعية مطلوب." }, 400);
+    const base = name
+      .toLowerCase()
+      .replace(/[^\u0600-\u06FFa-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || `mosque-${Date.now()}`;
+    const slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    const city = String(b.city ?? "").trim().slice(0, 80) || null;
+    const country = String(b.country ?? "Kuwait").trim().slice(0, 80) || "Kuwait";
+    const description = String(b.description ?? "").trim().slice(0, 2000) || null;
+    const address = String(b.address ?? "").trim().slice(0, 300) || null;
+    const defaultIqama = JSON.stringify({ Fajr: 25, Dhuhr: 20, Asr: 20, Maghrib: 10, Isha: 20 });
+    const res = await env.DB.prepare(
+      `INSERT INTO mosque_orgs (name, slug, city, country, address, description, iqama_json, owner_user_id, plan)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'free')`,
+    ).bind(name, slug, city, country, address, description, defaultIqama, user.id).run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "mosque.create", `mosque:${id}`);
+    return json({ ok: true, id, slug, plan: "free" }, 201);
+  }
+
+  const m = path.match(/^\/api\/mosques\/(\d+)$/);
+  if (m) {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    const id = Number(m[1]);
+    const row = await env.DB.prepare(`SELECT * FROM mosque_orgs WHERE id = ?`).bind(id).first<{
+      id: number; owner_user_id: number; plan: string;
+    }>();
+    if (!row) return json({ ok: false, error: "غير موجود." }, 404);
+    const isStaff = user.role === "admin" || user.role === "manager";
+    if (row.owner_user_id !== user.id && !isStaff) return json({ ok: false, error: "forbidden" }, 403);
+
+    if (request.method === "PATCH") {
+      const b = await readJson(request);
+      const fields: string[] = [];
+      const vals: (string | number | null)[] = [];
+      const allowed = ["name", "city", "country", "address", "description", "external_url", "iqama_json"];
+      for (const k of allowed) {
+        if (k in b) {
+          fields.push(`${k} = ?`);
+          vals.push(b[k] === null ? null : String(b[k]).slice(0, k === "description" ? 2000 : 500));
+        }
+      }
+      if ("is_published" in b) {
+        fields.push("is_published = ?");
+        vals.push(b.is_published ? 1 : 0);
+      }
+      if ("lat" in b) { fields.push("lat = ?"); vals.push(Number(b.lat)); }
+      if ("lng" in b) { fields.push("lng = ?"); vals.push(Number(b.lng)); }
+      // ترقية Pro: المدير فقط (أو عبر طلب)
+      if ("plan" in b && isStaff) {
+        const plan = String(b.plan) === "pro" ? "pro" : "free";
+        fields.push("plan = ?");
+        vals.push(plan);
+      }
+      if (!fields.length) return json({ ok: false, error: "لا تغييرات." }, 400);
+      vals.push(id);
+      await env.DB.prepare(`UPDATE mosque_orgs SET ${fields.join(", ")} WHERE id = ?`).bind(...vals).run();
+      await audit(env, user.email, "mosque.update", `mosque:${id}`);
+      return json({ ok: true });
+    }
+
+    if (request.method === "POST" && path.endsWith(`/${id}`) === false) {
+      /* fallthrough */
+    }
+  }
+
+  // طلب ترقية Pro
+  const up = path.match(/^\/api\/mosques\/(\d+)\/request-pro$/);
+  if (up && request.method === "POST") {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    const id = Number(up[1]);
+    const row = await env.DB.prepare(`SELECT id, owner_user_id, plan FROM mosque_orgs WHERE id = ?`)
+      .bind(id).first<{ id: number; owner_user_id: number; plan: string }>();
+    if (!row || row.owner_user_id !== user.id) return json({ ok: false, error: "forbidden" }, 403);
+    if (row.plan === "pro") return json({ ok: false, error: "المشترك بالفعل على Pro." }, 409);
+    const b = await readJson(request);
+    const note = String(b.note ?? "").trim().slice(0, 500) || null;
+    await env.DB.prepare(
+      `INSERT INTO mosque_plan_requests (mosque_id, user_id, note) VALUES (?, ?, ?)`,
+    ).bind(id, user.id, note).run();
+    await notifyRole(env, "manager", {
+      type: "mosque_pro",
+      title: "طلب اشتراك مسجد Pro",
+      body: `${user.name} يطلب ترقية مسجد #${id}`,
+      link: "/manager",
+      email: true,
+    });
+    return json({ ok: true }, 201);
+  }
+
+  // مدير: قائمة طلبات Pro + موافقة
+  if (route === "GET /api/mosques/plan-requests") {
+    if (!user || (user.role !== "manager" && user.role !== "admin")) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
+    const { results } = await env.DB.prepare(
+      `SELECT r.id, r.mosque_id, r.note, r.status, r.created_at, m.name AS mosque_name, u.name AS user_name, u.email
+         FROM mosque_plan_requests r
+         JOIN mosque_orgs m ON m.id = r.mosque_id
+         JOIN users u ON u.id = r.user_id
+        WHERE r.status = 'pending'
+        ORDER BY r.created_at DESC LIMIT 100`,
+    ).all();
+    return json({ ok: true, requests: results });
+  }
+  const apr = path.match(/^\/api\/mosques\/plan-requests\/(\d+)$/);
+  if (apr && request.method === "POST") {
+    if (!user || (user.role !== "manager" && user.role !== "admin")) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
+    const rid = Number(apr[1]);
+    const b = await readJson(request);
+    const action = b.action === "reject" ? "reject" : "approve";
+    const req = await env.DB.prepare(`SELECT * FROM mosque_plan_requests WHERE id = ?`)
+      .bind(rid).first<{ id: number; mosque_id: number; status: string }>();
+    if (!req || req.status !== "pending") return json({ ok: false, error: "الطلب غير متاح." }, 404);
+    if (action === "approve") {
+      await env.DB.prepare(
+        `UPDATE mosque_orgs SET plan = 'pro', plan_expires_at = datetime('now','+365 days') WHERE id = ?`,
+      ).bind(req.mosque_id).run();
+      await env.DB.prepare(`UPDATE mosque_plan_requests SET status = 'approved' WHERE id = ?`).bind(rid).run();
+    } else {
+      await env.DB.prepare(`UPDATE mosque_plan_requests SET status = 'rejected' WHERE id = ?`).bind(rid).run();
+    }
+    await audit(env, user.email, `mosque.plan.${action}`, `request:${rid}`);
+    return json({ ok: true });
+  }
+
+  return json({ ok: false, error: "Not Found" }, 404);
 }
 
 /** إشعارات الأدوار: قائمة + عدّ غير المقروء + تعليم كمقروء. */
@@ -2413,6 +2592,21 @@ async function processScheduledPosts(env: Env): Promise<void> {
   }
 }
 
+/** تقديم الأصول مع توجيه صفحات المسجد الديناميكية. */
+async function servePage(request: Request, env: Env, pathname: string): Promise<Response> {
+  // /mosque/<slug> → صفحة العرض (ما عدا المسارات الثابتة)
+  const mosquePage = pathname.match(/^\/mosque\/([^/]+)\/?$/);
+  if (mosquePage) {
+    const slug = mosquePage[1];
+    if (slug !== "manage" && slug !== "index.html" && slug !== "view.html") {
+      const assetUrl = new URL(request.url);
+      assetUrl.pathname = "/mosque/view.html";
+      return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+    }
+  }
+  return env.ASSETS.fetch(request);
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -2426,7 +2620,7 @@ export default {
     const res =
       url.pathname === "/api" || url.pathname.startsWith("/api/")
         ? await handleApi(request, env)
-        : await env.ASSETS.fetch(request); // الموقع العام (أصول ثابتة)
+        : await servePage(request, env, url.pathname);
 
     return harden(res, url.pathname);
   },
