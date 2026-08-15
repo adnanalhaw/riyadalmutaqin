@@ -46,11 +46,43 @@
           (m.plan === "pro" ? ' · <span class="badge">Pro</span>' : "") + "</p></div>" +
           (m.description ? '<p class="muted" style="line-height:1.9">' + RM.esc(m.description) + "</p>" : "") +
           (m.address ? '<p><strong>العنوان:</strong> ' + RM.esc(m.address) + "</p>" : "") +
+          '<div class="notice" id="iqLive" hidden></div>' +
           '<div class="card" style="padding:0;overflow:hidden;margin:1.2rem 0"><table class="t"><thead><tr><th>الصلاة</th><th>دقائق الإقامة بعد الأذان</th></tr></thead><tbody>' +
           iqRows + "</tbody></table></div>" +
           (m.external_url ? '<a class="btn btn-outline" href="' + RM.esc(m.external_url) + '" target="_blank" rel="noopener">موقع المسجد</a> ' : "") +
           '<a class="btn btn-ghost" href="/mosques">أقرب المساجد</a> ' +
           '<a class="btn btn-ghost" href="/prayer-times">مواقيت الصلاة</a>';
+
+        // عدّاد إقامة حيّ إن توفّر موقع أو الكويت افتراضياً
+        var lat = m.lat || 29.3759, lng = m.lng || 47.9774;
+        fetch("https://api.aladhan.com/v1/timings?latitude=" + lat + "&longitude=" + lng + "&method=4")
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var t = d && d.data && d.data.timings;
+            if (!t) return;
+            function mins(hhmm) { var p = String(hhmm).split(":"); return (+p[0]) * 60 + (+p[1]); }
+            function tick() {
+              var now = new Date();
+              var nowM = now.getHours() * 60 + now.getMinutes();
+              var labels = { Fajr:"الفجر", Dhuhr:"الظهر", Asr:"العصر", Maghrib:"المغرب", Isha:"العشاء" };
+              var box2 = document.getElementById("iqLive");
+              if (!box2) return;
+              var msg = null;
+              ["Fajr","Dhuhr","Asr","Maghrib","Isha"].forEach(function (k) {
+                if (msg) return;
+                var athan = mins(t[k]);
+                var off = iq[k] != null ? +iq[k] : 20;
+                var iqM = athan + off;
+                if (nowM >= athan && nowM < iqM) {
+                  msg = "إقامة " + labels[k] + " بعد " + RM.ar(iqM - nowM) + " دقيقة تقريباً";
+                }
+              });
+              if (msg) { box2.hidden = false; box2.textContent = msg; }
+              else box2.hidden = true;
+            }
+            tick();
+            setInterval(tick, 30000);
+          }).catch(function () {});
       });
     })();
   </script>
