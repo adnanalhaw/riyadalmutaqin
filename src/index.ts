@@ -288,6 +288,40 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return json({ ok: true, teachers: results, following, me: user ? user.id : null });
   }
 
+  // ملف معلّم عام
+  const teacherPub = path.match(/^\/api\/teachers\/(\d+)$/);
+  if (teacherPub && request.method === "GET") {
+    const id = Number(teacherPub[1]);
+    const t = await env.DB.prepare(
+      `SELECT u.id, u.name,
+              (SELECT COUNT(*) FROM follows f WHERE f.teacher_id = u.id) AS followers
+         FROM users u
+        WHERE u.id = ? AND u.role IN ('teacher','admin') AND u.status = 'active'`,
+    ).bind(id).first();
+    if (!t) return json({ ok: false, error: "المعلّم غير موجود." }, 404);
+    const { results: lessons } = await env.DB.prepare(
+      `SELECT id, title, doctor_name, type, youtube_id, status, created_at
+         FROM lessons
+        WHERE author_id = ? AND is_published = 1 AND approval_status = 'approved'
+        ORDER BY created_at DESC LIMIT 24`,
+    ).bind(id).all();
+    const { results: clips } = await env.DB.prepare(
+      `SELECT id, title, doctor_name, youtube_id, duration
+         FROM clips
+        WHERE author_id = ? AND is_published = 1 AND approval_status = 'approved'
+        ORDER BY created_at DESC LIMIT 24`,
+    ).bind(id).all();
+    const me = await getSessionUser(request, env.DB);
+    let following = false;
+    if (me) {
+      const f = await env.DB.prepare(
+        "SELECT 1 AS x FROM follows WHERE follower_id = ? AND teacher_id = ?",
+      ).bind(me.id, id).first();
+      following = Boolean(f);
+    }
+    return json({ ok: true, teacher: t, lessons, clips, following });
+  }
+
   // ===== متابعة/إلغاء متابعة معلّم (يتطلّب تسجيل دخول) =====
   if (route === "POST /api/follow") {
     const user = await getSessionUser(request, env.DB);
@@ -2657,7 +2691,7 @@ async function processScheduledPosts(env: Env): Promise<void> {
   }
 }
 
-/** تقديم الأصول مع توجيه صفحات المسجد الديناميكية. */
+/** تقديم الأصول مع توجيه صفحات المسجد وملف المعلّم الديناميكية. */
 async function servePage(request: Request, env: Env, pathname: string): Promise<Response> {
   // /mosque/<slug> → صفحة العرض (ما عدا المسارات الثابتة)
   const mosquePage = pathname.match(/^\/mosque\/([^/]+)\/?$/);
@@ -2668,6 +2702,13 @@ async function servePage(request: Request, env: Env, pathname: string): Promise<
       assetUrl.pathname = "/mosque/view.html";
       return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
     }
+  }
+  // /u/<id> → ملف معلّم عام
+  const teacherPage = pathname.match(/^\/u\/(\d+)\/?$/);
+  if (teacherPage) {
+    const assetUrl = new URL(request.url);
+    assetUrl.pathname = "/u/view.html";
+    return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
   }
   return env.ASSETS.fetch(request);
 }

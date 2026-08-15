@@ -48,6 +48,7 @@
       <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;justify-content:center">
         <button type="button" class="btn btn-outline" id="kwPray">الكويت — أمّ القرى</button>
       </div>
+      <div id="cityShortcuts" style="display:flex;gap:.4rem;flex-wrap:wrap;justify-content:center;margin-bottom:1rem"></div>
 
       <div class="card" id="card" style="padding:0;overflow:hidden">
         <div style="padding:1rem" class="muted" id="status">يُرجى السماح بالوصول إلى الموقع لعرض المواقيت بدقّة.</div>
@@ -147,6 +148,47 @@
         document.getElementById("method").value = "4";
         fetchByCity("Kuwait City", "Kuwait");
       });
+
+      // دعم ?city=&country=&method= للفهرسة والمشاركة
+      (function fromQuery() {
+        var sp = new URLSearchParams(location.search);
+        var city = sp.get("city");
+        var country = sp.get("country") || "";
+        var method = sp.get("method");
+        if (method && document.getElementById("method").querySelector('option[value="' + method + '"]')) {
+          document.getElementById("method").value = method;
+        }
+        if (city) {
+          document.getElementById("city").value = city;
+          document.getElementById("country").value = country || "Kuwait";
+          fetchByCity(city, country || "Kuwait");
+        }
+      })();
+
+      // اختصارات مدن سريعة
+      var cities = document.getElementById("cityShortcuts");
+      if (cities) {
+        [
+          ["الكويت", "Kuwait City", "Kuwait"],
+          ["الرياض", "Riyadh", "Saudi Arabia"],
+          ["جدّة", "Jeddah", "Saudi Arabia"],
+          ["دبي", "Dubai", "United Arab Emirates"],
+          ["عمّان", "Amman", "Jordan"],
+          ["القاهرة", "Cairo", "Egypt"],
+        ].forEach(function (c) {
+          var b = document.createElement("button");
+          b.type = "button";
+          b.className = "btn btn-ghost";
+          b.textContent = c[0];
+          b.addEventListener("click", function () {
+            document.getElementById("city").value = c[1];
+            document.getElementById("country").value = c[2];
+            history.replaceState(null, "", "/prayer-times?city=" + encodeURIComponent(c[1]) + "&country=" + encodeURIComponent(c[2]) + "&method=" + method());
+            fetchByCity(c[1], c[2]);
+          });
+          cities.appendChild(b);
+        });
+      }
 
       function minutesNow() { var d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
       function mins(hhmm) { var p = hhmm.split(":"); return (+p[0]) * 60 + (+p[1]); }

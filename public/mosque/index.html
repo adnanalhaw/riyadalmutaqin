@@ -15,7 +15,12 @@
     <div class="container">
       <div class="page-head">
         <h1>مساجد وجمعيات</h1>
-        <p>صفحات مؤسّسات على المنصّة (اشتراك خدمة تقنية — ليست تبرعات). <a class="gold" href="/mosque/manage">سجّل مسجدك</a></p>
+        <p>صفحات مؤسّسات على المنصّة (اشتراك خدمة تقنية — ليست تبرعات). <a class="gold" href="/mosque/manage">سجّل مسجدك</a>
+          · <a class="gold" href="/mosque/pricing">الأسعار</a></p>
+      </div>
+      <div class="field" style="max-width:420px;margin:0 0 1.2rem">
+        <label for="mq">بحث</label>
+        <input id="mq" type="search" placeholder="اسم أو مدينة…" />
       </div>
       <div id="list" class="grid"><p class="muted">يجري التحميل…</p></div>
       <p class="muted" style="margin-top:1.5rem">تبحث عن أقرب مسجد لموقعك؟ <a class="gold" href="/mosques">خريطة المساجد</a></p>
@@ -25,11 +30,17 @@
   <script src="/layout.js"></script>
   <script src="/content.js"></script>
   <script>
-    RM.api("/api/mosques").then(function (res) {
-      var list = (res.d && res.d.mosques) || [];
+    var all = [];
+    function paint() {
+      var q = (document.getElementById("mq").value || "").trim();
+      var list = all.filter(function (m) {
+        if (!q) return true;
+        var hay = (m.name || "") + " " + (m.city || "") + " " + (m.country || "");
+        return hay.indexOf(q) >= 0;
+      });
       var el = document.getElementById("list");
       if (!list.length) {
-        el.innerHTML = '<p class="muted">لا مساجد مسجّلة بعد. <a class="gold" href="/mosque/manage">كن أول مسجد</a></p>';
+        el.innerHTML = '<p class="muted">لا نتائج. <a class="gold" href="/mosque/manage">سجّل مسجدك</a></p>';
         return;
       }
       el.innerHTML = list.map(function (m) {
@@ -38,6 +49,11 @@
           "<h3>" + RM.esc(m.name) + "</h3>" +
           '<p>' + RM.esc([m.city, m.country].filter(Boolean).join(" · ") || "—") + "</p></a>";
       }).join("");
+    }
+    document.getElementById("mq").addEventListener("input", paint);
+    RM.api("/api/mosques").then(function (res) {
+      all = (res.d && res.d.mosques) || [];
+      paint();
     });
   </script>
 </body>

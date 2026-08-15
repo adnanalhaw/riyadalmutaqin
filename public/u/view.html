@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ملف معلّم — رياض المتقين</title>
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container">
+      <div id="box"><p class="muted">يجري التحميل…</p></div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var esc = RM.esc, ar = RM.ar, api = RM.api;
+      var parts = location.pathname.replace(/\/$/, "").split("/");
+      var id = parts[parts.length - 1];
+      if (!/^\d+$/.test(id)) { location.href = "/teachers"; return; }
+
+      api("/api/teachers/" + id).then(function (res) {
+        var box = document.getElementById("box");
+        if (!res.ok || !res.d.ok) {
+          box.innerHTML = '<p class="muted">المعلّم غير موجود. <a class="gold" href="/teachers">العودة</a></p>';
+          return;
+        }
+        var t = res.d.teacher;
+        var lessons = res.d.lessons || [];
+        var clips = res.d.clips || [];
+        document.title = t.name + " — رياض المتقين";
+        var followBtn = '<button class="btn ' + (res.d.following ? "btn-outline" : "btn-primary") + '" id="followBtn">' +
+          (res.d.following ? "✓ تتابعه" : "＋ متابعة") + "</button>";
+        box.innerHTML =
+          '<div class="page-head"><h1>' + esc(t.name) + "</h1>" +
+          '<p>المتابعون: ' + ar(t.followers || 0) + " · " + followBtn +
+          ' <button class="btn btn-ghost" id="shareT">مشاركة الملف</button></p></div>' +
+          '<h2 style="color:var(--gold);text-align:start">الدروس</h2>' +
+          '<div class="video-grid" id="lessons">' +
+          (lessons.length ? lessons.map(function (l) { return RM.videoCard ? RM.videoCard(l, {}) : '<div class="card">' + esc(l.title) + "</div>"; }).join("")
+            : '<p class="muted">لا دروس منشورة بعد.</p>') +
+          "</div>" +
+          '<h2 style="color:var(--gold);text-align:start;margin-top:2rem">المقاطع</h2>' +
+          '<div class="video-grid" id="clips">' +
+          (clips.length ? clips.map(function (c) {
+            return '<div class="card"><strong>' + esc(c.title) + "</strong>" +
+              (c.youtube_id ? '<div class="muted" style="font-size:.85rem;margin-top:.3rem">يوتيوب</div>' : "") +
+              "</div>";
+          }).join("") : '<p class="muted">لا مقاطع بعد.</p>') +
+          "</div>";
+
+        document.getElementById("followBtn").addEventListener("click", function () {
+          api("/api/follow", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ teacher_id: +id }),
+          }).then(function (r) {
+            if (r.status === 401) { location.href = "/login"; return; }
+            location.reload();
+          });
+        });
+        document.getElementById("shareT").addEventListener("click", function () {
+          var url = location.href;
+          if (navigator.share) navigator.share({ title: t.name, url: url });
+          else if (navigator.clipboard) navigator.clipboard.writeText(url).then(function () { alert("تمّ نسخ الرابط ✓"); });
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

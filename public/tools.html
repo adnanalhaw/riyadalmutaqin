@@ -19,6 +19,9 @@
       <div class="page-head">
         <h1>أدوات المسلم</h1>
         <p>ما يعينك على عبادتك ويومك — من الأذكار إلى مواقيت الصلاة وحاسبة الزكاة.</p>
+        <p class="muted" id="pwaTip" style="font-size:.9rem;margin-top:.5rem" hidden>
+          ثبّت التطبيق على جهازك لوصول أسرع: من قائمة المتصفّح اختر «إضافة إلى الشاشة الرئيسية».
+        </p>
       </div>
 
       <div class="grid">
@@ -42,5 +45,11 @@
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script>
+    if (window.matchMedia("(display-mode: browser)").matches) {
+      var tip = document.getElementById("pwaTip");
+      if (tip) tip.hidden = false;
+    }
+  </script>
 </body>
 </html>
