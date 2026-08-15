@@ -3,9 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>مكتبة المقاطع — رياض المتقين</title>
-  <meta name="description" content="مقاطع قصيرة منتقاة من دروس وسلاسل رياض المتقين." />
+  <title>المكتبة الصوتية — رياض المتقين</title>
+  <meta name="description" content="مكتبة صوتية من دروس ومحاضرات رياض المتقين للاستماع في أي وقت." />
   <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
@@ -17,12 +18,16 @@
   <main>
     <div class="container">
       <div class="page-head">
-        <h1>مكتبة المقاطع</h1>
-        <p>مقاطعُ قصيرةٌ منتقاةٌ من الدروس والسلاسل، سهلة المشاركة.</p>
+        <h1>المكتبة الصوتية</h1>
+        <p>استمع إلى الدروس والمحاضرات متى شئت — بلا اتصال مرئي.</p>
       </div>
 
       <section class="section" style="padding-top:1rem">
-        <div class="video-grid" id="clipsGrid"><p class="muted">يجري التحميل…</p></div>
+        <div id="audioList" style="display:grid;gap:1rem"><p class="muted">يجري التحميل…</p></div>
+        <p class="muted" style="margin-top:1.5rem">
+          تفضّل المقاطع المرئية؟ <a class="gold" href="/clips">مكتبة المقاطع</a>
+          · <a class="gold" href="/live">الدروس</a>
+        </p>
       </section>
     </div>
   </main>
@@ -30,6 +35,6 @@
   <div data-footer></div>
   <script src="/layout.js"></script>
   <script src="/content.js"></script>
-  <script>RM.loadClips("#clipsGrid");</script>
+  <script>RM.loadAudio("#audioList");</script>
 </body>
 </html>

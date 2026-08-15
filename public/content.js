@@ -209,19 +209,42 @@ window.RM = (function () {
     },
 
     // البثّ الحالي والدروس القادمة
-    loadLive: function (playerSel, metaSel, upcomingSel) {
+    // noticeSel اختياري: عنصر لرسائل الحالة (لا بث / بث بلا يوتيوب)
+    loadLive: function (playerSel, metaSel, upcomingSel, noticeSel) {
       api("/api/lessons").then(function (res) {
         var list = (res.d && res.d.lessons) || [];
         var live = list.filter(function (l) { return l.status === "live"; })[0];
         var player = document.querySelector(playerSel);
         var meta = document.querySelector(metaSel);
+        var notice = noticeSel ? document.querySelector(noticeSel) : null;
+
         if (live) {
-          if (player) player.innerHTML =
-            (live.youtube_id
-              ? '<iframe src="https://www.youtube.com/embed/' + esc(live.youtube_id) + '" style="width:100%;height:100%;border:0;border-radius:12px" allowfullscreen></iframe>'
-              : '<span class="badge live" style="position:absolute;top:1rem;inset-inline-start:1rem">● مباشر الآن</span><div class="play">▶</div>');
+          if (player) {
+            if (live.youtube_id) {
+              player.innerHTML =
+                '<span class="badge live" style="position:absolute;top:1rem;inset-inline-start:1rem;z-index:2">● مباشر الآن</span>' +
+                '<iframe src="https://www.youtube.com/embed/' + esc(live.youtube_id) +
+                '?autoplay=1&mute=1" title="' + esc(live.title) +
+                '" style="width:100%;height:100%;border:0;border-radius:12px" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>';
+              if (notice) { notice.hidden = true; notice.textContent = ""; }
+            } else {
+              player.innerHTML =
+                '<span class="badge live" style="position:absolute;top:1rem;inset-inline-start:1rem">● مباشر الآن</span><div class="play">▶</div>';
+              if (notice) {
+                notice.hidden = false;
+                notice.textContent = "البثّ معلَن، وينتظر ربط معرّف يوتيوب لايف من لوحة المعلّم لعرضه هنا.";
+              }
+            }
+          }
           if (meta) meta.innerHTML = '<div class="vtitle">' + esc(live.title) + "</div>" +
             '<div class="vdoc">الدكتور: ' + esc(live.doctor_name || "—") + "</div>";
+        } else {
+          if (player) {
+            player.innerHTML =
+              '<span class="badge soon" style="position:absolute;top:1rem;inset-inline-start:1rem">● لا يوجد بثٌّ حالياً</span><div class="play">▶</div>';
+          }
+          if (meta) meta.innerHTML = '<div class="vtitle">لا بثّ مباشر الآن</div><div class="vdoc">راجِع الدروس القادمة أو المسجّلة أدناه.</div>';
+          if (notice) { notice.hidden = true; notice.textContent = ""; }
         }
 
         var upcoming = list.filter(function (l) { return l.status === "scheduled"; });

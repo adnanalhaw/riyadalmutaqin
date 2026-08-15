@@ -341,6 +341,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const { results } = await env.DB.prepare(
       `SELECT id, title, description, doctor_name, audio_url, background_image, duration
          FROM audio_posts
+        WHERE is_published = 1 AND approval_status = 'approved'
         ORDER BY created_at DESC`,
     ).all();
     return json({ ok: true, audio: results });

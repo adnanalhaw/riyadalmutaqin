@@ -63,6 +63,7 @@
     { href: "/quran", label: "القرآن الكريم" },
     { href: "/live", label: "الدروس المباشرة" },
     { href: "/clips", label: "مكتبة المقاطع" },
+    { href: "/audio", label: "المكتبة الصوتية" },
     { href: "/tools", label: "أدوات المسلم" },
     { href: "/train", label: "ساهم بالتدريب" },
     { href: "/teachers", label: "المعلّمون" },
