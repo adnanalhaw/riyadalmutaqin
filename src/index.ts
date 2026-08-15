@@ -752,11 +752,11 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   // ===== تواصل مع الدعم (عام) =====
   if (route === "POST /api/support") return submitSupportTicket(request, env);
 
-  // ===== الإشعارات (مدير الموقع/الأدمن) =====
+  // ===== الإشعارات (أي مستخدم مسجّل حسب دوره) =====
   if (path.startsWith("/api/notifications")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
-    if (user.role !== "manager" && user.role !== "admin") return json({ ok: false, error: "forbidden" }, 403);
+    if (user.mustChangePassword) return mustChange();
     return handleNotifications(request, env, user, route);
   }
 
@@ -1026,20 +1026,27 @@ async function submitSupportTicket(request: Request, env: Env): Promise<Response
   return json({ ok: true, id }, 201);
 }
 
-/** إشعارات مدير الموقع/الأدمن: قائمة + عدّ غير المقروء + تعليم كمقروء. */
+/** إشعارات الأدوار: قائمة + عدّ غير المقروء + تعليم كمقروء. */
 async function handleNotifications(request: Request, env: Env, user: AuthUser, route: string): Promise<Response> {
-  const roleFilter = user.role === "admin" ? ["manager", "admin"] : ["manager"];
+  // الأدمن يرى إشعارات المدير+الأدمن؛ الباقون يرون دورهم (+ إشعارات موجّهة لمعرّفهم).
+  const roleFilter =
+    user.role === "admin" ? ["manager", "admin"] :
+    user.role === "manager" ? ["manager"] :
+    [user.role];
   const placeholders = roleFilter.map(() => "?").join(",");
 
   if (route === "GET /api/notifications") {
     const { results } = await env.DB.prepare(
       `SELECT id, type, title, body, link, is_read, created_at
-         FROM notifications WHERE recipient_role IN (${placeholders})
+         FROM notifications
+        WHERE recipient_role IN (${placeholders})
+           OR recipient_id = ?
         ORDER BY created_at DESC LIMIT 50`,
-    ).bind(...roleFilter).all();
+    ).bind(...roleFilter, user.id).all();
     const unread = await env.DB.prepare(
-      `SELECT COUNT(*) AS c FROM notifications WHERE recipient_role IN (${placeholders}) AND is_read = 0`,
-    ).bind(...roleFilter).first<{ c: number }>();
+      `SELECT COUNT(*) AS c FROM notifications
+        WHERE is_read = 0 AND (recipient_role IN (${placeholders}) OR recipient_id = ?)`,
+    ).bind(...roleFilter, user.id).first<{ c: number }>();
     return json({ ok: true, notifications: results, unread: unread ? unread.c : 0 });
   }
 
@@ -1047,12 +1054,14 @@ async function handleNotifications(request: Request, env: Env, user: AuthUser, r
     const b = await readJson(request);
     if (b.id) {
       await env.DB.prepare(
-        `UPDATE notifications SET is_read = 1 WHERE id = ? AND recipient_role IN (${placeholders})`,
-      ).bind(Number(b.id), ...roleFilter).run();
+        `UPDATE notifications SET is_read = 1
+          WHERE id = ? AND (recipient_role IN (${placeholders}) OR recipient_id = ?)`,
+      ).bind(Number(b.id), ...roleFilter, user.id).run();
     } else {
       await env.DB.prepare(
-        `UPDATE notifications SET is_read = 1 WHERE recipient_role IN (${placeholders})`,
-      ).bind(...roleFilter).run();
+        `UPDATE notifications SET is_read = 1
+          WHERE recipient_role IN (${placeholders}) OR recipient_id = ?`,
+      ).bind(...roleFilter, user.id).run();
     }
     return json({ ok: true });
   }

@@ -43,6 +43,18 @@
       </div>
 
       <div class="card" style="margin-top:1.2rem">
+        <h3 style="color:var(--gold);margin-top:0">تنبيه دخول الوقت</h3>
+        <p class="muted" style="margin-top:0;font-size:.92rem">
+          نغمة قصيرة داخل الصفحة عند دخول وقت الصلاة (وليست أذاناً مسجّلاً). يعمل والصفحة مفتوحة بعد لمسة أولى.
+        </p>
+        <label style="display:flex;align-items:center;gap:.6rem;margin:0">
+          <input type="checkbox" id="prayerAlert" style="width:auto" />
+          نبّهني عند دخول الوقت (صوت + إشعار متصفّح إن سمحت)
+        </label>
+        <p class="muted" id="prayerAlertHint" style="margin:.6rem 0 0;font-size:.85rem"></p>
+      </div>
+
+      <div class="card" style="margin-top:1.2rem">
         <h3 style="color:var(--gold);margin-top:0">تحديد يدويّ بالمدينة</h3>
         <div style="display:flex;gap:.6rem;flex-wrap:wrap">
           <input type="text" id="city" placeholder="المدينة (مثال: الكويت)" style="flex:1;min-width:140px" />
@@ -113,7 +125,70 @@
         document.querySelectorAll(".prow").forEach(function (r) {
           r.classList.toggle("now", r.getAttribute("data-k") === nextK);
         });
+        checkPrayerAlert(prayers, Math.floor(now));
       }
+
+      function dayKey() { return new Date().toISOString().slice(0, 10); }
+      function alertOn() {
+        try { return localStorage.getItem("rm_prayer_alert") === "1"; } catch (e) { return false; }
+      }
+      function setAlertOn(v) {
+        try { localStorage.setItem("rm_prayer_alert", v ? "1" : "0"); } catch (e) { /* تجاهل */ }
+      }
+      function firedKey(k) { return "rm_prayer_fired_" + dayKey() + "_" + k; }
+      function alreadyFired(k) {
+        try { return !!localStorage.getItem(firedKey(k)); } catch (e) { return false; }
+      }
+      function markFired(k) {
+        try { localStorage.setItem(firedKey(k), "1"); } catch (e) { /* تجاهل */ }
+      }
+      function checkPrayerAlert(prayers, nowMin) {
+        if (!alertOn() || !timings) return;
+        for (var i = 0; i < prayers.length; i++) {
+          var k = prayers[i];
+          var t = mins(timings[k]);
+          if (nowMin === t && !alreadyFired(k)) {
+            markFired(k);
+            if (window.RMSound) {
+              try { window.RMSound.unlock().then(function () { window.RMSound.play("prayer"); }); } catch (e) { /* تجاهل */ }
+            }
+            var title = "حان وقت " + (NAMES[k] || k);
+            if (window.Notification && Notification.permission === "granted") {
+              try { new Notification("رياض المتقين", { body: title, icon: "/assets/logo.png" }); } catch (e2) { /* تجاهل */ }
+            }
+            var hint = document.getElementById("prayerAlertHint");
+            if (hint) hint.textContent = "✓ " + title;
+          }
+        }
+      }
+
+      (function initAlertUi() {
+        var box = document.getElementById("prayerAlert");
+        var hint = document.getElementById("prayerAlertHint");
+        if (!box) return;
+        box.checked = alertOn();
+        hint.textContent = box.checked
+          ? "التنبيه مفعّل. المس الصفحة مرّة لتفعيل الصوت."
+          : "التنبيه متوقّف.";
+        box.addEventListener("change", function () {
+          setAlertOn(box.checked);
+          if (box.checked) {
+            if (window.RMSound) window.RMSound.unlock();
+            hint.textContent = "التنبيه مفعّل. جارٍ طلب إذن الإشعارات…";
+            if (window.Notification && Notification.permission === "default") {
+              Notification.requestPermission().then(function (p) {
+                hint.textContent = p === "granted"
+                  ? "التنبيه مفعّل مع إشعارات المتصفّح."
+                  : "التنبيه الصوتي مفعّل (بدون إشعار نظام).";
+              });
+            } else {
+              hint.textContent = "التنبيه مفعّل.";
+            }
+          } else {
+            hint.textContent = "التنبيه متوقّف.";
+          }
+        });
+      })();
 
       function fetchByCoords(lat, lng) {
         status("جارٍ جلب المواقيت…");

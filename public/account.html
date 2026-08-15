@@ -29,6 +29,16 @@
         <div class="stat"><div class="num">…</div><div class="lbl">نسبة الإنجاز</div></div>
       </div>
 
+      <div class="card" style="margin-bottom:2rem;max-width:520px">
+        <h3 style="color:var(--gold);margin-top:0">الإشعارات الصوتية</h3>
+        <p class="muted" style="margin-top:0;font-size:.92rem">تتحكّم بنغمات التذكيرات داخل الموقع (صلاة على النبيّ، تسبيح، مواقيت إن فعّلتها).</p>
+        <label style="display:flex;align-items:center;gap:.6rem;margin:0">
+          <input type="checkbox" id="accSound" style="width:auto" />
+          تفعيل الصوت داخل الموقع
+        </label>
+        <button type="button" class="btn btn-outline" id="accTestSound" style="margin-top:.8rem">تجربة نغمة</button>
+      </div>
+
       <!-- أدوات المسلم -->
       <section style="margin-bottom:2.2rem">
         <h2 style="color:var(--gold);text-align:start;margin:0 0 1rem">أدوات المسلم</h2>
@@ -195,6 +205,30 @@
           RM.bindSave(grid);
         }
       }).catch(function () { location.href = "/login"; });
+
+      // تفضيل الصوت
+      (function () {
+        var box = document.getElementById("accSound");
+        var test = document.getElementById("accTestSound");
+        if (!box) return;
+        function sync() {
+          box.checked = window.RMSound ? window.RMSound.isEnabled() : true;
+        }
+        sync();
+        box.addEventListener("change", function () {
+          if (window.RMSound) window.RMSound.setEnabled(box.checked);
+          else {
+            try { localStorage.setItem("rm_sound_enabled", box.checked ? "1" : "0"); } catch (e) { /* تجاهل */ }
+          }
+          if (box.checked && window.RMSound) window.RMSound.play("soft");
+        });
+        if (test) {
+          test.addEventListener("click", function () {
+            if (window.RMSound) window.RMSound.unlock().then(function () { window.RMSound.play("salawat"); });
+          });
+        }
+        document.addEventListener("rm-sound-change", sync);
+      })();
 
       document.getElementById("logout2").addEventListener("click", function () {
         fetch("/api/auth/logout", { method: "POST" }).then(function () { location.href = "/"; });

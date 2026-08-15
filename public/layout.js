@@ -39,6 +39,48 @@
     if (note) note.hidden = any;
   }
 
+  // جرس إشعارات للأدوار المسجّلة — يستطلع /api/notifications.
+  var __rmLastUnread = null;
+  function notifHome(role) {
+    if (role === "manager") return "/manager";
+    if (role === "admin") return "/admin";
+    if (role === "teacher") return "/teacher";
+    return "/account";
+  }
+  function setupNotifBell(user) {
+    var wrap = document.getElementById("notifBellWrap");
+    if (!wrap || !user) return;
+    function ar(n) {
+      return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; });
+    }
+    function paint(unread) {
+      var n = Number(unread) || 0;
+      wrap.innerHTML =
+        '<a class="btn btn-ghost" href="' + notifHome(user.role) + '" id="notifBell" title="الإشعارات" style="padding:.45rem .55rem;position:relative">' +
+        "🔔" +
+        (n > 0
+          ? '<span style="position:absolute;top:0;inset-inline-end:0;background:var(--gold);color:#2a1f04;border-radius:999px;font-size:.65rem;font-weight:800;min-width:1.1rem;padding:0 .25rem;line-height:1.2">' +
+            ar(n > 99 ? 99 : n) + "</span>"
+          : "") +
+        "</a>";
+      if (__rmLastUnread !== null && n > __rmLastUnread && window.RMSound) {
+        try { window.RMSound.play("alert"); } catch (e) { /* تجاهل */ }
+      }
+      __rmLastUnread = n;
+    }
+    function poll() {
+      fetch("/api/notifications", { headers: { accept: "application/json" } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.ok) return;
+          paint(d.unread || 0);
+        })
+        .catch(function () { /* تجاهل */ });
+    }
+    poll();
+    setInterval(poll, 60000);
+  }
+
   // أيقونة الموقع (لكل الصفحات عبر نقطة واحدة)
   if (!document.querySelector('link[rel="icon"]')) {
     var fav = document.createElement("link");
@@ -48,14 +90,21 @@
     document.head.appendChild(fav);
   }
 
-  // وحدة التذكيرات داخل الصفحة (الصلاة على النبيّ ﷺ + الصيام) — تُحمَّل مرّةً، وتُهيّئ نفسها.
-  if (!document.querySelector('script[data-rm-reminders]') && path.indexOf("/teacher") !== 0 &&
-      path.indexOf("/manager") !== 0 && path.indexOf("/admin") !== 0) {
-    var rs = document.createElement("script");
-    rs.src = "/reminders.js";
-    rs.setAttribute("data-rm-reminders", "1");
-    rs.defer = true;
-    document.head.appendChild(rs);
+  // الصوت متاح لكل الصفحات (كتم الترويسة + جرس الإشعارات). التذكيرات للعامّة فقط.
+  if (!document.querySelector('script[data-rm-sound]')) {
+    var ss = document.createElement("script");
+    ss.src = "/sound.js";
+    ss.setAttribute("data-rm-sound", "1");
+    document.head.appendChild(ss);
+  }
+  if (path.indexOf("/teacher") !== 0 && path.indexOf("/manager") !== 0 && path.indexOf("/admin") !== 0) {
+    if (!document.querySelector('script[data-rm-reminders]')) {
+      var rs = document.createElement("script");
+      rs.src = "/reminders.js";
+      rs.setAttribute("data-rm-reminders", "1");
+      rs.defer = true;
+      document.head.appendChild(rs);
+    }
   }
 
   var links = [
@@ -76,7 +125,18 @@
   }
 
   function authArea(user) {
-    var lang = '<div class="lang-wrap" style="position:relative">' +
+    var soundBtn =
+      '<button type="button" class="btn btn-ghost" id="soundBtn" title="كتم/تشغيل الإشعارات الصوتية" aria-label="الصوت" style="padding:.45rem .6rem">' +
+      (function () {
+        try {
+          var v = localStorage.getItem("rm_sound_enabled");
+          if (v === "0" || v === "false") return "🔇";
+        } catch (e) { /* تجاهل */ }
+        return "🔊";
+      })() +
+      "</button>";
+    var lang = soundBtn +
+      '<div class="lang-wrap" style="position:relative">' +
       '<button class="btn btn-ghost" id="langBtn" title="اللغة / Language" aria-haspopup="true" aria-expanded="false" style="padding:.45rem .6rem">🌐</button>' +
       '<div id="langMenu" class="lang-menu" hidden></div></div>' +
       '<div id="google_translate_element" style="display:none"></div>';
@@ -87,6 +147,7 @@
         : "/account";
       return (
         lang +
+        '<span id="notifBellWrap"></span>' +
         '<a class="btn btn-ghost" href="' + home + '">حسابي</a>' +
         '<a class="btn btn-outline" href="#" id="logoutBtn">خروج</a>'
       );
@@ -222,6 +283,36 @@
         });
       });
     }
+    var sb = document.getElementById("soundBtn");
+    if (sb) {
+      var syncSoundBtn = function () {
+        var on = true;
+        try {
+          if (window.RMSound) on = window.RMSound.isEnabled();
+          else {
+            var v = localStorage.getItem("rm_sound_enabled");
+            on = !(v === "0" || v === "false");
+          }
+        } catch (e) { /* تجاهل */ }
+        sb.textContent = on ? "🔊" : "🔇";
+        sb.setAttribute("aria-pressed", on ? "true" : "false");
+      };
+      sb.addEventListener("click", function (e) {
+        e.preventDefault();
+        if (window.RMSound) window.RMSound.toggle();
+        else {
+          try {
+            var cur = localStorage.getItem("rm_sound_enabled");
+            var next = cur === "0" || cur === "false";
+            localStorage.setItem("rm_sound_enabled", next ? "1" : "0");
+          } catch (err) { /* تجاهل */ }
+        }
+        syncSoundBtn();
+      });
+      document.addEventListener("rm-sound-change", syncSoundBtn);
+      syncSoundBtn();
+    }
+    if (user) setupNotifBell(user);
     setupLang();
     applyStoredLang();
     applySocialLinks(SOCIAL);
