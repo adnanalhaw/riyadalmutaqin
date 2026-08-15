@@ -12,6 +12,7 @@
     { href: "/manager/training", label: "🤖 مراجعة بيانات التدريب" },
     { href: "/manager/settings", label: "⚙️ إعدادات الموقع" },
     { href: "/manager/analytics", label: "📈 تحليل البيانات" },
+    { href: "/manager/growth", label: "🎯 مسار المليون د.ك" },
   ];
 
   function active(l) {
