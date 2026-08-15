@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>طلبات Pro للمساجد — مدير الموقع</title>
+  <meta name="description" content="اعتماد طلبات ترقية اشتراك المساجد Pro (خدمة تقنية — ليست تبرعات)." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>طلبات اشتراك المساجد Pro</h1>
+            <p>ترقية خدمة تقنية للمؤسسات — <strong>ليست تبرعات</strong>.</p>
+          </div>
+          <div id="list"><p class="muted">يجري التحميل…</p></div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var esc = RM.esc, api = RM.api;
+      RM.getMe().then(function (u) {
+        if (!u || (u.role !== "manager" && u.role !== "admin")) { location.href = "/login"; return; }
+        load();
+      });
+      function load() {
+        api("/api/mosques/plan-requests").then(function (res) {
+          var list = (res.d && res.d.requests) || [];
+          var el = document.getElementById("list");
+          if (!list.length) { el.innerHTML = '<p class="muted">لا طلبات معلّقة.</p>'; return; }
+          el.innerHTML = list.map(function (r) {
+            return '<div class="card" style="margin-bottom:1rem">' +
+              "<strong>" + esc(r.mosque_name) + "</strong>" +
+              '<div class="muted" style="font-size:.88rem">' + esc(r.user_name) + " · " + esc(r.email) + "</div>" +
+              (r.note ? "<p>" + esc(r.note) + "</p>" : "") +
+              '<div style="display:flex;gap:.5rem;margin-top:.6rem">' +
+              '<button class="btn btn-primary rm-act" data-id="' + r.id + '" data-action="approve">اعتماد Pro</button>' +
+              '<button class="btn btn-outline rm-act" data-id="' + r.id + '" data-action="reject">رفض</button></div></div>';
+          }).join("");
+        });
+      }
+      document.getElementById("list").addEventListener("click", function (e) {
+        var b = e.target.closest(".rm-act"); if (!b) return;
+        b.disabled = true;
+        api("/api/mosques/plan-requests/" + b.getAttribute("data-id"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: b.getAttribute("data-action") }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok) load();
+          else { alert(res.d.error || "فشل"); b.disabled = false; }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

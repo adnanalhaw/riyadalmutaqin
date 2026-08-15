@@ -8,6 +8,7 @@
     { href: "/manager", label: "📊 لوحة القيادة", exact: true },
     { href: "/manager/applications", label: "📝 طلبات التعليم" },
     { href: "/manager/approvals", label: "✅ الموافقة على المحتوى" },
+    { href: "/manager/mosques", label: "🏛️ طلبات مساجد Pro" },
     { href: "/manager/training", label: "🤖 مراجعة بيانات التدريب" },
     { href: "/manager/settings", label: "⚙️ إعدادات الموقع" },
     { href: "/manager/analytics", label: "📈 تحليل البيانات" },
@@ -23,6 +24,7 @@
       "/manager/applications": counts.pending_apps,
       "/manager/approvals": (counts.pending_clips || 0) + (counts.pending_lessons || 0) + (counts.pending_posts || 0) + (counts.pending_audio || 0),
       "/manager/training": counts.pending_docs,
+      "/manager/mosques": counts.pending_mosque_pro,
     };
     function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
     var html = "<h4>مدير الموقع</h4>" + links.map(function (l) {

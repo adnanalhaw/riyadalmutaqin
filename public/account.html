@@ -39,6 +39,14 @@
         <button type="button" class="btn btn-outline" id="accTestSound" style="margin-top:.8rem">تجربة نغمة</button>
       </div>
 
+      <div class="card" style="margin-bottom:2rem;max-width:520px">
+        <h3 style="color:var(--gold);margin-top:0">ادعُ صديقاً</h3>
+        <p class="muted" style="margin-top:0;font-size:.92rem">انشر رابط المنصّة — نمو المجتمع يخدم العلم النافع (بلا تبرعات).</p>
+        <input id="refLink" readonly style="width:100%" />
+        <button type="button" class="btn btn-primary" id="copyRef" style="margin-top:.7rem">نسخ الرابط</button>
+        <span class="muted" id="copyRefMsg" style="margin-inline-start:.6rem"></span>
+      </div>
+
       <!-- أدوات المسلم -->
       <section style="margin-bottom:2.2rem">
         <h2 style="color:var(--gold);text-align:start;margin:0 0 1rem">أدوات المسلم</h2>
@@ -228,6 +236,26 @@
           });
         }
         document.addEventListener("rm-sound-change", sync);
+      })();
+
+      (function () {
+        var link = location.origin + "/?ref=share";
+        var inp = document.getElementById("refLink");
+        if (inp) inp.value = link;
+        var btn = document.getElementById("copyRef");
+        if (btn) {
+          btn.addEventListener("click", function () {
+            var msg = document.getElementById("copyRefMsg");
+            if (navigator.clipboard) {
+              navigator.clipboard.writeText(link).then(function () {
+                if (msg) msg.textContent = "تمّ النسخ ✓";
+              });
+            } else if (inp) {
+              inp.select();
+              if (msg) msg.textContent = "انسخ يدوياً";
+            }
+          });
+        }
       })();
 
       document.getElementById("logout2").addEventListener("click", function () {

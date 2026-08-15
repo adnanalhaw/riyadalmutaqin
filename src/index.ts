@@ -362,6 +362,48 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return json({ ok: true, settings });
   }
 
+  // سؤال من الكوربوس المعتمد فقط (عام) — لا اختلاق؛ بلا مصدر لا جواب.
+  if (route === "POST /api/ask") {
+    const b = await readJson(request);
+    const q = String(b.question ?? "").trim();
+    if (q.length < 3) return json({ ok: false, error: "اكتب سؤالاً أوضح." }, 400);
+    if (q.length > 500) return json({ ok: false, error: "السؤال طويل جداً." }, 400);
+    if (await rateLimited(env, request, "ask", 30, 10)) {
+      return json({ ok: false, error: "محاولات كثيرة. حاوِل بعد قليل." }, 429);
+    }
+    // بحث بسيط بالكلمات في الأسئلة/الأجوبة المعتمدة
+    const words = q
+      .replace(/[^\u0600-\u06FFa-zA-Z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 2)
+      .slice(0, 6);
+    if (!words.length) return json({ ok: false, error: "تعذّر فهم السؤال." }, 400);
+    const like = words.map(() => "(question LIKE ? OR answer LIKE ? OR source LIKE ?)").join(" OR ");
+    const binds: string[] = [];
+    for (const w of words) {
+      const p = `%${w}%`;
+      binds.push(p, p, p);
+    }
+    const { results } = await env.DB.prepare(
+      `SELECT id, question, answer, source, topic
+         FROM ai_contributions
+        WHERE status = 'approved' AND kind = 'qa' AND answer IS NOT NULL AND length(answer) > 0
+          AND (${like})
+        ORDER BY length(question) ASC
+        LIMIT 5`,
+    ).bind(...binds).all();
+    if (!results.length) {
+      return json({
+        ok: true,
+        found: false,
+        message: "لا جواب معتمد في الكوربوس بعد لهذا السؤال. ساهم بإجابة موثّقة من المصدر.",
+        contribute: "/train",
+        matches: [],
+      });
+    }
+    return json({ ok: true, found: true, matches: results });
+  }
+
   // ===== المتعلّم: مكتبة الحفظ (يتطلّب تسجيل دخول) =====
   if (path === "/api/library" || path === "/api/library/remove") {
     const user = await getSessionUser(request, env.DB);
@@ -1267,7 +1309,10 @@ async function handleManager(
          (SELECT COUNT(*) FROM audio_posts WHERE approval_status = 'pending')      AS pending_audio,
          (SELECT COUNT(*) FROM ai_documents WHERE approval_status = 'pending')     AS pending_docs,
          (SELECT COUNT(*) FROM users WHERE role = 'teacher')                       AS teachers,
-         (SELECT COUNT(*) FROM users WHERE role = 'student')                       AS students`,
+         (SELECT COUNT(*) FROM users WHERE role = 'student')                       AS students,
+         (SELECT COUNT(*) FROM mosque_orgs)                                        AS mosques,
+         (SELECT COUNT(*) FROM mosque_orgs WHERE plan = 'pro')                     AS mosques_pro,
+         (SELECT COUNT(*) FROM mosque_plan_requests WHERE status = 'pending')      AS pending_mosque_pro`,
     ).first();
     return json({ ok: true, stats: row });
   }
@@ -2598,7 +2643,7 @@ async function servePage(request: Request, env: Env, pathname: string): Promise<
   const mosquePage = pathname.match(/^\/mosque\/([^/]+)\/?$/);
   if (mosquePage) {
     const slug = mosquePage[1];
-    if (slug !== "manage" && slug !== "index.html" && slug !== "view.html") {
+    if (slug !== "manage" && slug !== "pricing" && slug !== "index.html" && slug !== "view.html") {
       const assetUrl = new URL(request.url);
       assetUrl.pathname = "/mosque/view.html";
       return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
