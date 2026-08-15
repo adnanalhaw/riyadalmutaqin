@@ -1151,14 +1151,23 @@ async function handleMosques(request: Request, env: Env, path: string, route: st
     if (row.owner_user_id !== user.id && !isStaff) return json({ ok: false, error: "forbidden" }, 403);
 
     if (request.method === "GET") {
-      // إحصاء مشاهدات الصفحة (Pro يرى التفاصيل؛ Free يرى المجموع فقط)
+      // إحصاء مشاهدات الصفحة
       const views = await env.DB.prepare(
         `SELECT COUNT(*) AS c FROM page_views WHERE path = ? OR path = ?`,
       ).bind(`/mosque/${row.slug}`, `/mosque/${row.slug}/`).first<{ c: number }>();
+      let series: { day: string; c: number }[] = [];
+      if (row.plan === "pro") {
+        const { results } = await env.DB.prepare(
+          `SELECT date(created_at) AS day, COUNT(*) AS c FROM page_views
+            WHERE (path = ? OR path = ?) AND created_at >= datetime('now','-7 days')
+            GROUP BY date(created_at) ORDER BY day ASC`,
+        ).bind(`/mosque/${row.slug}`, `/mosque/${row.slug}/`).all<{ day: string; c: number }>();
+        series = results || [];
+      }
       return json({
         ok: true,
         mosque: row,
-        stats: { views: views?.c ?? 0, pro: row.plan === "pro" },
+        stats: { views: views?.c ?? 0, pro: row.plan === "pro", series },
       });
     }
 

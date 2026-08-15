@@ -38,6 +38,7 @@
       <div class="card" id="editPanel" hidden style="margin-top:1.5rem">
         <h3 style="color:var(--gold);margin-top:0">تعديل: <span id="editTitle"></span></h3>
         <p class="muted" id="editStats" style="font-size:.9rem"></p>
+        <div id="editChart" style="margin-bottom:1rem"></div>
         <form id="editForm">
           <input type="hidden" id="editId" />
           <div class="field"><label for="eName">الاسم</label><input id="eName" required /></div>
@@ -115,7 +116,21 @@
           document.getElementById("editTitle").textContent = m.name;
           document.getElementById("editStats").textContent =
             "مشاهدات الصفحة: " + ar(st.views || 0) +
-            (st.pro ? " · Pro" : " · Free (التفاصيل الكاملة مع Pro لاحقاً)");
+            (st.pro ? " · Pro" : " · Free");
+          var chart = document.getElementById("editChart");
+          if (chart) {
+            if (st.pro && st.series && st.series.length) {
+              var max = Math.max.apply(null, st.series.map(function (x) { return x.c; }).concat([1]));
+              chart.innerHTML = '<div class="muted" style="font-size:.85rem;margin-bottom:.4rem">آخر ٧ أيام</div>' +
+                '<div style="display:flex;align-items:flex-end;gap:.35rem;height:80px">' +
+                st.series.map(function (s) {
+                  var h = Math.max(4, Math.round((s.c / max) * 72));
+                  return '<div title="' + esc(s.day) + ': ' + ar(s.c) + '" style="flex:1;background:var(--gold);height:' + h + 'px;border-radius:4px 4px 0 0;opacity:.85"></div>';
+                }).join("") + "</div>";
+            } else if (!st.pro) {
+              chart.innerHTML = '<p class="muted" style="font-size:.88rem">مخطط المشاهدات متاح مع <a class="gold" href="/mosque/pricing">Pro</a>.</p>';
+            } else chart.innerHTML = "";
+          }
           document.getElementById("eName").value = m.name || "";
           document.getElementById("eCity").value = m.city || "";
           document.getElementById("eCountry").value = m.country || "Kuwait";
