@@ -4,12 +4,20 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>النشر على القنوات — رياض المتقين</title>
-  <meta name="description" content="إنشاء منشور ونشره على يوتيوب وتيك توك وفيسبوك وإكس وتيليجرام، مع الجدولة." />
-  <meta name="theme-color" content="#0b1430" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <meta name="description" content="إنشاء منشور ونشره على يوتيوب وتيك توك وفيسبوك وإنستغرام وإكس وتيليجرام، مع الجدولة وإعادة المحاولة." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
   <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .conn { display:flex; flex-wrap:wrap; gap:.5rem; margin-bottom:1rem }
+    .conn .pill { font-size:.82rem; padding:.35rem .7rem; border-radius:999px; border:1px solid var(--border) }
+    .conn .on { background:rgba(167,214,118,.15); color:var(--pistachio-soft); border-color:rgba(167,214,118,.35) }
+    .conn .off { background:rgba(255,255,255,.04); color:var(--muted) }
+    .xcount { font-size:.85rem; color:var(--muted) }
+    .xcount.warn { color:#e3a24a }
+    .xcount.bad { color:#ff6b7a }
+    .share-row { display:flex; flex-wrap:wrap; gap:.45rem; margin-top:.6rem }
+  </style>
 </head>
 <body>
   <div data-header></div>
@@ -22,7 +30,11 @@
         <section>
           <div class="page-head" style="padding-top:0">
             <h1>النشر على القنوات</h1>
-            <p>اكتب منشوراً واحداً وانشُره على عدّة قنوات دفعةً واحدة.</p>
+            <p>منشور واحد → عدّة منصّات. تيليجرام مباشر، والباقي عبر Webhook أو مشاركة يدوية.</p>
+          </div>
+
+          <div class="conn" id="connBar">
+            <span class="pill off">جارٍ فحص الربط…</span>
           </div>
 
           <div class="card" style="margin-bottom:1.5rem">
@@ -30,21 +42,23 @@
               <div class="field">
                 <label for="content">المحتوى</label>
                 <textarea id="content" rows="4" placeholder="اكتب نصّ المنشور هنا…"></textarea>
+                <div class="xcount" id="xCount">٠ حرف · حدّ إكس ≈ ٢٨٠</div>
               </div>
               <div class="field">
-                <label for="media">رفع صورة (للبطاقة)</label>
+                <label for="media">رفع صورة / بطاقة</label>
                 <input type="file" id="media" accept="image/*" />
-                <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">للفيديو: ارفعه على يوتيوب وأدرِج رابطه في نصّ المنشور.</p>
+                <p class="muted" style="margin:.4rem 0 0;font-size:.85rem">للفيديو الطويل: ارفعه عبر يوتيوب من صفحة الدروس وأدرج الرابط هنا.</p>
               </div>
 
               <div class="field">
                 <label>القنوات المستهدفة</label>
-                <div style="display:flex;flex-direction:column;gap:.6rem">
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" checked style="width:auto" /> يوتيوب</label>
+                <div style="display:flex;flex-direction:column;gap:.55rem" id="chanList">
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" checked style="width:auto" /> تيليجرام <span class="muted" style="font-size:.8rem">(تسليم مباشر إن ضُبط)</span></label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" style="width:auto" /> يوتيوب</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="tiktok" style="width:auto" /> تيك توك</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="instagram" style="width:auto" /> إنستغرام</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> فيسبوك</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="x" style="width:auto" /> إكس / تويتر</label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" style="width:auto" /> تيليجرام</label>
                 </div>
               </div>
 
@@ -56,7 +70,9 @@
               <div style="display:flex;gap:.7rem;flex-wrap:wrap">
                 <button class="btn btn-primary" type="submit" data-action="now">نشر الآن</button>
                 <button class="btn btn-outline" type="submit" data-action="schedule">جدولة</button>
+                <button class="btn btn-ghost" type="button" id="manualShare">فتح روابط مشاركة يدوية</button>
               </div>
+              <div class="share-row" id="manualLinks" hidden></div>
               <div class="notice" id="pubNotice" hidden></div>
             </form>
           </div>
@@ -74,9 +90,9 @@
           </div>
 
           <div class="notice" id="channelsNote">
-            تيليجرام يُنشَر تلقائياً عند ضبط أسراره، وبقيّة القنوات تُسلَّم دفعةً واحدة عبر
-            Webhook التوزيع (Make/Zapier) عند ضبط سرّ PUBLISH_WEBHOOK_URL — راجِع README.
-            بلا ضبطٍ تبقى في قائمة الإصدار.
+            <strong>التسليم التلقائي:</strong> تيليجرام عبر Bot API · يوتيوب/تيك توك/فيسبوك/إكس/إنستغرام عبر
+            <code>PUBLISH_WEBHOOK_URL</code> (Make / Zapier / n8n). بدون الضبط تبقى في قائمة الإصدار ويمكنك
+            «إعادة المحاولة» أو المشاركة اليدوية.
           </div>
         </section>
       </div>
@@ -92,15 +108,18 @@
       var esc = RM.esc;
       var form = document.getElementById("publishForm");
       var notice = document.getElementById("pubNotice");
+      var conn = { telegram: false, webhook: false, youtube_oauth: false };
 
-      var CH = { youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك", x: "إكس", telegram: "تيليجرام" };
+      var CH = {
+        youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك",
+        x: "إكس", instagram: "إنستغرام", telegram: "تيليجرام",
+      };
       var STATUS = {
         draft: ["مسودة", "soon"], scheduled: ["مجدول", "soon"],
-        queued: ["في قائمة الإصدار", "soon"],
+        queued: ["في الطابور", "soon"],
         published: ["منشور", ""], failed: ["فشل", "live"],
       };
 
-      // الزرّ المضغوط يحدّد الإجراء (now/schedule)
       var pendingAction = "now";
       form.querySelectorAll("button[type=submit]").forEach(function (b) {
         b.addEventListener("click", function () { pendingAction = b.getAttribute("data-action"); });
@@ -108,8 +127,33 @@
 
       function show(msg) { notice.textContent = msg; notice.hidden = false; }
 
-      // رفع صورة البطاقة إلى R2 وإرجاع رابطها (أو null إن لم تُرفَق). يرمي خطأً عند فشل الرفع
-      // حتى لا يُنشَر المنشور بصورةٍ مفقودةٍ دون علم المستخدم.
+      function paintConn() {
+        var bar = document.getElementById("connBar");
+        bar.innerHTML =
+          pill(conn.telegram, "تيليجرام Bot") +
+          pill(conn.webhook, "Webhook التوزيع") +
+          pill(conn.youtube_oauth, "يوتيوب OAuth (للرفع من الدروس)");
+        var note = document.getElementById("channelsNote");
+        if (!conn.telegram && !conn.webhook) {
+          note.innerHTML = "<strong>لا تسليم تلقائي مُعَدّ حالياً.</strong> أضِف أسرار تيليجرام و/أو PUBLISH_WEBHOOK_URL في Cloudflare. يمكنك النشر اليدوي من زر الروابط أو حفظ المنشور وإعادة المحاولة لاحقاً.";
+        } else if (!conn.webhook) {
+          note.innerHTML = "تيليجرام جاهز. لباقي القنوات اضبط <code>PUBLISH_WEBHOOK_URL</code> أو استخدم المشاركة اليدوية.";
+        }
+      }
+      function pill(on, label) {
+        return '<span class="pill ' + (on ? "on" : "off") + '">' + (on ? "✓ " : "○ ") + label + "</span>";
+      }
+
+      var contentEl = document.getElementById("content");
+      function updateCount() {
+        var n = contentEl.value.length;
+        var el = document.getElementById("xCount");
+        el.textContent = n + " حرف · حدّ إكس ≈ ٢٨٠";
+        el.className = "xcount" + (n > 280 ? " bad" : n > 240 ? " warn" : "");
+      }
+      contentEl.addEventListener("input", updateCount);
+      updateCount();
+
       function uploadMedia() {
         var input = document.getElementById("media");
         if (!input.files || !input.files[0]) return Promise.resolve(null);
@@ -124,20 +168,46 @@
           });
       }
 
+      function selectedChannels() {
+        return Array.prototype.slice
+          .call(form.querySelectorAll('#chanList input[type=checkbox]:checked'))
+          .map(function (c) { return c.value; });
+      }
+
+      function buildManualLinks(text, url) {
+        var t = encodeURIComponent(text || "رياض المتقين");
+        var u = encodeURIComponent(url || location.origin);
+        return [
+          { name: "إكس", href: "https://twitter.com/intent/tweet?text=" + t + "&url=" + u },
+          { name: "فيسبوك", href: "https://www.facebook.com/sharer/sharer.php?u=" + u + "&quote=" + t },
+          { name: "واتساب", href: "https://wa.me/?text=" + encodeURIComponent((text || "") + " " + (url || location.origin)) },
+          { name: "تيليجرام", href: "https://t.me/share/url?url=" + u + "&text=" + t },
+          { name: "لينكدإن", href: "https://www.linkedin.com/sharing/share-offsite/?url=" + u },
+        ];
+      }
+
+      document.getElementById("manualShare").addEventListener("click", function () {
+        var box = document.getElementById("manualLinks");
+        var text = contentEl.value.trim();
+        var links = buildManualLinks(text, location.origin);
+        box.hidden = false;
+        box.innerHTML = links.map(function (l) {
+          return '<a class="btn btn-outline" target="_blank" rel="noopener" href="' + l.href + '">' + l.name + "</a>";
+        }).join("");
+      });
+
       form.addEventListener("submit", function (e) {
         e.preventDefault();
-        var channels = Array.prototype.slice
-          .call(form.querySelectorAll('input[type=checkbox]:checked'))
-          .map(function (c) { return c.value; });
+        var channels = selectedChannels();
         if (!channels.length) { show("اختَر قناةً واحدةً على الأقل."); return; }
 
-        var content = document.getElementById("content").value.trim();
+        var content = contentEl.value.trim();
         var hasMedia = document.getElementById("media").files.length > 0;
         if (!content && !hasMedia) { show("اكتب محتوى أو أرفِق وسائط."); return; }
 
         var action = pendingAction;
         var scheduledAt = document.getElementById("scheduleAt").value || null;
-        if (action === "schedule" && !scheduledAt) { show("حدّد موعد الجدولة في حقل «جدولة النشر»."); return; }
+        if (action === "schedule" && !scheduledAt) { show("حدّد موعد الجدولة."); return; }
 
         show("جارٍ المعالجة…");
         uploadMedia().then(function (mediaUrl) {
@@ -152,12 +222,22 @@
         }).then(function (res) {
           var d = res.d || {};
           if (!res.ok || !d.ok) { show(d.error || "تعذّر النشر."); return; }
-          var tg = (d.delivered || []).filter(function (x) { return x.channel === "telegram"; })[0];
-          if (action === "schedule") show("تمّت الجدولة ✓");
-          else if (tg && tg.ok) show("نُشِر على تيليجرام ✓ وحُفِظ للقنوات الأخرى.");
-          else if (tg && !tg.ok) show("تعذّر النشر على تيليجرام: " + (tg.error || "") + " — حُفِظ المنشور.");
-          else show("حُفِظ المنشور ✓ (يُربط تسليم القنوات تباعاً).");
+          if (d.approval_status === "pending") {
+            show("حُفِظ المنشور بانتظار موافقة المدير قبل التسليم ✓");
+          } else if (action === "schedule") {
+            show("تمّت الجدولة ✓");
+          } else {
+            var del = d.delivered || [];
+            var ok = del.filter(function (x) { return x.ok; }).map(function (x) { return CH[x.channel] || x.channel; });
+            var bad = del.filter(function (x) { return !x.ok; }).map(function (x) { return (CH[x.channel] || x.channel) + (x.error ? ": " + x.error : ""); });
+            var parts = [];
+            if (ok.length) parts.push("نُشِر على: " + ok.join("، "));
+            if (bad.length) parts.push("لم يُسلَّم: " + bad.join(" · "));
+            if (!parts.length) parts.push("حُفِظ في الطابور — لا وسيط تسليم مُعَدّ للقنوات المختارة.");
+            show(parts.join(" | ") + " (الحالة: " + (STATUS[d.status] ? STATUS[d.status][0] : d.status) + ")");
+          }
           form.reset();
+          updateCount();
           loadPosts();
         }).catch(function (err) { show(err && err.message ? err.message : "حدث خطأ في الاتصال."); });
       });
@@ -167,41 +247,72 @@
         RM.api("/api/teacher/posts").then(function (res) {
           var d = res.d || {};
           if (!res.ok || !d.ok) {
-            body.innerHTML = '<tr><td colspan="5" class="muted">تعذّر تحميل المنشورات. سجّل الدخول ثم أعِد المحاولة.</td></tr>';
+            body.innerHTML = '<tr><td colspan="5" class="muted">تعذّر التحميل. سجّل الدخول كمعلّم.</td></tr>';
             return;
           }
-          if (!d.telegram) {
-            document.getElementById("channelsNote").textContent =
-              "تيليجرام غير مُعَدّ بعد. أضِف TELEGRAM_BOT_TOKEN وTELEGRAM_CHAT_ID كأسرار لتفعيل النشر التلقائي عليه (راجِع README). القنوات الأخرى تُحفَظ في قائمة الإصدار.";
+          if (d.connections) {
+            conn = d.connections;
+            paintConn();
           }
           var list = d.posts || [];
-          if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا توجد منشورات بعد.</td></tr>'; return; }
+          if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا منشورات بعد.</td></tr>'; return; }
           body.innerHTML = list.map(function (p) {
             var chans = [];
             try { chans = JSON.parse(p.channels || "[]"); } catch (e) { chans = []; }
             var chLabel = chans.map(function (c) { return CH[c] || c; }).join(" · ");
             var st = STATUS[p.status] || [p.status, ""];
             var when = p.scheduled_at || p.created_at || "—";
+            var ap = p.approval_status === "pending" ? ' <span class="badge soon">بانتظار موافقة</span>' : "";
+            var logHint = "";
+            try {
+              var log = JSON.parse(p.delivery_log || "null");
+              if (log && log.delivered) {
+                logHint = '<div class="muted" style="font-size:.75rem;margin-top:.25rem">' +
+                  log.delivered.map(function (x) {
+                    return (CH[x.channel] || x.channel) + ":" + (x.ok ? "✓" : "✗");
+                  }).join(" ") + "</div>";
+              }
+            } catch (e2) {}
+            var actions = '<a href="#" class="gold rm-del" data-id="' + p.id + '">حذف</a>';
+            if (p.status === "queued" || p.status === "failed") {
+              actions = '<a href="#" class="gold rm-retry" data-id="' + p.id + '">إعادة تسليم</a> · ' + actions;
+            }
             return '<tr data-id="' + p.id + '">' +
-              "<td>" + (p.content ? esc(p.content) : '<span class="muted">— وسائط —</span>') + "</td>" +
+              "<td>" + (p.content ? esc(p.content.slice(0, 120)) : '<span class="muted">— وسائط —</span>') + logHint + "</td>" +
               "<td>" + esc(chLabel) + "</td>" +
               "<td>" + esc(when) + "</td>" +
-              '<td><span class="badge ' + st[1] + '">' + st[0] + "</span></td>" +
-              '<td><a href="#" class="gold rm-del" data-id="' + p.id + '">حذف</a></td>' +
-              "</tr>";
+              '<td><span class="badge ' + st[1] + '">' + st[0] + "</span>" + ap + "</td>" +
+              "<td>" + actions + "</td></tr>";
           }).join("");
         }).catch(function () {
-          body.innerHTML = '<tr><td colspan="5" class="muted">تعذّر الاتصال بالخادم.</td></tr>';
+          body.innerHTML = '<tr><td colspan="5" class="muted">تعذّر الاتصال.</td></tr>';
         });
       }
 
       document.getElementById("postsBody").addEventListener("click", function (e) {
         var del = e.target.closest(".rm-del");
-        if (!del) return;
-        e.preventDefault();
-        if (!confirm("حذف هذا المنشور؟")) return;
-        RM.api("/api/teacher/posts/" + del.getAttribute("data-id"), { method: "DELETE" })
-          .then(function () { loadPosts(); });
+        if (del) {
+          e.preventDefault();
+          if (!confirm("حذف هذا المنشور؟")) return;
+          RM.api("/api/teacher/posts/" + del.getAttribute("data-id"), { method: "DELETE" })
+            .then(function () { loadPosts(); });
+          return;
+        }
+        var retry = e.target.closest(".rm-retry");
+        if (retry) {
+          e.preventDefault();
+          retry.textContent = "…";
+          RM.api("/api/teacher/posts/" + retry.getAttribute("data-id") + "/retry", { method: "POST" })
+            .then(function (res) {
+              var d = res.d || {};
+              if (!res.ok || !d.ok) { alert(d.error || "فشلت إعادة التسليم"); }
+              else {
+                var ok = (d.delivered || []).filter(function (x) { return x.ok; }).length;
+                alert("أُعيد التسليم — نجح: " + ok + " · الحالة: " + (d.status || ""));
+              }
+              loadPosts();
+            });
+        }
       });
 
       loadPosts();
