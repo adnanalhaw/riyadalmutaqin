@@ -1,0 +1,15 @@
+{
+  "name": "رياض المتقين",
+  "short_name": "رياض المتقين",
+  "description": "القرآن والسنّة بفهم سلف الأمّة — دروس وأذكار وأدوات المسلم",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#03130b",
+  "theme_color": "#03130b",
+  "dir": "rtl",
+  "lang": "ar",
+  "icons": [
+    { "src": "/assets/logo.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/assets/logo.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ]
+}

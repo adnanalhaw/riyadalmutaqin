@@ -33,6 +33,33 @@
               صحّح النص قبل الاعتماد إن لزم (أصل المساهم يُحفظ)، واكتب ملاحظة للمردود ليتعلّم صاحبه.</p>
           </div>
 
+          <div class="card" style="margin-bottom:1.8rem">
+            <h3 style="color:var(--gold);margin-top:0">كتب ومستندات PDF</h3>
+            <p class="muted" style="margin-top:0">رفع المدير يُعتمَد تلقائياً. رفع المعلّم يظهر هنا بانتظار اعتمادك (حسب قرارات المنصّة).</p>
+            <form id="docForm" style="max-width:520px;margin-bottom:1.2rem">
+              <div class="field">
+                <label for="docTitle">عنوان الكتاب / المستند</label>
+                <input id="docTitle" type="text" required placeholder="مثال: متن أبي شجاع" />
+              </div>
+              <div class="field">
+                <label for="docRights">مصدر الحقّ في النشر</label>
+                <select id="docRights" required>
+                  <option value="">— اختر —</option>
+                  <option value="public_domain">ملك عام</option>
+                  <option value="publisher_permission">إذن ناشر</option>
+                  <option value="official">مصدر رسمي</option>
+                </select>
+              </div>
+              <div class="field">
+                <label for="docFile">ملف PDF</label>
+                <input id="docFile" type="file" accept="application/pdf,.pdf" required />
+              </div>
+              <button class="btn btn-primary" type="submit">رفع واعتماد</button>
+              <div class="notice" id="docNotice" hidden></div>
+            </form>
+            <div id="docList"><p class="muted">يجري تحميل المستندات…</p></div>
+          </div>
+
           <div class="tabbtns">
             <button class="btn on" data-st="pending" type="button">⏳ بانتظار المراجعة <span id="cPending"></span></button>
             <button class="btn" data-st="approved" type="button">✅ المعتمدة <span id="cApproved"></span></button>
@@ -60,6 +87,77 @@
         if (!u) { location.href = "/login"; return; }
         if (u.role !== "manager" && u.role !== "admin") { location.href = "/"; return; }
         load();
+        loadDocs();
+      });
+
+      function loadDocs() {
+        api("/api/manager/documents?status=all").then(function (res) {
+          var list = (res.d && res.d.documents) || [];
+          var el = document.getElementById("docList");
+          if (!list.length) { el.innerHTML = '<p class="muted">لا مستندات بعد.</p>'; return; }
+          el.innerHTML = list.map(function (d) {
+            var st = d.approval_status === "approved" ? "✅ معتمد" :
+              d.approval_status === "rejected" ? "❌ مرفوض" : "⏳ معلّق";
+            var acts = d.approval_status === "pending"
+              ? '<div style="margin-top:.5rem;display:flex;gap:.5rem">' +
+                '<button class="btn btn-primary doc-act" data-id="' + d.id + '" data-action="approve">اعتماد</button>' +
+                '<button class="btn btn-outline doc-act" data-id="' + d.id + '" data-action="reject">رفض</button></div>'
+              : "";
+            return '<div class="card" style="margin-bottom:.8rem"><strong>' + esc(d.title) + "</strong>" +
+              '<div class="muted" style="font-size:.85rem">' + st +
+              (d.uploader ? " · " + esc(d.uploader) : "") +
+              (d.source_rights ? " · " + esc(d.source_rights) : "") + "</div>" +
+              '<a class="gold" href="/api/media/' + encodeURIComponent(d.r2_key) + '" target="_blank" rel="noopener">فتح PDF</a>' +
+              acts + "</div>";
+          }).join("");
+        });
+      }
+
+      document.getElementById("docForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var n = document.getElementById("docNotice");
+        var file = document.getElementById("docFile").files[0];
+        if (!file) return;
+        n.hidden = false; n.textContent = "جارٍ الرفع…";
+        var fd = new FormData();
+        fd.append("file", file);
+        fd.append("kind", "document");
+        fetch("/api/teacher/media", { method: "POST", body: fd })
+          .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+          .then(function (up) {
+            if (!up.ok || !up.d.ok) { n.textContent = up.d.error || "تعذّر رفع الملف."; return null; }
+            return api("/api/teacher/documents", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                title: document.getElementById("docTitle").value.trim(),
+                r2_key: up.d.key,
+                mime: up.d.mime,
+                bytes: up.d.bytes,
+                source_rights: document.getElementById("docRights").value,
+              }),
+            });
+          })
+          .then(function (res) {
+            if (!res) return;
+            if (res.ok && res.d.ok) {
+              n.textContent = "تمّ الرفع والاعتماد ✓";
+              document.getElementById("docForm").reset();
+              loadDocs();
+            } else n.textContent = (res.d && res.d.error) || "تعذّر الحفظ.";
+          })
+          .catch(function () { n.textContent = "خطأ في الاتصال."; });
+      });
+
+      document.getElementById("docList").addEventListener("click", function (e) {
+        var btn = e.target.closest(".doc-act");
+        if (!btn) return;
+        btn.disabled = true;
+        api("/api/manager/documents/" + btn.getAttribute("data-id"), {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: btn.getAttribute("data-action") }),
+        }).then(function () { loadDocs(); });
       });
 
       document.querySelectorAll(".tabbtns [data-st]").forEach(function (b) {

@@ -288,6 +288,40 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return json({ ok: true, teachers: results, following, me: user ? user.id : null });
   }
 
+  // ملف معلّم عام
+  const teacherPub = path.match(/^\/api\/teachers\/(\d+)$/);
+  if (teacherPub && request.method === "GET") {
+    const id = Number(teacherPub[1]);
+    const t = await env.DB.prepare(
+      `SELECT u.id, u.name,
+              (SELECT COUNT(*) FROM follows f WHERE f.teacher_id = u.id) AS followers
+         FROM users u
+        WHERE u.id = ? AND u.role IN ('teacher','admin') AND u.status = 'active'`,
+    ).bind(id).first();
+    if (!t) return json({ ok: false, error: "المعلّم غير موجود." }, 404);
+    const { results: lessons } = await env.DB.prepare(
+      `SELECT id, title, doctor_name, type, youtube_id, status, created_at
+         FROM lessons
+        WHERE author_id = ? AND is_published = 1 AND approval_status = 'approved'
+        ORDER BY created_at DESC LIMIT 24`,
+    ).bind(id).all();
+    const { results: clips } = await env.DB.prepare(
+      `SELECT id, title, doctor_name, youtube_id, duration
+         FROM clips
+        WHERE author_id = ? AND is_published = 1 AND approval_status = 'approved'
+        ORDER BY created_at DESC LIMIT 24`,
+    ).bind(id).all();
+    const me = await getSessionUser(request, env.DB);
+    let following = false;
+    if (me) {
+      const f = await env.DB.prepare(
+        "SELECT 1 AS x FROM follows WHERE follower_id = ? AND teacher_id = ?",
+      ).bind(me.id, id).first();
+      following = Boolean(f);
+    }
+    return json({ ok: true, teacher: t, lessons, clips, following });
+  }
+
   // ===== متابعة/إلغاء متابعة معلّم (يتطلّب تسجيل دخول) =====
   if (route === "POST /api/follow") {
     const user = await getSessionUser(request, env.DB);
@@ -341,9 +375,67 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     const { results } = await env.DB.prepare(
       `SELECT id, title, description, doctor_name, audio_url, background_image, duration
          FROM audio_posts
+        WHERE is_published = 1 AND approval_status = 'approved'
         ORDER BY created_at DESC`,
     ).all();
     return json({ ok: true, audio: results });
+  }
+
+  // إعدادات عامة للقراءة فقط (روابط التواصل وغيرها)
+  if (route === "GET /api/settings/public") {
+    const keys = ["social_youtube", "social_tiktok", "social_facebook", "social_instagram", "site_tagline"];
+    const settings: Record<string, string> = {};
+    try {
+      const { results } = await env.DB.prepare(
+        `SELECT key, value FROM site_settings WHERE key IN (${keys.map(() => "?").join(",")})`,
+      ).bind(...keys).all<{ key: string; value: string }>();
+      for (const row of results || []) settings[row.key] = row.value ?? "";
+    } catch {
+      // الجدول قد لا يكون مُرحَّلاً بعد — الواجهة تستخدم القيم الافتراضية.
+    }
+    return json({ ok: true, settings });
+  }
+
+  // سؤال من الكوربوس المعتمد فقط (عام) — لا اختلاق؛ بلا مصدر لا جواب.
+  if (route === "POST /api/ask") {
+    const b = await readJson(request);
+    const q = String(b.question ?? "").trim();
+    if (q.length < 3) return json({ ok: false, error: "اكتب سؤالاً أوضح." }, 400);
+    if (q.length > 500) return json({ ok: false, error: "السؤال طويل جداً." }, 400);
+    if (await rateLimited(env, request, "ask", 30, 10)) {
+      return json({ ok: false, error: "محاولات كثيرة. حاوِل بعد قليل." }, 429);
+    }
+    // بحث بسيط بالكلمات في الأسئلة/الأجوبة المعتمدة
+    const words = q
+      .replace(/[^\u0600-\u06FFa-zA-Z0-9\s]/g, " ")
+      .split(/\s+/)
+      .filter((w) => w.length >= 2)
+      .slice(0, 6);
+    if (!words.length) return json({ ok: false, error: "تعذّر فهم السؤال." }, 400);
+    const like = words.map(() => "(question LIKE ? OR answer LIKE ? OR source LIKE ?)").join(" OR ");
+    const binds: string[] = [];
+    for (const w of words) {
+      const p = `%${w}%`;
+      binds.push(p, p, p);
+    }
+    const { results } = await env.DB.prepare(
+      `SELECT id, question, answer, source, topic
+         FROM ai_contributions
+        WHERE status = 'approved' AND kind = 'qa' AND answer IS NOT NULL AND length(answer) > 0
+          AND (${like})
+        ORDER BY length(question) ASC
+        LIMIT 5`,
+    ).bind(...binds).all();
+    if (!results.length) {
+      return json({
+        ok: true,
+        found: false,
+        message: "لا جواب معتمد في الكوربوس بعد لهذا السؤال. ساهم بإجابة موثّقة من المصدر.",
+        contribute: "/train",
+        matches: [],
+      });
+    }
+    return json({ ok: true, found: true, matches: results });
   }
 
   // ===== المتعلّم: مكتبة الحفظ (يتطلّب تسجيل دخول) =====
@@ -736,11 +828,16 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
   // ===== تواصل مع الدعم (عام) =====
   if (route === "POST /api/support") return submitSupportTicket(request, env);
 
-  // ===== الإشعارات (مدير الموقع/الأدمن) =====
+  // ===== المساجد/الجمعيات (عام + إدارة للمالك) =====
+  if (path.startsWith("/api/mosques")) {
+    return handleMosques(request, env, path, route);
+  }
+
+  // ===== الإشعارات (أي مستخدم مسجّل حسب دوره) =====
   if (path.startsWith("/api/notifications")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
-    if (user.role !== "manager" && user.role !== "admin") return json({ ok: false, error: "forbidden" }, 403);
+    if (user.mustChangePassword) return mustChange();
     return handleNotifications(request, env, user, route);
   }
 
@@ -762,12 +859,12 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleManager(request, env, user, path, route);
   }
 
-  // ===== المعلّم (يتطلّب دور teacher/admin) =====
+  // ===== المعلّم / المدير / الأدمن: إدارة محتوى ونشر (كلٌّ على قنواته) =====
   if (path.startsWith("/api/teacher/")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
     if (user.mustChangePassword) return mustChange();
-    if (user.role !== "teacher" && user.role !== "admin") {
+    if (user.role !== "teacher" && user.role !== "admin" && user.role !== "manager") {
       return json({ ok: false, error: "forbidden" }, 403);
     }
     return handleTeacher(request, env, user, path, route);
@@ -1007,20 +1104,221 @@ async function submitSupportTicket(request: Request, env: Env): Promise<Response
   return json({ ok: true, id }, 201);
 }
 
-/** إشعارات مدير الموقع/الأدمن: قائمة + عدّ غير المقروء + تعليم كمقروء. */
+/** واجهات المساجد/الجمعيات — اشتراك خدمة (Free/Pro) وليس تبرعات. */
+async function handleMosques(request: Request, env: Env, path: string, route: string): Promise<Response> {
+  // قائمة عامة
+  if (route === "GET /api/mosques") {
+    const { results } = await env.DB.prepare(
+      `SELECT id, name, slug, city, country, lat, lng, plan, description
+         FROM mosque_orgs WHERE is_published = 1
+        ORDER BY plan = 'pro' DESC, name ASC LIMIT 200`,
+    ).all();
+    return json({ ok: true, mosques: results });
+  }
+
+  // تفاصيل عامة بالـ slug
+  const bySlug = path.match(/^\/api\/mosques\/by-slug\/([^/]+)$/);
+  if (bySlug && request.method === "GET") {
+    const slug = decodeURIComponent(bySlug[1]);
+    const row = await env.DB.prepare(
+      `SELECT id, name, slug, city, country, lat, lng, address, iqama_json, description,
+              external_url, plan, is_published
+         FROM mosque_orgs WHERE slug = ? AND is_published = 1`,
+    ).bind(slug).first();
+    if (!row) return json({ ok: false, error: "المسجد غير موجود." }, 404);
+    return json({ ok: true, mosque: row });
+  }
+
+  // إنشاء / قائمة ملكي — يتطلّب دخولاً
+  const user = await getSessionUser(request, env.DB);
+
+  if (route === "GET /api/mosques/mine") {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    const { results } = await env.DB.prepare(
+      `SELECT id, name, slug, city, country, plan, is_published, created_at
+         FROM mosque_orgs WHERE owner_user_id = ? ORDER BY created_at DESC`,
+    ).bind(user.id).all();
+    return json({ ok: true, mosques: results });
+  }
+
+  if (route === "POST /api/mosques") {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
+    const b = await readJson(request);
+    const name = String(b.name ?? "").trim();
+    if (name.length < 2) return json({ ok: false, error: "اسم المسجد/الجمعية مطلوب." }, 400);
+    const base = name
+      .toLowerCase()
+      .replace(/[^\u0600-\u06FFa-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48) || `mosque-${Date.now()}`;
+    const slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    const city = String(b.city ?? "").trim().slice(0, 80) || null;
+    const country = String(b.country ?? "Kuwait").trim().slice(0, 80) || "Kuwait";
+    const description = String(b.description ?? "").trim().slice(0, 2000) || null;
+    const address = String(b.address ?? "").trim().slice(0, 300) || null;
+    const defaultIqama = JSON.stringify({ Fajr: 25, Dhuhr: 20, Asr: 20, Maghrib: 10, Isha: 20 });
+    const res = await env.DB.prepare(
+      `INSERT INTO mosque_orgs (name, slug, city, country, address, description, iqama_json, owner_user_id, plan)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'free')`,
+    ).bind(name, slug, city, country, address, description, defaultIqama, user.id).run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "mosque.create", `mosque:${id}`);
+    return json({ ok: true, id, slug, plan: "free" }, 201);
+  }
+
+  const m = path.match(/^\/api\/mosques\/(\d+)$/);
+  if (m) {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    const id = Number(m[1]);
+    const row = await env.DB.prepare(`SELECT * FROM mosque_orgs WHERE id = ?`).bind(id).first<{
+      id: number; owner_user_id: number; plan: string; slug: string; name: string;
+      city: string | null; country: string | null; address: string | null;
+      description: string | null; iqama_json: string | null; external_url: string | null;
+      is_published: number;
+    }>();
+    if (!row) return json({ ok: false, error: "غير موجود." }, 404);
+    const isStaff = user.role === "admin" || user.role === "manager";
+    if (row.owner_user_id !== user.id && !isStaff) return json({ ok: false, error: "forbidden" }, 403);
+
+    if (request.method === "GET") {
+      // إحصاء مشاهدات الصفحة
+      const views = await env.DB.prepare(
+        `SELECT COUNT(*) AS c FROM page_views WHERE path = ? OR path = ?`,
+      ).bind(`/mosque/${row.slug}`, `/mosque/${row.slug}/`).first<{ c: number }>();
+      let series: { day: string; c: number }[] = [];
+      if (row.plan === "pro") {
+        const { results } = await env.DB.prepare(
+          `SELECT date(created_at) AS day, COUNT(*) AS c FROM page_views
+            WHERE (path = ? OR path = ?) AND created_at >= datetime('now','-7 days')
+            GROUP BY date(created_at) ORDER BY day ASC`,
+        ).bind(`/mosque/${row.slug}`, `/mosque/${row.slug}/`).all<{ day: string; c: number }>();
+        series = results || [];
+      }
+      return json({
+        ok: true,
+        mosque: row,
+        stats: { views: views?.c ?? 0, pro: row.plan === "pro", series },
+      });
+    }
+
+    if (request.method === "PATCH") {
+      const b = await readJson(request);
+      const fields: string[] = [];
+      const vals: (string | number | null)[] = [];
+      const allowed = ["name", "city", "country", "address", "description", "external_url", "iqama_json"];
+      for (const k of allowed) {
+        if (k in b) {
+          fields.push(`${k} = ?`);
+          vals.push(b[k] === null ? null : String(b[k]).slice(0, k === "description" ? 2000 : 500));
+        }
+      }
+      if ("is_published" in b) {
+        fields.push("is_published = ?");
+        vals.push(b.is_published ? 1 : 0);
+      }
+      if ("lat" in b) { fields.push("lat = ?"); vals.push(Number(b.lat)); }
+      if ("lng" in b) { fields.push("lng = ?"); vals.push(Number(b.lng)); }
+      // ترقية Pro: المدير فقط (أو عبر طلب)
+      if ("plan" in b && isStaff) {
+        const plan = String(b.plan) === "pro" ? "pro" : "free";
+        fields.push("plan = ?");
+        vals.push(plan);
+      }
+      if (!fields.length) return json({ ok: false, error: "لا تغييرات." }, 400);
+      vals.push(id);
+      await env.DB.prepare(`UPDATE mosque_orgs SET ${fields.join(", ")} WHERE id = ?`).bind(...vals).run();
+      await audit(env, user.email, "mosque.update", `mosque:${id}`);
+      return json({ ok: true });
+    }
+  }
+
+  // طلب ترقية Pro
+  const up = path.match(/^\/api\/mosques\/(\d+)\/request-pro$/);
+  if (up && request.method === "POST") {
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    const id = Number(up[1]);
+    const row = await env.DB.prepare(`SELECT id, owner_user_id, plan FROM mosque_orgs WHERE id = ?`)
+      .bind(id).first<{ id: number; owner_user_id: number; plan: string }>();
+    if (!row || row.owner_user_id !== user.id) return json({ ok: false, error: "forbidden" }, 403);
+    if (row.plan === "pro") return json({ ok: false, error: "المشترك بالفعل على Pro." }, 409);
+    const b = await readJson(request);
+    const note = String(b.note ?? "").trim().slice(0, 500) || null;
+    await env.DB.prepare(
+      `INSERT INTO mosque_plan_requests (mosque_id, user_id, note) VALUES (?, ?, ?)`,
+    ).bind(id, user.id, note).run();
+    await notifyRole(env, "manager", {
+      type: "mosque_pro",
+      title: "طلب اشتراك مسجد Pro",
+      body: `${user.name} يطلب ترقية مسجد #${id}`,
+      link: "/manager",
+      email: true,
+    });
+    return json({ ok: true }, 201);
+  }
+
+  // مدير: قائمة طلبات Pro + موافقة
+  if (route === "GET /api/mosques/plan-requests") {
+    if (!user || (user.role !== "manager" && user.role !== "admin")) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
+    const { results } = await env.DB.prepare(
+      `SELECT r.id, r.mosque_id, r.note, r.status, r.created_at, m.name AS mosque_name, u.name AS user_name, u.email
+         FROM mosque_plan_requests r
+         JOIN mosque_orgs m ON m.id = r.mosque_id
+         JOIN users u ON u.id = r.user_id
+        WHERE r.status = 'pending'
+        ORDER BY r.created_at DESC LIMIT 100`,
+    ).all();
+    return json({ ok: true, requests: results });
+  }
+  const apr = path.match(/^\/api\/mosques\/plan-requests\/(\d+)$/);
+  if (apr && request.method === "POST") {
+    if (!user || (user.role !== "manager" && user.role !== "admin")) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
+    const rid = Number(apr[1]);
+    const b = await readJson(request);
+    const action = b.action === "reject" ? "reject" : "approve";
+    const req = await env.DB.prepare(`SELECT * FROM mosque_plan_requests WHERE id = ?`)
+      .bind(rid).first<{ id: number; mosque_id: number; status: string }>();
+    if (!req || req.status !== "pending") return json({ ok: false, error: "الطلب غير متاح." }, 404);
+    if (action === "approve") {
+      await env.DB.prepare(
+        `UPDATE mosque_orgs SET plan = 'pro', plan_expires_at = datetime('now','+365 days') WHERE id = ?`,
+      ).bind(req.mosque_id).run();
+      await env.DB.prepare(`UPDATE mosque_plan_requests SET status = 'approved' WHERE id = ?`).bind(rid).run();
+    } else {
+      await env.DB.prepare(`UPDATE mosque_plan_requests SET status = 'rejected' WHERE id = ?`).bind(rid).run();
+    }
+    await audit(env, user.email, `mosque.plan.${action}`, `request:${rid}`);
+    return json({ ok: true });
+  }
+
+  return json({ ok: false, error: "Not Found" }, 404);
+}
+
+/** إشعارات الأدوار: قائمة + عدّ غير المقروء + تعليم كمقروء. */
 async function handleNotifications(request: Request, env: Env, user: AuthUser, route: string): Promise<Response> {
-  const roleFilter = user.role === "admin" ? ["manager", "admin"] : ["manager"];
+  // الأدمن يرى إشعارات المدير+الأدمن؛ الباقون يرون دورهم (+ إشعارات موجّهة لمعرّفهم).
+  const roleFilter =
+    user.role === "admin" ? ["manager", "admin"] :
+    user.role === "manager" ? ["manager"] :
+    [user.role];
   const placeholders = roleFilter.map(() => "?").join(",");
 
   if (route === "GET /api/notifications") {
     const { results } = await env.DB.prepare(
       `SELECT id, type, title, body, link, is_read, created_at
-         FROM notifications WHERE recipient_role IN (${placeholders})
+         FROM notifications
+        WHERE recipient_role IN (${placeholders})
+           OR recipient_id = ?
         ORDER BY created_at DESC LIMIT 50`,
-    ).bind(...roleFilter).all();
+    ).bind(...roleFilter, user.id).all();
     const unread = await env.DB.prepare(
-      `SELECT COUNT(*) AS c FROM notifications WHERE recipient_role IN (${placeholders}) AND is_read = 0`,
-    ).bind(...roleFilter).first<{ c: number }>();
+      `SELECT COUNT(*) AS c FROM notifications
+        WHERE is_read = 0 AND (recipient_role IN (${placeholders}) OR recipient_id = ?)`,
+    ).bind(...roleFilter, user.id).first<{ c: number }>();
     return json({ ok: true, notifications: results, unread: unread ? unread.c : 0 });
   }
 
@@ -1028,12 +1326,14 @@ async function handleNotifications(request: Request, env: Env, user: AuthUser, r
     const b = await readJson(request);
     if (b.id) {
       await env.DB.prepare(
-        `UPDATE notifications SET is_read = 1 WHERE id = ? AND recipient_role IN (${placeholders})`,
-      ).bind(Number(b.id), ...roleFilter).run();
+        `UPDATE notifications SET is_read = 1
+          WHERE id = ? AND (recipient_role IN (${placeholders}) OR recipient_id = ?)`,
+      ).bind(Number(b.id), ...roleFilter, user.id).run();
     } else {
       await env.DB.prepare(
-        `UPDATE notifications SET is_read = 1 WHERE recipient_role IN (${placeholders})`,
-      ).bind(...roleFilter).run();
+        `UPDATE notifications SET is_read = 1
+          WHERE recipient_role IN (${placeholders}) OR recipient_id = ?`,
+      ).bind(...roleFilter, user.id).run();
     }
     return json({ ok: true });
   }
@@ -1057,8 +1357,13 @@ async function handleManager(
          (SELECT COUNT(*) FROM clips WHERE approval_status = 'pending')            AS pending_clips,
          (SELECT COUNT(*) FROM lessons WHERE approval_status = 'pending')          AS pending_lessons,
          (SELECT COUNT(*) FROM channel_posts WHERE approval_status = 'pending')    AS pending_posts,
+         (SELECT COUNT(*) FROM audio_posts WHERE approval_status = 'pending')      AS pending_audio,
+         (SELECT COUNT(*) FROM ai_documents WHERE approval_status = 'pending')     AS pending_docs,
          (SELECT COUNT(*) FROM users WHERE role = 'teacher')                       AS teachers,
-         (SELECT COUNT(*) FROM users WHERE role = 'student')                       AS students`,
+         (SELECT COUNT(*) FROM users WHERE role = 'student')                       AS students,
+         (SELECT COUNT(*) FROM mosque_orgs)                                        AS mosques,
+         (SELECT COUNT(*) FROM mosque_orgs WHERE plan = 'pro')                     AS mosques_pro,
+         (SELECT COUNT(*) FROM mosque_plan_requests WHERE status = 'pending')      AS pending_mosque_pro`,
     ).first();
     return json({ ok: true, stats: row });
   }
@@ -1165,19 +1470,82 @@ async function handleManager(
          FROM channel_posts p LEFT JOIN users u ON u.id = p.author_id
         WHERE p.approval_status = 'pending' ORDER BY p.created_at DESC LIMIT 100`,
     ).all();
-    return json({ ok: true, clips, lessons, posts });
+    const { results: audio } = await env.DB.prepare(
+      `SELECT a.id, a.title, a.doctor_name, a.audio_url, a.duration, a.created_at, u.name AS author_name
+         FROM audio_posts a LEFT JOIN users u ON u.id = a.author_id
+        WHERE a.approval_status = 'pending' ORDER BY a.created_at DESC LIMIT 100`,
+    ).all();
+    return json({ ok: true, clips, lessons, posts, audio });
+  }
+
+  // إعدادات الموقع (مدير/أدمن)
+  if (route === "GET /api/manager/settings") {
+    const { results } = await env.DB.prepare(`SELECT key, value FROM site_settings ORDER BY key`).all<{ key: string; value: string }>();
+    const settings: Record<string, string> = {};
+    for (const row of results || []) settings[row.key] = row.value ?? "";
+    return json({ ok: true, settings });
+  }
+  if (route === "POST /api/manager/settings") {
+    const b = await readJson(request);
+    const allowed = ["social_youtube", "social_tiktok", "social_facebook", "social_instagram", "site_tagline"];
+    let updated = 0;
+    for (const key of allowed) {
+      if (!(key in b)) continue;
+      const value = String(b[key] ?? "").trim().slice(0, 500);
+      await env.DB.prepare(
+        `INSERT INTO site_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
+      ).bind(key, value).run();
+      updated++;
+    }
+    await audit(env, user.email, "manager.settings", `keys:${updated}`);
+    return json({ ok: true, updated });
+  }
+
+  // مستندات التدريب (قائمة / اعتماد)
+  if (route === "GET /api/manager/documents") {
+    const reqUrl = new URL(request.url);
+    const status = ["pending", "approved", "rejected", "all"].includes(reqUrl.searchParams.get("status") ?? "")
+      ? (reqUrl.searchParams.get("status") as string)
+      : "pending";
+    const where = status === "all" ? "" : " WHERE d.approval_status = ?";
+    const binds = status === "all" ? [] : [status];
+    const { results } = await env.DB.prepare(
+      `SELECT d.id, d.title, d.r2_key, d.mime, d.bytes, d.source_rights, d.approval_status, d.notes,
+              d.created_at, d.reviewed_at, u.name AS uploader
+         FROM ai_documents d LEFT JOIN users u ON u.id = d.uploaded_by
+        ${where}
+        ORDER BY d.created_at DESC LIMIT 200`,
+    ).bind(...binds).all();
+    return json({ ok: true, documents: results });
+  }
+  const md = path.match(/^\/api\/manager\/documents\/(\d+)$/);
+  if (md && request.method === "POST") {
+    const id = Number(md[1]);
+    const b = await readJson(request);
+    const status = b.action === "approve" ? "approved" : b.action === "reject" ? "rejected" : "";
+    if (!status) return json({ ok: false, error: "إجراء غير صالح." }, 400);
+    const notes = String(b.notes ?? "").trim().slice(0, 500) || null;
+    await env.DB.prepare(
+      `UPDATE ai_documents SET approval_status = ?, reviewed_by = ?, reviewed_at = datetime('now'),
+         notes = COALESCE(?, notes), status = CASE WHEN ? = 'approved' THEN 'active' ELSE 'archived' END
+       WHERE id = ?`,
+    ).bind(status, user.id, notes, status, id).run();
+    await audit(env, user.email, `manager.document.${b.action}`, `document:${id}`);
+    return json({ ok: true });
   }
 
   // الموافقة/الرفض على عنصر محتوى
-  const mp = path.match(/^\/api\/manager\/(clips|lessons|posts)\/(\d+)$/);
+  const mp = path.match(/^\/api\/manager\/(clips|lessons|posts|audio)\/(\d+)$/);
   if (mp && request.method === "POST") {
-    const table = mp[1] === "posts" ? "channel_posts" : mp[1];
+    const kind = mp[1];
+    const table = kind === "posts" ? "channel_posts" : kind === "audio" ? "audio_posts" : kind;
     const id = Number(mp[2]);
     const b = await readJson(request);
     const status = b.action === "approve" ? "approved" : b.action === "reject" ? "rejected" : "";
     if (!status) return json({ ok: false, error: "إجراء غير صالح." }, 400);
-    // عند الموافقة على درس/مقطع: ننشره أيضاً (is_published) إن كان مطبّقاً.
-    if (table === "clips" || table === "lessons") {
+    // عند الموافقة على درس/مقطع/صوت: ننشره أيضاً (is_published).
+    if (table === "clips" || table === "lessons" || table === "audio_posts") {
       await env.DB.prepare(
         `UPDATE ${table} SET approval_status = ?, reviewed_by = ?, is_published = ? WHERE id = ?`,
       ).bind(status, user.id, status === "approved" ? 1 : 0, id).run();
@@ -1186,7 +1554,7 @@ async function handleManager(
         `UPDATE channel_posts SET approval_status = ?, reviewed_by = ? WHERE id = ?`,
       ).bind(status, user.id, id).run();
     }
-    await audit(env, user.email, `manager.${mp[1]}.${b.action}`, `${mp[1]}:${id}`);
+    await audit(env, user.email, `manager.${kind}.${b.action}`, `${kind}:${id}`);
     return json({ ok: true });
   }
 
@@ -1463,7 +1831,7 @@ async function audit(env: Env, email: string, action: string, target: string): P
 }
 
 /** القنوات المدعومة للنشر. */
-const CHANNELS = ["youtube", "tiktok", "facebook", "x", "telegram"] as const;
+const CHANNELS = ["youtube", "tiktok", "facebook", "x", "instagram", "telegram"] as const;
 type Channel = (typeof CHANNELS)[number];
 
 /** هل تكامل تيليجرام مُعَدّ (أسرار موجودة)؟ */
@@ -1519,20 +1887,130 @@ async function sendTelegramPost(
 /** هل ضُبط Webhook توزيع المنشورات؟ */
 const webhookConfigured = (env: Env): boolean => !!env.PUBLISH_WEBHOOK_URL;
 
-/** يسلّم منشوراً إلى Webhook خارجي (Make/Zapier/n8n) ليوزّعه على بقيّة المنصّات.
- *  استعادة قناة «الربط والنشر» من النسخة القديمة — لكن من الخادم لا من متصفّح المستخدم:
- *  الحمولة JSON واحدة بقائمة القنوات، والوسيط الخارجي يوجّه كلّ قناة لوجهتها. */
-async function sendWebhookPost(
+/** يستخرج معرّف فيديو يوتيوب من رابط أو معرّف خام. */
+function extractYouTubeId(input: string): string | null {
+  const s = input.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+/** يسلّم المنشور للقنوات — يفضّل ربطات المستخدم الخاصة، مع سقوط اختياري على أسرار الموقع. */
+async function deliverToChannels(
   env: Env,
+  channels: Channel[],
+  content: string | null,
+  mediaUrl: string | null,
+  origin: string,
+  userCreds?: {
+    telegram?: { bot_token: string; chat_id: string };
+    webhook?: { url: string };
+  },
+): Promise<{ delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[]; status: string }> {
+  const delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[] = [];
+
+  if (channels.includes("telegram")) {
+    if (userCreds?.telegram?.bot_token && userCreds.telegram.chat_id) {
+      const r = await sendTelegramPostWithCreds(
+        userCreds.telegram.bot_token,
+        userCreds.telegram.chat_id,
+        content,
+        mediaUrl,
+        origin,
+        env,
+      );
+      delivered.push({ channel: "telegram", ok: r.ok, error: r.error, via: "user_telegram" });
+    } else if (telegramConfigured(env)) {
+      const r = await sendTelegramPost(env, content, mediaUrl, origin);
+      delivered.push({ channel: "telegram", ok: r.ok, error: r.error, via: "site_telegram" });
+    } else {
+      delivered.push({
+        channel: "telegram",
+        ok: false,
+        error: "اربط تيليجرام الخاص بك من إعدادات النشر (بوت + chat_id).",
+        via: "none",
+      });
+    }
+  }
+
+  const rest = channels.filter((c) => c !== "telegram");
+  if (rest.length) {
+    const hook = userCreds?.webhook?.url || env.PUBLISH_WEBHOOK_URL;
+    if (hook) {
+      const r = await sendWebhookPostToUrl(hook, rest, content, mediaUrl, origin, env);
+      for (const c of rest) {
+        delivered.push({
+          channel: c,
+          ok: r.ok,
+          error: r.error,
+          via: userCreds?.webhook?.url ? "user_webhook" : "site_webhook",
+        });
+      }
+    } else {
+      for (const c of rest) {
+        delivered.push({
+          channel: c,
+          ok: false,
+          error: "اربط Webhook الخاص بك (Make/Zapier) من إعدادات النشر، أو انشر يدوياً.",
+          via: "none",
+        });
+      }
+    }
+  }
+
+  const anyOk = delivered.some((d) => d.ok);
+  const anyAttempt = delivered.some((d) => d.via && d.via !== "none");
+  let status = "queued";
+  if (anyOk) status = "published";
+  else if (anyAttempt && delivered.every((d) => d.via !== "none" && !d.ok)) status = "failed";
+  return { delivered, status };
+}
+
+async function sendTelegramPostWithCreds(
+  botToken: string,
+  chatId: string,
+  content: string | null,
+  mediaUrl: string | null,
+  baseOrigin: string,
+  env: Env,
+): Promise<{ ok: boolean; error?: string }> {
+  const call = async (method: string, payload: Record<string, unknown>) => {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, ...payload }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+      if (res.ok && data.ok) return { ok: true as const };
+      return { ok: false as const, error: data.description || `HTTP ${res.status}` };
+    } catch (err) {
+      return { ok: false as const, error: String((err as Error).message) };
+    }
+  };
+  if (mediaUrl) {
+    const abs = /^https?:\/\//.test(mediaUrl) ? mediaUrl : `${siteBase(env, baseOrigin)}${mediaUrl}`;
+    if (!/^https?:\/\//.test(abs)) {
+      return call("sendMessage", { text: `${content ? content + "\n" : ""}${mediaUrl}` });
+    }
+    const isVideo = mediaUrl.includes("/video/") || /\.(mp4|mov|webm|m4v)$/i.test(mediaUrl);
+    if (isVideo) return call("sendVideo", { video: abs, caption: content || undefined });
+    return call("sendPhoto", { photo: abs, caption: content || undefined });
+  }
+  return call("sendMessage", { text: content || "📎 منشور جديد", disable_web_page_preview: false });
+}
+
+async function sendWebhookPostToUrl(
+  url: string,
   channels: string[],
   content: string | null,
   mediaUrl: string | null,
   baseOrigin: string,
+  env: Env,
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!env.PUBLISH_WEBHOOK_URL) return { ok: false, error: "Webhook غير مُعَدّ." };
   const abs = mediaUrl && !/^https?:\/\//.test(mediaUrl) ? `${siteBase(env, baseOrigin)}${mediaUrl}` : mediaUrl;
   try {
-    const res = await fetch(env.PUBLISH_WEBHOOK_URL, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -1549,15 +2027,33 @@ async function sendWebhookPost(
   }
 }
 
-/** يستخرج معرّف فيديو يوتيوب من رابط أو معرّف خام. */
-function extractYouTubeId(input: string): string | null {
-  const s = input.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
+async function loadUserPublishCreds(
+  env: Env,
+  userId: number,
+): Promise<{ telegram?: { bot_token: string; chat_id: string }; webhook?: { url: string } }> {
+  const out: { telegram?: { bot_token: string; chat_id: string }; webhook?: { url: string } } = {};
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT channel, config_json FROM social_connections
+        WHERE user_id = ? AND is_active = 1 AND channel IN ('telegram','webhook')`,
+    ).bind(userId).all<{ channel: string; config_json: string }>();
+    for (const row of results || []) {
+      let cfg: Record<string, string> = {};
+      try { cfg = JSON.parse(row.config_json || "{}"); } catch { cfg = {}; }
+      if (row.channel === "telegram" && cfg.bot_token && cfg.chat_id) {
+        out.telegram = { bot_token: String(cfg.bot_token), chat_id: String(cfg.chat_id) };
+      }
+      if (row.channel === "webhook" && cfg.url) {
+        out.webhook = { url: String(cfg.url) };
+      }
+    }
+  } catch {
+    // الجدول قد لا يكون مُرحَّلاً بعد
+  }
+  return out;
 }
 
-/** رفع صورة/صوت إلى R2 وإرجاع رابطه. */
+/** رفع صورة/صوت/مستند إلى R2 وإرجاع رابطه. */
 async function uploadMedia(request: Request, env: Env): Promise<Response> {
   const form = await request.formData();
   const entry = form.get("file");
@@ -1569,14 +2065,20 @@ async function uploadMedia(request: Request, env: Env): Promise<Response> {
     stream(): ReadableStream;
   };
 
-  // الصور والصوت وفيديو المونتاج تُخزَّن في R2. الفيديو محدود بحدّ جسم الطلب في Cloudflare.
+  // الصور والصوت وفيديو المونتاج ومستندات PDF تُخزَّن في R2.
   const kindRaw = String(form.get("kind") ?? "image");
-  const kind = kindRaw === "audio" ? "audio" : kindRaw === "video" ? "video" : "image";
-  const limits = { audio: 50, image: 10, video: 100 } as const;
+  const kind =
+    kindRaw === "audio" ? "audio" :
+    kindRaw === "video" ? "video" :
+    kindRaw === "document" ? "document" : "image";
+  const limits = { audio: 50, image: 10, video: 100, document: 40 } as const;
   const maxBytes = limits[kind] * 1024 * 1024;
   if (file.size > maxBytes) return json({ ok: false, error: "حجم الملف كبير جداً." }, 413);
   const type = (file.type || "").toLowerCase();
-  if (!type.startsWith(`${kind}/`)) {
+  if (kind === "document") {
+    const okDoc = type === "application/pdf" || /\.pdf$/i.test(file.name || "");
+    if (!okDoc) return json({ ok: false, error: "يُقبل ملف PDF فقط للمستندات." }, 415);
+  } else if (!type.startsWith(`${kind}/`)) {
     return json({ ok: false, error: "نوع الملف غير مدعوم." }, 415);
   }
   // قائمة بيضاء صارمة للصور: نمنع SVG/HTML (تنفّذ سكربتات إن قُدّمت من نفس الأصل) — XSS مخزّن.
@@ -1585,11 +2087,13 @@ async function uploadMedia(request: Request, env: Env): Promise<Response> {
     return json({ ok: false, error: "صيغة الصورة غير مدعومة (JPG/PNG/GIF/WebP/AVIF فقط)." }, 415);
   }
 
-  const ext = (file.name.split(".").pop() || "bin").toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5);
+  const ext = (file.name.split(".").pop() || (kind === "document" ? "pdf" : "bin"))
+    .toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 5) || "bin";
   const key = `${kind}/${crypto.randomUUID()}.${ext}`;
   // البثّ مباشرةً إلى R2 (لا arrayBuffer) لتفادي تجاوز حدّ ذاكرة الـ isolate مع الفيديو.
-  await env.MEDIA.put(key, file.stream(), { httpMetadata: { contentType: file.type } });
-  return json({ ok: true, key, url: `/api/media/${key}` }, 201);
+  const contentType = kind === "document" ? (type || "application/pdf") : file.type;
+  await env.MEDIA.put(key, file.stream(), { httpMetadata: { contentType } });
+  return json({ ok: true, key, url: `/api/media/${key}`, mime: contentType, bytes: file.size }, 201);
 }
 
 async function handleTeacher(
@@ -1630,23 +2134,31 @@ async function handleTeacher(
     const cover = b.cover_image ? String(b.cover_image) : null;
     const scheduledAt = b.scheduled_at ? String(b.scheduled_at) : null;
     const membersOnly = b.is_members_only ? 1 : 0;
+    const courseId = Number.isFinite(Number(b.course_id)) ? Number(b.course_id) : null;
 
     let status = "published";
     if (type === "live") status = b.mode === "schedule" ? "scheduled" : "live";
     else if (b.status === "draft") status = "draft";
     let isPublished = status === "draft" ? 0 : 1;
 
+    // البث المباشر الآن يتطلّب معرّف يوتيوب لايف لعرضه للزوّار.
+    if (type === "live" && b.mode !== "schedule" && !youtubeId) {
+      return json({ ok: false, error: "أدخِل رابط أو معرّف بث يوتيوب لايف لعرضه على الموقع." }, 400);
+    }
+
     // محتوى المعلّم يحتاج موافقة مدير الموقع قبل النشر؛ الأدمن يُنشَر مباشرةً.
-    const needsApproval = user.role === "teacher";
+    // استثناء: البث الحيّ يظهر فوراً للزوّار (مع بقاء سجلّ الاعتماد إن لزم لاحقاً كمسجّل).
+    const needsApproval = user.role === "teacher" && status !== "live";
     const approval = needsApproval ? "pending" : "approved";
     if (needsApproval) isPublished = 0;
+    if (status === "live") isPublished = 1;
 
     const res = await env.DB.prepare(
-      `INSERT INTO lessons (title, description, doctor_name, type, youtube_id, cover_image,
+      `INSERT INTO lessons (course_id, title, description, doctor_name, type, youtube_id, cover_image,
                             status, scheduled_at, is_published, is_members_only, author_id, approval_status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(title, description, doctor, type, youtubeId, cover, status, scheduledAt, isPublished, membersOnly, user.id, approval)
+      .bind(courseId, title, description, doctor, type, youtubeId, cover, status, scheduledAt, isPublished, membersOnly, user.id, approval)
       .run();
     const id = Number(res.meta.last_row_id);
     await audit(env, user.email, "lesson.create", `lesson:${id}`);
@@ -1680,21 +2192,37 @@ async function handleTeacher(
       const b = await readJson(request);
       const fields: string[] = [];
       const vals: (string | number | null)[] = [];
-      const allowed = ["title", "description", "doctor_name", "youtube_id", "cover_image", "status", "scheduled_at"];
+      const allowed = ["title", "description", "doctor_name", "cover_image", "status", "scheduled_at"];
       for (const k of allowed) {
         if (k in b) {
           fields.push(`${k} = ?`);
           vals.push(b[k] === null ? null : String(b[k]));
         }
       }
+      if ("youtube_id" in b) {
+        fields.push("youtube_id = ?");
+        vals.push(b.youtube_id ? extractYouTubeId(String(b.youtube_id)) : null);
+      }
+      if ("course_id" in b) {
+        fields.push("course_id = ?");
+        const cid = b.course_id === null || b.course_id === "" ? null : Number(b.course_id);
+        vals.push(cid != null && Number.isFinite(cid) ? cid : null);
+      }
       if ("is_members_only" in b) {
         fields.push("is_members_only = ?");
         vals.push(b.is_members_only ? 1 : 0);
       }
       if ("status" in b) {
-        // لا يُنشَر إلّا المحتوى المُعتمَد؛ المعلّق يبقى مخفيّاً مهما كانت الحالة.
-        fields.push("is_published = CASE WHEN approval_status = 'approved' THEN ? ELSE 0 END");
-        vals.push(String(b.status) === "draft" ? 0 : 1);
+        const next = String(b.status);
+        // إنهاء البث: يتحوّل إلى مسجّل منشور ويظهر في المكتبة.
+        if (next === "published") {
+          fields.push("type = CASE WHEN type = 'live' THEN 'youtube' ELSE type END");
+          fields.push("is_published = 1");
+          fields.push("approval_status = 'approved'");
+        } else {
+          fields.push("is_published = CASE WHEN approval_status = 'approved' THEN ? ELSE 0 END");
+          vals.push(next === "draft" ? 0 : 1);
+        }
       }
       if (!fields.length) return json({ ok: false, error: "لا تغييرات." }, 400);
       vals.push(id);
@@ -1777,7 +2305,7 @@ async function handleTeacher(
   if (route === "GET /api/teacher/audio") {
     const own = user.role !== "admin";
     const { results } = await env.DB.prepare(
-      `SELECT id, title, description, doctor_name, audio_url, duration, created_at
+      `SELECT id, title, doctor_name, audio_url, duration, approval_status, is_published, created_at
          FROM audio_posts${own ? " WHERE author_id = ?" : ""} ORDER BY created_at DESC`,
     ).bind(...(own ? [user.id] : [])).all();
     return json({ ok: true, audio: results });
@@ -1790,14 +2318,27 @@ async function handleTeacher(
     const description = String(b.description ?? "").trim() || null;
     const audioUrl = b.audio_url ? String(b.audio_url) : null;
     const duration = Number.isFinite(Number(b.duration)) ? Math.max(0, Math.floor(Number(b.duration))) : null;
+    const needsApproval = user.role === "teacher";
+    const approval = needsApproval ? "pending" : "approved";
+    const published = needsApproval ? 0 : 1;
     const res = await env.DB.prepare(
-      "INSERT INTO audio_posts (title, description, doctor_name, audio_url, duration, author_id) VALUES (?, ?, ?, ?, ?, ?)",
+      `INSERT INTO audio_posts (title, description, doctor_name, audio_url, duration, author_id, approval_status, is_published)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
-      .bind(title, description, doctor, audioUrl, duration, user.id)
+      .bind(title, description, doctor, audioUrl, duration, user.id, approval, published)
       .run();
     const id = Number(res.meta.last_row_id);
     await audit(env, user.email, "audio.create", `audio:${id}`);
-    return json({ ok: true, id }, 201);
+    if (needsApproval) {
+      await notifyRole(env, "manager", {
+        type: "content_pending",
+        title: "صوت بانتظار الموافقة",
+        body: `${user.name} رفع مادّة صوتية: «${title}».`,
+        link: "/manager/approvals",
+        email: true,
+      });
+    }
+    return json({ ok: true, id, approval_status: approval }, 201);
   }
   const ma = path.match(/^\/api\/teacher\/audio\/(\d+)$/);
   if (ma && request.method === "DELETE") {
@@ -1902,16 +2443,119 @@ async function handleTeacher(
     return json({ ok: true, followers: followers ? followers.c : 0, followersByDay, totals, clips });
   }
 
-  // ===== النشر على القنوات (channel_posts) =====
+  // ===== ربطات التواصل الخاصة بالمستخدم (كلٌّ على قناته) =====
+  if (route === "GET /api/teacher/social") {
+    let results: Record<string, unknown>[] = [];
+    try {
+      const q = await env.DB.prepare(
+        `SELECT id, channel, label, is_active, updated_at, config_json
+           FROM social_connections WHERE user_id = ? ORDER BY channel, id`,
+      ).bind(user.id).all<Record<string, unknown>>();
+      results = (q.results || []).map((row) => {
+        let hint = "";
+        try {
+          const cfg = JSON.parse(String(row.config_json || "{}")) as Record<string, string>;
+          if (row.channel === "telegram") hint = cfg.chat_id ? `chat:${cfg.chat_id}` : "";
+          if (row.channel === "webhook") hint = cfg.url ? String(cfg.url).slice(0, 48) + "…" : "";
+        } catch { /* ignore */ }
+        return {
+          id: row.id,
+          channel: row.channel,
+          label: row.label,
+          is_active: row.is_active,
+          updated_at: row.updated_at,
+          hint,
+        };
+      });
+    } catch {
+      results = [];
+    }
+    const yt = await env.DB.prepare(
+      "SELECT channel_title, channel_id FROM youtube_accounts WHERE teacher_id = ?",
+    ).bind(user.id).first<{ channel_title: string | null; channel_id: string | null }>();
+    const creds = await loadUserPublishCreds(env, user.id);
+    return json({
+      ok: true,
+      connections: results,
+      youtube: yt ? { connected: true, title: yt.channel_title, id: yt.channel_id } : { connected: false },
+      ready: {
+        telegram: Boolean(creds.telegram),
+        webhook: Boolean(creds.webhook),
+        site_telegram_fallback: telegramConfigured(env),
+        site_webhook_fallback: webhookConfigured(env),
+      },
+    });
+  }
+
+  if (route === "POST /api/teacher/social") {
+    const b = await readJson(request);
+    const channel = String(b.channel ?? "");
+    if (channel !== "telegram" && channel !== "webhook") {
+      return json({ ok: false, error: "القناة غير مدعومة (telegram أو webhook)." }, 400);
+    }
+    const label = String(b.label ?? "افتراضي").trim().slice(0, 40) || "افتراضي";
+    let config: Record<string, string> = {};
+    if (channel === "telegram") {
+      const bot = String(b.bot_token ?? "").trim();
+      const chat = String(b.chat_id ?? "").trim();
+      if (!bot || !chat) return json({ ok: false, error: "أدخِل bot_token و chat_id لقناتك." }, 400);
+      const test = await fetch(`https://api.telegram.org/bot${bot}/getChat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: chat }),
+      });
+      const td = (await test.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+      if (!test.ok || !td.ok) {
+        return json({ ok: false, error: "تعذّر التحقق من تيليجرام: " + (td.description || String(test.status)) }, 400);
+      }
+      config = { bot_token: bot, chat_id: chat };
+    } else {
+      const url = String(b.url ?? "").trim();
+      if (!/^https:\/\//i.test(url)) return json({ ok: false, error: "رابط Webhook يجب أن يبدأ بـ https://" }, 400);
+      config = { url };
+    }
+    await env.DB.prepare(
+      `INSERT INTO social_connections (user_id, channel, label, config_json, is_active, updated_at)
+       VALUES (?, ?, ?, ?, 1, datetime('now'))
+       ON CONFLICT(user_id, channel, label) DO UPDATE SET
+         config_json = excluded.config_json,
+         is_active = 1,
+         updated_at = datetime('now')`,
+    ).bind(user.id, channel, label, JSON.stringify(config)).run();
+    await audit(env, user.email, "social.connect", `${channel}:${label}`);
+    return json({ ok: true }, 201);
+  }
+
+  const sdel = path.match(/^\/api\/teacher\/social\/(\d+)$/);
+  if (sdel && request.method === "DELETE") {
+    const id = Number(sdel[1]);
+    await env.DB.prepare(`DELETE FROM social_connections WHERE id = ? AND user_id = ?`)
+      .bind(id, user.id).run();
+    await audit(env, user.email, "social.disconnect", `id:${id}`);
+    return json({ ok: true });
+  }
+
+  // ===== النشر على القنوات — كل مستخدم على قناته الخاصة =====
   if (route === "GET /api/teacher/posts") {
-    // مُقيَّد بمالك المنشورات (اتّساقاً مع الحذف؛ كلٌّ يدير منشوراته).
     const { results } = await env.DB.prepare(
-      `SELECT id, content, media_url, channels, scheduled_at, status, created_at
+      `SELECT id, content, media_url, channels, scheduled_at, status, approval_status, delivery_log, created_at
          FROM channel_posts WHERE author_id = ? ORDER BY created_at DESC LIMIT 100`,
     )
       .bind(user.id)
       .all();
-    return json({ ok: true, posts: results, telegram: telegramConfigured(env), webhook: webhookConfigured(env) });
+    const creds = await loadUserPublishCreds(env, user.id);
+    return json({
+      ok: true,
+      posts: results,
+      connections: {
+        telegram: Boolean(creds.telegram) || telegramConfigured(env),
+        webhook: Boolean(creds.webhook) || webhookConfigured(env),
+        youtube_oauth: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+        user_telegram: Boolean(creds.telegram),
+        user_webhook: Boolean(creds.webhook),
+      },
+      channels: CHANNELS,
+    });
   }
 
   if (route === "POST /api/teacher/posts") {
@@ -1928,12 +2572,8 @@ async function handleTeacher(
     const scheduledAt = schedule && b.scheduled_at ? String(b.scheduled_at) : null;
     if (schedule && !scheduledAt) return json({ ok: false, error: "حدّد موعد الجدولة." }, 400);
 
-    // محتوى المعلّم يحتاج موافقة مدير الموقع قبل أيّ تسليم؛ الأدمن يُسلَّم مباشرةً.
-    const needsApproval = user.role === "teacher";
-    const approval = needsApproval ? "pending" : "approved";
-
-    // نُدرج الصفّ أولاً (queued/scheduled) قبل أيّ تسليم خارجي — حتى لو فشل لاحقاً يبقى سجلٌّ
-    // ولا يتكرّر الإرسال عند إعادة المحاولة. القنوات غير المُسلَّمة فعلياً تبقى في قائمة الإصدار.
+    // قنوات المستخدم الخاصة: لا موافقة مدير — كلٌّ ينشر على قناته.
+    const approval = "approved";
     const initial = schedule ? "scheduled" : "queued";
     const res = await env.DB.prepare(
       `INSERT INTO channel_posts (author_id, content, media_url, channels, scheduled_at, status, approval_status)
@@ -1944,48 +2584,54 @@ async function handleTeacher(
     const id = Number(res.meta.last_row_id);
     await audit(env, user.email, "post.create", `post:${id}`);
 
-    // عند انتظار الموافقة: لا تسليم الآن — يُشعَر مدير الموقع.
-    if (needsApproval) {
-      await notifyRole(env, "manager", {
-        type: "content_pending",
-        title: "منشور بانتظار الموافقة",
-        body: `${user.name} أعدّ منشوراً للقنوات.`,
-        link: "/manager/approvals",
-        email: true,
-      });
-      return json({ ok: true, id, status: "queued", approval_status: approval, delivered: [] }, 201);
-    }
-
-    // التسليم الفعلي عند «النشر الآن»: تيليجرام مباشرةً، وبقيّة القنوات دفعةً واحدة عبر
-    // Webhook التوزيع إن ضُبط (استعادة «الربط والنشر» من النسخة القديمة — من الخادم).
-    const delivered: { channel: Channel; ok: boolean; error?: string }[] = [];
     let status = initial;
+    let delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[] = [];
     if (!schedule) {
       const origin = new URL(request.url).origin;
-      if (channels.includes("telegram") && telegramConfigured(env)) {
-        const r = await sendTelegramPost(env, content || null, mediaUrl, origin);
-        delivered.push({ channel: "telegram", ok: r.ok, error: r.error });
-      }
-      const rest = channels.filter((c) => c !== "telegram");
-      if (rest.length && webhookConfigured(env)) {
-        const r = await sendWebhookPost(env, rest, content || null, mediaUrl, origin);
-        for (const c of rest) delivered.push({ channel: c, ok: r.ok, error: r.error });
-      }
-      if (delivered.length) {
-        // published إن نجح أيّ تسليم؛ failed إن فشلت المحاولات وكانت تغطّي كلّ القنوات؛
-        // وإلّا queued — القنوات بلا وسيلة تسليم تبقى في قائمة الإصدار (السلوك الأصلي).
-        const anyOk = delivered.some((d) => d.ok);
-        const covered = delivered.length >= channels.length;
-        status = anyOk ? "published" : covered ? "failed" : "queued";
-        await env.DB.prepare("UPDATE channel_posts SET status = ? WHERE id = ?").bind(status, id).run();
-      }
+      const creds = await loadUserPublishCreds(env, user.id);
+      const out = await deliverToChannels(env, channels, content || null, mediaUrl, origin, creds);
+      delivered = out.delivered;
+      status = out.status;
+      await env.DB.prepare(
+        `UPDATE channel_posts SET status = ?, delivery_log = ? WHERE id = ?`,
+      ).bind(status, JSON.stringify({ at: new Date().toISOString(), delivered }), id).run();
     }
-    return json({ ok: true, id, status, delivered }, 201);
+    return json({ ok: true, id, status, delivered, approval_status: approval }, 201);
+  }
+
+  const retry = path.match(/^\/api\/teacher\/posts\/(\d+)\/retry$/);
+  if (retry && request.method === "POST") {
+    const id = Number(retry[1]);
+    const row = await env.DB.prepare(
+      `SELECT id, content, media_url, channels, status, author_id
+         FROM channel_posts WHERE id = ? AND author_id = ?`,
+    ).bind(id, user.id).first<{
+      id: number; content: string | null; media_url: string | null; channels: string; status: string;
+    }>();
+    if (!row) return json({ ok: false, error: "المنشور غير موجود." }, 404);
+    if (row.status === "scheduled") {
+      return json({ ok: false, error: "المنشور مجدول — انتظر موعده." }, 409);
+    }
+    let channels: Channel[] = [];
+    try {
+      channels = (JSON.parse(row.channels || "[]") as string[])
+        .filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
+    } catch {
+      channels = [];
+    }
+    if (!channels.length) return json({ ok: false, error: "لا قنوات على المنشور." }, 400);
+    const origin = new URL(request.url).origin;
+    const creds = await loadUserPublishCreds(env, user.id);
+    const out = await deliverToChannels(env, channels, row.content, row.media_url, origin, creds);
+    await env.DB.prepare(
+      `UPDATE channel_posts SET status = ?, delivery_log = ?, approval_status = 'approved' WHERE id = ?`,
+    ).bind(out.status, JSON.stringify({ at: new Date().toISOString(), delivered: out.delivered, retry: true }), id).run();
+    await audit(env, user.email, "post.retry", `post:${id}`);
+    return json({ ok: true, id, status: out.status, delivered: out.delivered });
   }
 
   const mp = path.match(/^\/api\/teacher\/posts\/(\d+)$/);
   if (mp && request.method === "DELETE") {
-    // مُقيَّد بمالك المنشور (منع حذف منشورات معلّمٍ آخر).
     await env.DB.prepare("DELETE FROM channel_posts WHERE id = ? AND author_id = ?")
       .bind(Number(mp[1]), user.id)
       .run();
@@ -1996,6 +2642,92 @@ async function handleTeacher(
   // ===== تكامل يوتيوب =====
   if (path.startsWith("/api/teacher/youtube/")) {
     return handleYouTube(request, env, user, route);
+  }
+
+  // ===== الدورات (سلاسل علمية) =====
+  if (route === "GET /api/teacher/courses") {
+    const own = user.role !== "admin";
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, slug, category, description, is_published, created_at
+         FROM courses${own ? " WHERE author_id = ? OR author_id IS NULL" : ""}
+        ORDER BY sort_order ASC, created_at DESC`,
+    ).bind(...(own ? [user.id] : [])).all();
+    return json({ ok: true, courses: results });
+  }
+  if (route === "POST /api/teacher/courses") {
+    const b = await readJson(request);
+    const title = String(b.title ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "عنوان الدورة مطلوب." }, 400);
+    const baseSlug = title
+      .toLowerCase()
+      .replace(/[^\u0600-\u06FFa-z0-9]+/gi, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 60) || `course-${Date.now()}`;
+    const slug = `${baseSlug}-${Math.random().toString(36).slice(2, 7)}`;
+    const category = String(b.category ?? "").trim().slice(0, 80) || null;
+    const description = String(b.description ?? "").trim().slice(0, 2000) || null;
+    const res = await env.DB.prepare(
+      `INSERT INTO courses (title, slug, category, description, author_id, is_published, approval_status)
+       VALUES (?, ?, ?, ?, ?, 1, 'approved')`,
+    ).bind(title, slug, category, description, user.id).run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "course.create", `course:${id}`);
+    return json({ ok: true, id, slug }, 201);
+  }
+  const mCourse = path.match(/^\/api\/teacher\/courses\/(\d+)$/);
+  if (mCourse && request.method === "DELETE") {
+    const id = Number(mCourse[1]);
+    const isAdmin = user.role === "admin";
+    const r = await env.DB.prepare(
+      `DELETE FROM courses WHERE id = ?${isAdmin ? "" : " AND author_id = ?"}`,
+    ).bind(...(isAdmin ? [id] : [id, user.id])).run();
+    if (!r.meta.changes) return json({ ok: false, error: "غير موجود أو لا تملك صلاحيّته." }, 403);
+    await audit(env, user.email, "course.delete", `course:${id}`);
+    return json({ ok: true });
+  }
+
+  // ===== مستندات PDF للتدريب =====
+  if (route === "GET /api/teacher/documents") {
+    const own = user.role === "teacher";
+    const { results } = await env.DB.prepare(
+      `SELECT id, title, r2_key, mime, bytes, source_rights, approval_status, notes, created_at
+         FROM ai_documents${own ? " WHERE uploaded_by = ?" : ""}
+        ORDER BY created_at DESC LIMIT 100`,
+    ).bind(...(own ? [user.id] : [])).all();
+    return json({ ok: true, documents: results });
+  }
+  if (route === "POST /api/teacher/documents") {
+    const b = await readJson(request);
+    const title = String(b.title ?? "").trim();
+    const r2Key = String(b.r2_key ?? "").trim();
+    const rights = String(b.source_rights ?? "").trim();
+    if (title.length < 2) return json({ ok: false, error: "عنوان المستند مطلوب." }, 400);
+    if (!r2Key.startsWith("document/")) return json({ ok: false, error: "ارفع ملف PDF أولاً." }, 400);
+    if (!["public_domain", "publisher_permission", "official"].includes(rights)) {
+      return json({ ok: false, error: "حدّد مصدر الحقّ في النشر بوضوح." }, 400);
+    }
+    // المدير/الأدمن: معتمد تلقائياً. المعلّم: معلّق حتى اعتماد المدير.
+    const auto = user.role === "manager" || user.role === "admin";
+    const approval = auto ? "approved" : "pending";
+    const status = auto ? "active" : "active";
+    const mime = String(b.mime ?? "application/pdf").slice(0, 80);
+    const bytes = Number.isFinite(Number(b.bytes)) ? Math.max(0, Math.floor(Number(b.bytes))) : null;
+    const res = await env.DB.prepare(
+      `INSERT INTO ai_documents (title, r2_key, uploaded_by, status, approval_status, mime, bytes, source_rights)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(title, r2Key, user.id, status, approval, mime, bytes, rights).run();
+    const id = Number(res.meta.last_row_id);
+    await audit(env, user.email, "document.create", `document:${id}`);
+    if (!auto) {
+      await notifyRole(env, "manager", {
+        type: "content_pending",
+        title: "مستند بانتظار الاعتماد",
+        body: `${user.name} رفع كتاباً/مستنداً: «${title}».`,
+        link: "/manager/training",
+        email: true,
+      });
+    }
+    return json({ ok: true, id, approval_status: approval }, 201);
   }
 
   // بقيّة واجهات المعلّم تُربط لاحقاً.
@@ -2160,33 +2892,48 @@ function harden(res: Response, pathname = ""): Response {
 /** يعالج المنشورات المجدولة المستحقّة (يُستدعى من مُشغّل cron). */
 async function processScheduledPosts(env: Env): Promise<void> {
   const { results } = await env.DB.prepare(
-    `SELECT id, content, media_url, channels FROM channel_posts
+    `SELECT id, author_id, content, media_url, channels FROM channel_posts
       WHERE status = 'scheduled' AND approval_status = 'approved'
         AND scheduled_at IS NOT NULL AND scheduled_at <= datetime('now')
       ORDER BY scheduled_at ASC LIMIT 25`,
-  ).all<{ id: number; content: string | null; media_url: string | null; channels: string | null }>();
+  ).all<{ id: number; author_id: number; content: string | null; media_url: string | null; channels: string | null }>();
 
   for (const p of results) {
-    let channels: string[] = [];
+    let channels: Channel[] = [];
     try {
-      channels = JSON.parse(p.channels || "[]");
+      channels = (JSON.parse(p.channels || "[]") as string[])
+        .filter((c): c is Channel => (CHANNELS as readonly string[]).includes(c));
     } catch {
       channels = [];
     }
-    // التسليم الفعلي: تيليجرام مباشرةً + بقيّة القنوات عبر Webhook التوزيع إن ضُبط.
-    let attempts = 0, okCount = 0;
-    if (channels.includes("telegram") && telegramConfigured(env)) {
-      const r = await sendTelegramPost(env, p.content, p.media_url, "");
-      attempts += 1; if (r.ok) okCount += 1;
-    }
-    const rest = channels.filter((c) => c !== "telegram");
-    if (rest.length && webhookConfigured(env)) {
-      const r = await sendWebhookPost(env, rest, p.content, p.media_url, "");
-      attempts += rest.length; if (r.ok) okCount += rest.length;
-    }
-    const status = okCount > 0 ? "published" : attempts >= channels.length && attempts > 0 ? "failed" : "queued";
-    await env.DB.prepare("UPDATE channel_posts SET status = ? WHERE id = ?").bind(status, p.id).run();
+    const creds = await loadUserPublishCreds(env, p.author_id);
+    const out = await deliverToChannels(env, channels, p.content, p.media_url, env.SITE_URL || "", creds);
+    await env.DB.prepare(
+      `UPDATE channel_posts SET status = ?, delivery_log = ? WHERE id = ?`,
+    ).bind(out.status, JSON.stringify({ at: new Date().toISOString(), delivered: out.delivered, cron: true }), p.id).run();
   }
+}
+
+/** تقديم الأصول مع توجيه صفحات المسجد وملف المعلّم الديناميكية. */
+async function servePage(request: Request, env: Env, pathname: string): Promise<Response> {
+  // /mosque/<slug> → صفحة العرض (ما عدا المسارات الثابتة)
+  const mosquePage = pathname.match(/^\/mosque\/([^/]+)\/?$/);
+  if (mosquePage) {
+    const slug = mosquePage[1];
+    if (slug !== "manage" && slug !== "pricing" && slug !== "index.html" && slug !== "view.html") {
+      const assetUrl = new URL(request.url);
+      assetUrl.pathname = "/mosque/view.html";
+      return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+    }
+  }
+  // /u/<id> → ملف معلّم عام
+  const teacherPage = pathname.match(/^\/u\/(\d+)\/?$/);
+  if (teacherPage) {
+    const assetUrl = new URL(request.url);
+    assetUrl.pathname = "/u/view.html";
+    return env.ASSETS.fetch(new Request(assetUrl.toString(), request));
+  }
+  return env.ASSETS.fetch(request);
 }
 
 export default {
@@ -2202,7 +2949,7 @@ export default {
     const res =
       url.pathname === "/api" || url.pathname.startsWith("/api/")
         ? await handleApi(request, env)
-        : await env.ASSETS.fetch(request); // الموقع العام (أصول ثابتة)
+        : await servePage(request, env, url.pathname);
 
     return harden(res, url.pathname);
   },

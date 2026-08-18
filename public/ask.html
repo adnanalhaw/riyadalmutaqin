@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>اسأل من الكوربوس — رياض المتقين</title>
+  <meta name="description" content="ابحث في الإجابات الشرعية المعتمدة فقط — لا جواب بلا مصدر في كوربوس التدريب." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:720px">
+      <div class="page-head">
+        <h1>اسأل من الكوربوس المعتمد</h1>
+        <p>نبحث فقط في مساهمات راجعها مدير الموقع. إن لم نجد جواباً موثّقاً نقول ذلك صراحةً.</p>
+      </div>
+      <form id="askForm" class="card">
+        <div class="field">
+          <label for="q">سؤالك</label>
+          <textarea id="q" rows="3" required placeholder="مثال: ما حكم كذا…؟"></textarea>
+        </div>
+        <button class="btn btn-primary" type="submit">ابحث</button>
+      </form>
+      <div id="out" style="margin-top:1.2rem"></div>
+      <p class="muted" style="margin-top:1.5rem">ساهم بإجابات موثّقة: <a class="gold" href="/train">ساهم بالتدريب</a></p>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var esc = RM.esc, api = RM.api;
+      document.getElementById("askForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var out = document.getElementById("out");
+        out.innerHTML = '<p class="muted">جارٍ البحث…</p>';
+        api("/api/ask", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ question: document.getElementById("q").value.trim() }),
+        }).then(function (res) {
+          var d = res.d || {};
+          if (!res.ok || !d.ok) {
+            out.innerHTML = '<p class="muted">' + esc(d.error || "تعذّر البحث") + "</p>";
+            return;
+          }
+          if (!d.found) {
+            out.innerHTML = '<div class="notice">' + esc(d.message || "لا نتائج") +
+              ' <a class="gold" href="' + esc(d.contribute || "/train") + '">ساهم الآن</a></div>';
+            return;
+          }
+          out.innerHTML = (d.matches || []).map(function (m, i) {
+            return '<div class="card" style="margin-bottom:1rem">' +
+              (i === 0 ? '<span class="badge">أقرب مطابقة</span>' : "") +
+              '<div class="muted" style="font-size:.85rem;margin:.4rem 0">السؤال في الكوربوس</div>' +
+              "<div><strong>" + esc(m.question) + "</strong></div>" +
+              '<div class="muted" style="font-size:.85rem;margin: .8rem 0 .3rem">الجواب المعتمد</div>' +
+              "<div style=\"line-height:1.9\">" + esc(m.answer) + "</div>" +
+              (m.source ? '<div class="muted" style="margin-top:.6rem;font-size:.88rem">المصدر: ' + esc(m.source) + "</div>" : "") +
+              (m.topic ? '<div class="badge" style="margin-top:.5rem">' + esc(m.topic) + "</div>" : "") +
+              "</div>";
+          }).join("");
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -19,11 +19,16 @@
       <div class="page-head">
         <h1>أدوات المسلم</h1>
         <p>ما يعينك على عبادتك ويومك — من الأذكار إلى مواقيت الصلاة وحاسبة الزكاة.</p>
+        <p class="muted" id="pwaTip" style="font-size:.9rem;margin-top:.5rem" hidden>
+          ثبّت التطبيق على جهازك لوصول أسرع: من قائمة المتصفّح اختر «إضافة إلى الشاشة الرئيسية».
+        </p>
       </div>
 
       <div class="grid">
         <a class="card link" href="/quran"><div class="ic">📖</div><h3>القرآن الكريم</h3><p>قراءة بالرسم العثماني وتلاوة بأصوات القرّاء.</p></a>
+        <a class="card link" href="/audio"><div class="ic">🎧</div><h3>المكتبة الصوتية</h3><p>دروس ومحاضرات للاستماع في أي وقت.</p></a>
         <a class="card link" href="/adhkar"><div class="ic">📿</div><h3>الأذكار</h3><p>أذكار الصباح والمساء وبعد الصلاة والنوم.</p></a>
+        <a class="card link" href="/ask"><div class="ic">❓</div><h3>اسأل من الكوربوس</h3><p>إجابات معتمدة بالمصدر فقط.</p></a>
         <a class="card link" href="/prayer-times"><div class="ic">🕌</div><h3>مواقيت الصلاة</h3><p>أوقات الصلوات حسب موقعك مع الصلاة القادمة.</p></a>
         <a class="card link" href="/qibla"><div class="ic">🧭</div><h3>اتجاه القبلة</h3><p>بوصلة تشير إلى الكعبة المشرّفة من موقعك.</p></a>
         <a class="card link" href="/tasbeeh"><div class="ic">🔢</div><h3>عدّاد التسبيح</h3><p>سبحة إلكترونية مع أذكار جاهزة وحفظ تلقائي.</p></a>
@@ -31,6 +36,8 @@
         <a class="card link" href="/khatma"><div class="ic">📗</div><h3>متتبّع الختمة</h3><p>تابع تقدّمك في ختم القرآن وحدّد هدفاً يوميّاً.</p></a>
         <a class="card link" href="/hijri"><div class="ic">📅</div><h3>التقويم الهجري</h3><p>التاريخ الهجري اليوم مع تقويم الشهر وأيّام الصيام.</p></a>
         <a class="card link" href="/mosques"><div class="ic">🗺️</div><h3>خريطة المساجد</h3><p>أقرب المساجد إليك حسب موقعك.</p></a>
+        <a class="card link" href="/mosque/"><div class="ic">🏛️</div><h3>مساجد وجمعيات المنصّة</h3><p>صفحات مؤسّسات مشتركة (اشتراك خدمة — بلا تبرعات).</p></a>
+        <a class="card link" href="/mosque/pricing"><div class="ic">💼</div><h3>خطط الاشتراك</h3><p>Free وPro بالدينار الكويتي — للمساجد والجمعيات.</p></a>
         <a class="card link" href="/train"><div class="ic">🤖</div><h3>ساهم بتدريب الذكاء</h3><p>أسئلة وأجوبة شرعية موثّقة تطوّر دقة الذكاء الاصطناعي — بشفافية كاملة.</p></a>
       </div>
     </div>
@@ -38,5 +45,11 @@
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script>
+    if (window.matchMedia("(display-mode: browser)").matches) {
+      var tip = document.getElementById("pwaTip");
+      if (tip) tip.hidden = false;
+    }
+  </script>
 </body>
 </html>

@@ -45,11 +45,13 @@
             (isFollowing ? "✓ تتابعه" : "＋ متابعة") + "</button>";
         return (
           '<div class="card" style="text-align:center">' +
+          '<a href="/u/' + t.id + '" style="display:block">' +
           '<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--gold-soft),var(--gold));color:#2a1f04;display:grid;place-items:center;font-size:1.6rem;font-weight:800;margin:0 auto .6rem">' +
           esc((t.name || "؟").charAt(0)) + "</div>" +
-          '<h3 style="margin:.2rem 0">' + esc(t.name) + "</h3>" +
+          '<h3 style="margin:.2rem 0">' + esc(t.name) + "</h3></a>" +
           '<div class="muted" style="font-size:.9rem">' +
           ar(t.followers || 0) + " متابع · " + ar(t.clips || 0) + " مقطع</div>" +
+          '<a class="btn btn-ghost" href="/u/' + t.id + '" style="margin-top:.5rem;width:100%">الملف</a>' +
           btn + "</div>"
         );
       }

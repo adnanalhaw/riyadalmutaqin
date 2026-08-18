@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>صفحة مسجد — رياض المتقين</title>
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container" style="max-width:720px">
+      <div id="box"><p class="muted">يجري التحميل…</p></div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var parts = location.pathname.replace(/\/$/, "").split("/");
+      var slug = decodeURIComponent(parts[parts.length - 1] || "");
+      if (!slug || slug === "mosque") {
+        location.href = "/mosque/";
+        return;
+      }
+      RM.api("/api/mosques/by-slug/" + encodeURIComponent(slug)).then(function (res) {
+        var m = res.d && res.d.mosque;
+        var box = document.getElementById("box");
+        if (!res.ok || !m) {
+          box.innerHTML = '<p class="muted">المسجد غير موجود. <a class="gold" href="/mosque/">العودة</a></p>';
+          return;
+        }
+        document.title = m.name + " — رياض المتقين";
+        var iq = {};
+        try { iq = JSON.parse(m.iqama_json || "{}"); } catch (e) {}
+        var iqRows = ["Fajr","Dhuhr","Asr","Maghrib","Isha"].map(function (k) {
+          var labels = { Fajr:"الفجر", Dhuhr:"الظهر", Asr:"العصر", Maghrib:"المغرب", Isha:"العشاء" };
+          return "<tr><td>" + labels[k] + "</td><td>" + RM.ar(iq[k] != null ? iq[k] : "—") + " د</td></tr>";
+        }).join("");
+        box.innerHTML =
+          '<div class="page-head" style="padding-top:0"><h1>' + RM.esc(m.name) + "</h1>" +
+          '<p>' + RM.esc([m.city, m.country].filter(Boolean).join(" · ")) +
+          (m.plan === "pro" ? ' · <span class="badge">Pro</span>' : "") + "</p></div>" +
+          (m.description ? '<p class="muted" style="line-height:1.9">' + RM.esc(m.description) + "</p>" : "") +
+          (m.address ? '<p><strong>العنوان:</strong> ' + RM.esc(m.address) + "</p>" : "") +
+          '<div class="notice" id="iqLive" hidden></div>' +
+          '<div class="card" style="padding:0;overflow:hidden;margin:1.2rem 0"><table class="t"><thead><tr><th>الصلاة</th><th>دقائق الإقامة بعد الأذان</th></tr></thead><tbody>' +
+          iqRows + "</tbody></table></div>" +
+          (m.external_url ? '<a class="btn btn-outline" href="' + RM.esc(m.external_url) + '" target="_blank" rel="noopener">موقع المسجد</a> ' : "") +
+          '<a class="btn btn-ghost" href="/mosques">أقرب المساجد</a> ' +
+          '<a class="btn btn-ghost" href="/prayer-times">مواقيت الصلاة</a>';
+
+        // عدّاد إقامة حيّ إن توفّر موقع أو الكويت افتراضياً
+        var lat = m.lat || 29.3759, lng = m.lng || 47.9774;
+        fetch("https://api.aladhan.com/v1/timings?latitude=" + lat + "&longitude=" + lng + "&method=4")
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            var t = d && d.data && d.data.timings;
+            if (!t) return;
+            function mins(hhmm) { var p = String(hhmm).split(":"); return (+p[0]) * 60 + (+p[1]); }
+            function tick() {
+              var now = new Date();
+              var nowM = now.getHours() * 60 + now.getMinutes();
+              var labels = { Fajr:"الفجر", Dhuhr:"الظهر", Asr:"العصر", Maghrib:"المغرب", Isha:"العشاء" };
+              var box2 = document.getElementById("iqLive");
+              if (!box2) return;
+              var msg = null;
+              ["Fajr","Dhuhr","Asr","Maghrib","Isha"].forEach(function (k) {
+                if (msg) return;
+                var athan = mins(t[k]);
+                var off = iq[k] != null ? +iq[k] : 20;
+                var iqM = athan + off;
+                if (nowM >= athan && nowM < iqM) {
+                  msg = "إقامة " + labels[k] + " بعد " + RM.ar(iqM - nowM) + " دقيقة تقريباً";
+                }
+              });
+              if (msg) { box2.hidden = false; box2.textContent = msg; }
+              else box2.hidden = true;
+            }
+            tick();
+            setInterval(tick, 30000);
+          }).catch(function () {});
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>إعدادات الموقع — مدير الموقع</title>
+  <meta name="description" content="روابط التواصل والشعار النصّي لموقع رياض المتقين." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>إعدادات الموقع</h1>
+            <p>حدّث روابط التواصل والشعار النصّي — تظهر فوراً في الصفحة الرئيسية وبطاقة المشاركة.</p>
+          </div>
+          <form id="settingsForm" class="card" style="max-width:560px">
+            <div class="field">
+              <label for="site_tagline">الشعار النصّي</label>
+              <input id="site_tagline" type="text" maxlength="120" placeholder="القرآن والسنّة بفهم سلف الأمّة" />
+            </div>
+            <div class="field">
+              <label for="social_youtube">رابط يوتيوب (اتركه فارغاً لإخفاء الزر)</label>
+              <input id="social_youtube" type="url" placeholder="https://www.youtube.com/@..." />
+            </div>
+            <div class="field">
+              <label for="social_tiktok">تيك توك</label>
+              <input id="social_tiktok" type="url" />
+            </div>
+            <div class="field">
+              <label for="social_facebook">فيسبوك</label>
+              <input id="social_facebook" type="url" />
+            </div>
+            <div class="field">
+              <label for="social_instagram">إنستغرام</label>
+              <input id="social_instagram" type="url" />
+            </div>
+            <button class="btn btn-primary" type="submit">حفظ الإعدادات</button>
+            <div class="notice" id="notice" hidden></div>
+          </form>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var api = RM.api;
+      var keys = ["site_tagline", "social_youtube", "social_tiktok", "social_facebook", "social_instagram"];
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "manager" && u.role !== "admin") { location.href = "/"; return; }
+        api("/api/manager/settings").then(function (res) {
+          var s = (res.d && res.d.settings) || {};
+          keys.forEach(function (k) {
+            var el = document.getElementById(k);
+            if (el) el.value = s[k] || "";
+          });
+        });
+      });
+      document.getElementById("settingsForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var body = {};
+        keys.forEach(function (k) { body[k] = document.getElementById(k).value.trim(); });
+        var n = document.getElementById("notice");
+        n.hidden = false; n.textContent = "جارٍ الحفظ…";
+        api("/api/manager/settings", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        }).then(function (res) {
+          n.textContent = (res.ok && res.d.ok) ? "تمّ الحفظ ✓ — حدّث الصفحة العامة لترى الروابط." : (res.d.error || "تعذّر الحفظ.");
+        }).catch(function () { n.textContent = "خطأ في الاتصال."; });
+      });
+    })();
+  </script>
+</body>
+</html>

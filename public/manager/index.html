@@ -43,6 +43,7 @@
 
           <h2 style="color:var(--gold);text-align:start;margin:2rem 0 1rem">إجراءات سريعة</h2>
           <div class="grid">
+            <a class="card link" href="/manager/mosques"><div class="ic">🏛️</div><h3>طلبات مساجد Pro</h3><p>اعتماد اشتراكات الخدمة التقنية للمساجد.</p></a>
             <a class="card link" href="/manager/applications"><div class="ic">📝</div><h3>طلبات التعليم</h3><p>راجِع طلبات الانضمام معلّمين ووافِق أو ارفض.</p></a>
             <a class="card link" href="/manager/approvals"><div class="ic">✅</div><h3>الموافقة على المحتوى</h3><p>اعتمِد المقاطع والدروس والمنشورات قبل نشرها.</p></a>
             <a class="card link" href="/manager/analytics"><div class="ic">📈</div><h3>تحليل البيانات</h3><p>الزوّار، البلدان، أوقات الدخول، ووظائف المسجّلين.</p></a>
@@ -70,10 +71,13 @@
       function loadStats() {
         api("/api/manager/dashboard").then(function (res) {
           var s = (res.d && res.d.stats) || {};
-          var pendingContent = (s.pending_clips || 0) + (s.pending_lessons || 0) + (s.pending_posts || 0);
+          var pendingContent = (s.pending_clips || 0) + (s.pending_lessons || 0) + (s.pending_posts || 0) + (s.pending_audio || 0);
           document.getElementById("stats").innerHTML =
             stat(s.pending_apps, "طلبات تعليم معلّقة") +
             stat(pendingContent, "محتوى بانتظار الموافقة") +
+            stat(s.mosques, "مساجد مسجّلة") +
+            stat(s.mosques_pro, "مساجد Pro") +
+            stat(s.pending_mosque_pro, "طلبات Pro") +
             stat(s.teachers, "المعلّمون") +
             stat(s.students, "المتعلّمون");
         });

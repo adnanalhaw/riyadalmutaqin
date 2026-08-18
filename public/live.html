@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>الدروس المباشرة — رياض المتقين</title>
   <meta name="description" content="الدروس المباشرة والقادمة والمسجّلة في رياض المتقين، تُنشر تلقائياً على يوتيوب." />
-  <meta name="theme-color" content="#0b1430" />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
@@ -28,13 +29,10 @@
           <div class="play">▶</div>
         </div>
         <div class="vmeta" id="liveMeta" style="max-width:860px">
-          <div class="vtitle">عنوان الدرس</div>
+          <div class="vtitle">—</div>
           <div class="vdoc">الدكتور: —</div>
         </div>
-        <div class="notice">
-          سيظهر البثّ المباشر هنا فور بدئه، ويُنشر تلقائياً على قناة يوتيوب بعد انتهائه.
-          ميزة البثّ المباشر والنشر التلقائي ستُفعَّل بعد مرحلة الربط (Integration).
-        </div>
+        <div class="notice" id="liveNotice" hidden></div>
       </section>
 
       <section class="section" style="padding-top:0">
@@ -62,7 +60,7 @@
   <script src="/layout.js"></script>
   <script src="/content.js"></script>
   <script>
-    RM.loadLive("#livePlayer", "#liveMeta", "#upcomingBody");
+    RM.loadLive("#livePlayer", "#liveMeta", "#upcomingBody", "#liveNotice");
     RM.loadRecorded("#recordedGrid");
   </script>
 </body>

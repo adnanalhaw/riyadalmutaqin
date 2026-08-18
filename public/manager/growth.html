@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>مؤشّرات النمو — مدير الموقع</title>
+  <meta name="description" content="مؤشّرات مسار مليون دينار: مساجد، Pro، كوربوس، مستخدمون — بلا تبرعات." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="icon" href="/assets/logo.png" type="image/png" />
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>مؤشّرات مسار المليون د.ك</h1>
+            <p>قياس المنتج والاشتراكات — <strong>بدون جمع تبرعات</strong>. الإيراد عبر SaaS مساجد + كوربوس لرزق.</p>
+          </div>
+          <div class="stats" id="stats"></div>
+          <div class="notice" style="margin-top:1.5rem">
+            هدف توجيهي: نمو مساجد Pro × ٢٩ د.ك/شهر + جودة كوربوس للتصدير لرزق.
+            الأرقام أدناه من قاعدة البيانات الفعلية.
+          </div>
+          <div class="card" style="margin-top:1.2rem">
+            <h3 style="color:var(--gold);margin-top:0">روابط تشغيل</h3>
+            <p><a class="gold" href="/manager/mosques">طلبات Pro</a> ·
+              <a class="gold" href="/mosque/pricing">صفحة الأسعار</a> ·
+              <a class="gold" href="/manager/training">اعتماد التدريب / تصدير JSONL</a> ·
+              <a class="gold" href="/ask">تجربة اسأل</a></p>
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      var ar = RM.ar, api = RM.api;
+      RM.getMe().then(function (u) {
+        if (!u || (u.role !== "manager" && u.role !== "admin")) { location.href = "/login"; return; }
+        Promise.all([
+          api("/api/manager/dashboard"),
+          api("/api/train/stats"),
+        ]).then(function (pair) {
+          var s = (pair[0].d && pair[0].d.stats) || {};
+          var t = (pair[1].d && pair[1].d.stats) || {};
+          var pro = s.mosques_pro || 0;
+          var mrr = pro * 29;
+          document.getElementById("stats").innerHTML =
+            card(s.students, "متعلّمون") +
+            card(s.teachers, "معلّمون") +
+            card(s.mosques, "مساجد Free+Pro") +
+            card(pro, "مساجد Pro") +
+            card(s.pending_mosque_pro, "طلبات Pro معلّقة") +
+            card(t.approved, "مساهمات معتمدة") +
+            card(t.contributors, "مساهمون") +
+            card(mrr, "MRR تقديري د.ك (Pro×٢٩)");
+        });
+      });
+      function card(n, lbl) {
+        return '<div class="stat"><div class="num">' + ar(n || 0) + '</div><div class="lbl">' + lbl + "</div></div>";
+      }
+    })();
+  </script>
+</body>
+</html>

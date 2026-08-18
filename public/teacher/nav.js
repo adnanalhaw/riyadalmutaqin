@@ -7,6 +7,7 @@
   var links = [
     { href: "/teacher", label: "📊 لوحة التحكم", exact: true },
     { href: "/teacher/lessons", label: "🔴 الدروس المباشرة" },
+    { href: "/teacher/courses", label: "📚 الدورات" },
     { href: "/teacher/editor", label: "✂ المونتاج" },
     { href: "/teacher/content", label: "📚 مكتبة المقاطع" },
     { href: "/teacher/audience", label: "👥 المتابعون والأداء" },
@@ -31,15 +32,18 @@
     if (el) el.innerHTML = html;
   }
 
-  // الأدمن له لوحته المستقلّة (/admin)؛ ومدير الموقع له لوحته (/manager).
-  // نعرض رابط العودة إلى لوحة الأدمن إن كان أدمن (لأنه قد يصل لصفحات المعلّم تقنيّاً).
   renderNav();
   fetch("/api/auth/me", { headers: { accept: "application/json" } })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
+      var extra = [];
       if (d && d.user && d.user.role === "admin") {
-        renderNav([{ href: "/admin", label: "↩ لوحة الأدمن" }]);
+        extra.push({ href: "/admin", label: "↩ لوحة الأدمن" });
       }
+      if (d && d.user && d.user.role === "manager") {
+        extra.push({ href: "/manager", label: "↩ لوحة مدير الموقع" });
+      }
+      if (extra.length) renderNav(extra);
     })
     .catch(function () {});
 })();
