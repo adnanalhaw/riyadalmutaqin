@@ -1887,20 +1887,6 @@ async function sendTelegramPost(
 /** هل ضُبط Webhook توزيع المنشورات؟ */
 const webhookConfigured = (env: Env): boolean => !!env.PUBLISH_WEBHOOK_URL;
 
-/** يسلّم منشوراً إلى Webhook خارجي (Make/Zapier/n8n) ليوزّعه على بقيّة المنصّات.
- *  استعادة قناة «الربط والنشر» من النسخة القديمة — لكن من الخادم لا من متصفّح المستخدم:
- *  الحمولة JSON واحدة بقائمة القنوات، والوسيط الخارجي يوجّه كلّ قناة لوجهتها. */
-async function sendWebhookPost(
-  env: Env,
-  channels: string[],
-  content: string | null,
-  mediaUrl: string | null,
-  baseOrigin: string,
-): Promise<{ ok: boolean; error?: string }> {
-  if (!env.PUBLISH_WEBHOOK_URL) return { ok: false, error: "Webhook غير مُعَدّ." };
-  return sendWebhookPostToUrl(env.PUBLISH_WEBHOOK_URL, channels, content, mediaUrl, baseOrigin, env);
-}
-
 /** يستخرج معرّف فيديو يوتيوب من رابط أو معرّف خام. */
 function extractYouTubeId(input: string): string | null {
   const s = input.trim();
