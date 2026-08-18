@@ -357,9 +357,13 @@
     }
 
     // حماية صفحات المعلّم على جهة العميل (الحماية الفعلية على الـ API).
+    // المدير والأدمن يدخلون أيضاً للنشر على قنواتهم الخاصة.
     if (path.indexOf("/teacher") === 0) {
       if (!user) { location.href = "/login?role=teacher"; return; }
-      if (user.role !== "teacher" && user.role !== "admin") { location.href = "/"; return; }
+      if (user.role !== "teacher" && user.role !== "admin" && user.role !== "manager") {
+        location.href = "/";
+        return;
+      }
     }
     // حماية صفحات مدير الموقع (manager/admin فقط).
     if (path.indexOf("/manager") === 0) {

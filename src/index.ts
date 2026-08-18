@@ -859,15 +859,12 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleManager(request, env, user, path, route);
   }
 
-  // ===== المعلّم (يتطلّب دور teacher/admin؛ والمدير لرفع المستندات فقط) =====
+  // ===== المعلّم / المدير / الأدمن: إدارة محتوى ونشر (كلٌّ على قنواته) =====
   if (path.startsWith("/api/teacher/")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
     if (user.mustChangePassword) return mustChange();
-    const managerDocOnly =
-      user.role === "manager" &&
-      (path.startsWith("/api/teacher/media") || path.startsWith("/api/teacher/documents"));
-    if (user.role !== "teacher" && user.role !== "admin" && !managerDocOnly) {
+    if (user.role !== "teacher" && user.role !== "admin" && user.role !== "manager") {
       return json({ ok: false, error: "forbidden" }, 403);
     }
     return handleTeacher(request, env, user, path, route);
@@ -1901,9 +1898,133 @@ async function sendWebhookPost(
   baseOrigin: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!env.PUBLISH_WEBHOOK_URL) return { ok: false, error: "Webhook غير مُعَدّ." };
+  return sendWebhookPostToUrl(env.PUBLISH_WEBHOOK_URL, channels, content, mediaUrl, baseOrigin, env);
+}
+
+/** يستخرج معرّف فيديو يوتيوب من رابط أو معرّف خام. */
+function extractYouTubeId(input: string): string | null {
+  const s = input.trim();
+  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
+  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+  return m ? m[1] : null;
+}
+
+/** يسلّم المنشور للقنوات — يفضّل ربطات المستخدم الخاصة، مع سقوط اختياري على أسرار الموقع. */
+async function deliverToChannels(
+  env: Env,
+  channels: Channel[],
+  content: string | null,
+  mediaUrl: string | null,
+  origin: string,
+  userCreds?: {
+    telegram?: { bot_token: string; chat_id: string };
+    webhook?: { url: string };
+  },
+): Promise<{ delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[]; status: string }> {
+  const delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[] = [];
+
+  if (channels.includes("telegram")) {
+    if (userCreds?.telegram?.bot_token && userCreds.telegram.chat_id) {
+      const r = await sendTelegramPostWithCreds(
+        userCreds.telegram.bot_token,
+        userCreds.telegram.chat_id,
+        content,
+        mediaUrl,
+        origin,
+        env,
+      );
+      delivered.push({ channel: "telegram", ok: r.ok, error: r.error, via: "user_telegram" });
+    } else if (telegramConfigured(env)) {
+      const r = await sendTelegramPost(env, content, mediaUrl, origin);
+      delivered.push({ channel: "telegram", ok: r.ok, error: r.error, via: "site_telegram" });
+    } else {
+      delivered.push({
+        channel: "telegram",
+        ok: false,
+        error: "اربط تيليجرام الخاص بك من إعدادات النشر (بوت + chat_id).",
+        via: "none",
+      });
+    }
+  }
+
+  const rest = channels.filter((c) => c !== "telegram");
+  if (rest.length) {
+    const hook = userCreds?.webhook?.url || env.PUBLISH_WEBHOOK_URL;
+    if (hook) {
+      const r = await sendWebhookPostToUrl(hook, rest, content, mediaUrl, origin, env);
+      for (const c of rest) {
+        delivered.push({
+          channel: c,
+          ok: r.ok,
+          error: r.error,
+          via: userCreds?.webhook?.url ? "user_webhook" : "site_webhook",
+        });
+      }
+    } else {
+      for (const c of rest) {
+        delivered.push({
+          channel: c,
+          ok: false,
+          error: "اربط Webhook الخاص بك (Make/Zapier) من إعدادات النشر، أو انشر يدوياً.",
+          via: "none",
+        });
+      }
+    }
+  }
+
+  const anyOk = delivered.some((d) => d.ok);
+  const anyAttempt = delivered.some((d) => d.via && d.via !== "none");
+  let status = "queued";
+  if (anyOk) status = "published";
+  else if (anyAttempt && delivered.every((d) => d.via !== "none" && !d.ok)) status = "failed";
+  return { delivered, status };
+}
+
+async function sendTelegramPostWithCreds(
+  botToken: string,
+  chatId: string,
+  content: string | null,
+  mediaUrl: string | null,
+  baseOrigin: string,
+  env: Env,
+): Promise<{ ok: boolean; error?: string }> {
+  const call = async (method: string, payload: Record<string, unknown>) => {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/${method}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: chatId, ...payload }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+      if (res.ok && data.ok) return { ok: true as const };
+      return { ok: false as const, error: data.description || `HTTP ${res.status}` };
+    } catch (err) {
+      return { ok: false as const, error: String((err as Error).message) };
+    }
+  };
+  if (mediaUrl) {
+    const abs = /^https?:\/\//.test(mediaUrl) ? mediaUrl : `${siteBase(env, baseOrigin)}${mediaUrl}`;
+    if (!/^https?:\/\//.test(abs)) {
+      return call("sendMessage", { text: `${content ? content + "\n" : ""}${mediaUrl}` });
+    }
+    const isVideo = mediaUrl.includes("/video/") || /\.(mp4|mov|webm|m4v)$/i.test(mediaUrl);
+    if (isVideo) return call("sendVideo", { video: abs, caption: content || undefined });
+    return call("sendPhoto", { photo: abs, caption: content || undefined });
+  }
+  return call("sendMessage", { text: content || "📎 منشور جديد", disable_web_page_preview: false });
+}
+
+async function sendWebhookPostToUrl(
+  url: string,
+  channels: string[],
+  content: string | null,
+  mediaUrl: string | null,
+  baseOrigin: string,
+  env: Env,
+): Promise<{ ok: boolean; error?: string }> {
   const abs = mediaUrl && !/^https?:\/\//.test(mediaUrl) ? `${siteBase(env, baseOrigin)}${mediaUrl}` : mediaUrl;
   try {
-    const res = await fetch(env.PUBLISH_WEBHOOK_URL, {
+    const res = await fetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
@@ -1920,56 +2041,30 @@ async function sendWebhookPost(
   }
 }
 
-/** يستخرج معرّف فيديو يوتيوب من رابط أو معرّف خام. */
-function extractYouTubeId(input: string): string | null {
-  const s = input.trim();
-  if (/^[a-zA-Z0-9_-]{11}$/.test(s)) return s;
-  const m = s.match(/(?:v=|youtu\.be\/|embed\/|shorts\/)([a-zA-Z0-9_-]{11})/);
-  return m ? m[1] : null;
-}
-
-/** يسلّم المنشور للقنوات المتاحة (تيليجرام مباشر + Webhook للباقي) ويعيد السجلّ. */
-async function deliverToChannels(
+async function loadUserPublishCreds(
   env: Env,
-  channels: Channel[],
-  content: string | null,
-  mediaUrl: string | null,
-  origin: string,
-): Promise<{ delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[]; status: string }> {
-  const delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[] = [];
-
-  if (channels.includes("telegram")) {
-    if (telegramConfigured(env)) {
-      const r = await sendTelegramPost(env, content, mediaUrl, origin);
-      delivered.push({ channel: "telegram", ok: r.ok, error: r.error, via: "telegram_bot" });
-    } else {
-      delivered.push({ channel: "telegram", ok: false, error: "تيليجرام غير مُعَدّ (أسرار ناقصة).", via: "none" });
-    }
-  }
-
-  const rest = channels.filter((c) => c !== "telegram");
-  if (rest.length) {
-    if (webhookConfigured(env)) {
-      const r = await sendWebhookPost(env, rest, content, mediaUrl, origin);
-      for (const c of rest) delivered.push({ channel: c, ok: r.ok, error: r.error, via: "webhook" });
-    } else {
-      for (const c of rest) {
-        delivered.push({
-          channel: c,
-          ok: false,
-          error: "اضبط PUBLISH_WEBHOOK_URL (Make/Zapier/n8n) أو انشر يدوياً عبر روابط المشاركة.",
-          via: "none",
-        });
+  userId: number,
+): Promise<{ telegram?: { bot_token: string; chat_id: string }; webhook?: { url: string } }> {
+  const out: { telegram?: { bot_token: string; chat_id: string }; webhook?: { url: string } } = {};
+  try {
+    const { results } = await env.DB.prepare(
+      `SELECT channel, config_json FROM social_connections
+        WHERE user_id = ? AND is_active = 1 AND channel IN ('telegram','webhook')`,
+    ).bind(userId).all<{ channel: string; config_json: string }>();
+    for (const row of results || []) {
+      let cfg: Record<string, string> = {};
+      try { cfg = JSON.parse(row.config_json || "{}"); } catch { cfg = {}; }
+      if (row.channel === "telegram" && cfg.bot_token && cfg.chat_id) {
+        out.telegram = { bot_token: String(cfg.bot_token), chat_id: String(cfg.chat_id) };
+      }
+      if (row.channel === "webhook" && cfg.url) {
+        out.webhook = { url: String(cfg.url) };
       }
     }
+  } catch {
+    // الجدول قد لا يكون مُرحَّلاً بعد
   }
-
-  const anyOk = delivered.some((d) => d.ok);
-  const anyAttempt = delivered.some((d) => d.via && d.via !== "none");
-  let status = "queued";
-  if (anyOk) status = "published";
-  else if (anyAttempt && delivered.every((d) => d.via !== "none" && !d.ok)) status = "failed";
-  return { delivered, status };
+  return out;
 }
 
 /** رفع صورة/صوت/مستند إلى R2 وإرجاع رابطه. */
@@ -2362,7 +2457,99 @@ async function handleTeacher(
     return json({ ok: true, followers: followers ? followers.c : 0, followersByDay, totals, clips });
   }
 
-  // ===== النشر على القنوات (channel_posts) =====
+  // ===== ربطات التواصل الخاصة بالمستخدم (كلٌّ على قناته) =====
+  if (route === "GET /api/teacher/social") {
+    let results: Record<string, unknown>[] = [];
+    try {
+      const q = await env.DB.prepare(
+        `SELECT id, channel, label, is_active, updated_at, config_json
+           FROM social_connections WHERE user_id = ? ORDER BY channel, id`,
+      ).bind(user.id).all<Record<string, unknown>>();
+      results = (q.results || []).map((row) => {
+        let hint = "";
+        try {
+          const cfg = JSON.parse(String(row.config_json || "{}")) as Record<string, string>;
+          if (row.channel === "telegram") hint = cfg.chat_id ? `chat:${cfg.chat_id}` : "";
+          if (row.channel === "webhook") hint = cfg.url ? String(cfg.url).slice(0, 48) + "…" : "";
+        } catch { /* ignore */ }
+        return {
+          id: row.id,
+          channel: row.channel,
+          label: row.label,
+          is_active: row.is_active,
+          updated_at: row.updated_at,
+          hint,
+        };
+      });
+    } catch {
+      results = [];
+    }
+    const yt = await env.DB.prepare(
+      "SELECT channel_title, channel_id FROM youtube_accounts WHERE teacher_id = ?",
+    ).bind(user.id).first<{ channel_title: string | null; channel_id: string | null }>();
+    const creds = await loadUserPublishCreds(env, user.id);
+    return json({
+      ok: true,
+      connections: results,
+      youtube: yt ? { connected: true, title: yt.channel_title, id: yt.channel_id } : { connected: false },
+      ready: {
+        telegram: Boolean(creds.telegram),
+        webhook: Boolean(creds.webhook),
+        site_telegram_fallback: telegramConfigured(env),
+        site_webhook_fallback: webhookConfigured(env),
+      },
+    });
+  }
+
+  if (route === "POST /api/teacher/social") {
+    const b = await readJson(request);
+    const channel = String(b.channel ?? "");
+    if (channel !== "telegram" && channel !== "webhook") {
+      return json({ ok: false, error: "القناة غير مدعومة (telegram أو webhook)." }, 400);
+    }
+    const label = String(b.label ?? "افتراضي").trim().slice(0, 40) || "افتراضي";
+    let config: Record<string, string> = {};
+    if (channel === "telegram") {
+      const bot = String(b.bot_token ?? "").trim();
+      const chat = String(b.chat_id ?? "").trim();
+      if (!bot || !chat) return json({ ok: false, error: "أدخِل bot_token و chat_id لقناتك." }, 400);
+      const test = await fetch(`https://api.telegram.org/bot${bot}/getChat`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ chat_id: chat }),
+      });
+      const td = (await test.json().catch(() => ({}))) as { ok?: boolean; description?: string };
+      if (!test.ok || !td.ok) {
+        return json({ ok: false, error: "تعذّر التحقق من تيليجرام: " + (td.description || String(test.status)) }, 400);
+      }
+      config = { bot_token: bot, chat_id: chat };
+    } else {
+      const url = String(b.url ?? "").trim();
+      if (!/^https:\/\//i.test(url)) return json({ ok: false, error: "رابط Webhook يجب أن يبدأ بـ https://" }, 400);
+      config = { url };
+    }
+    await env.DB.prepare(
+      `INSERT INTO social_connections (user_id, channel, label, config_json, is_active, updated_at)
+       VALUES (?, ?, ?, ?, 1, datetime('now'))
+       ON CONFLICT(user_id, channel, label) DO UPDATE SET
+         config_json = excluded.config_json,
+         is_active = 1,
+         updated_at = datetime('now')`,
+    ).bind(user.id, channel, label, JSON.stringify(config)).run();
+    await audit(env, user.email, "social.connect", `${channel}:${label}`);
+    return json({ ok: true }, 201);
+  }
+
+  const sdel = path.match(/^\/api\/teacher\/social\/(\d+)$/);
+  if (sdel && request.method === "DELETE") {
+    const id = Number(sdel[1]);
+    await env.DB.prepare(`DELETE FROM social_connections WHERE id = ? AND user_id = ?`)
+      .bind(id, user.id).run();
+    await audit(env, user.email, "social.disconnect", `id:${id}`);
+    return json({ ok: true });
+  }
+
+  // ===== النشر على القنوات — كل مستخدم على قناته الخاصة =====
   if (route === "GET /api/teacher/posts") {
     const { results } = await env.DB.prepare(
       `SELECT id, content, media_url, channels, scheduled_at, status, approval_status, delivery_log, created_at
@@ -2370,13 +2557,16 @@ async function handleTeacher(
     )
       .bind(user.id)
       .all();
+    const creds = await loadUserPublishCreds(env, user.id);
     return json({
       ok: true,
       posts: results,
       connections: {
-        telegram: telegramConfigured(env),
-        webhook: webhookConfigured(env),
+        telegram: Boolean(creds.telegram) || telegramConfigured(env),
+        webhook: Boolean(creds.webhook) || webhookConfigured(env),
         youtube_oauth: Boolean(env.GOOGLE_CLIENT_ID && env.GOOGLE_CLIENT_SECRET),
+        user_telegram: Boolean(creds.telegram),
+        user_webhook: Boolean(creds.webhook),
       },
       channels: CHANNELS,
     });
@@ -2396,8 +2586,8 @@ async function handleTeacher(
     const scheduledAt = schedule && b.scheduled_at ? String(b.scheduled_at) : null;
     if (schedule && !scheduledAt) return json({ ok: false, error: "حدّد موعد الجدولة." }, 400);
 
-    const needsApproval = user.role === "teacher";
-    const approval = needsApproval ? "pending" : "approved";
+    // قنوات المستخدم الخاصة: لا موافقة مدير — كلٌّ ينشر على قناته.
+    const approval = "approved";
     const initial = schedule ? "scheduled" : "queued";
     const res = await env.DB.prepare(
       `INSERT INTO channel_posts (author_id, content, media_url, channels, scheduled_at, status, approval_status)
@@ -2408,22 +2598,12 @@ async function handleTeacher(
     const id = Number(res.meta.last_row_id);
     await audit(env, user.email, "post.create", `post:${id}`);
 
-    if (needsApproval) {
-      await notifyRole(env, "manager", {
-        type: "content_pending",
-        title: "منشور بانتظار الموافقة",
-        body: `${user.name} أعدّ منشوراً للقنوات.`,
-        link: "/manager/approvals",
-        email: true,
-      });
-      return json({ ok: true, id, status: "queued", approval_status: approval, delivered: [] }, 201);
-    }
-
     let status = initial;
     let delivered: { channel: Channel; ok: boolean; error?: string; via?: string }[] = [];
     if (!schedule) {
       const origin = new URL(request.url).origin;
-      const out = await deliverToChannels(env, channels, content || null, mediaUrl, origin);
+      const creds = await loadUserPublishCreds(env, user.id);
+      const out = await deliverToChannels(env, channels, content || null, mediaUrl, origin, creds);
       delivered = out.delivered;
       status = out.status;
       await env.DB.prepare(
@@ -2433,23 +2613,18 @@ async function handleTeacher(
     return json({ ok: true, id, status, delivered, approval_status: approval }, 201);
   }
 
-  // إعادة محاولة التسليم لمنشور queued/failed معتمد
   const retry = path.match(/^\/api\/teacher\/posts\/(\d+)\/retry$/);
   if (retry && request.method === "POST") {
     const id = Number(retry[1]);
     const row = await env.DB.prepare(
-      `SELECT id, content, media_url, channels, status, approval_status, author_id
+      `SELECT id, content, media_url, channels, status, author_id
          FROM channel_posts WHERE id = ? AND author_id = ?`,
     ).bind(id, user.id).first<{
-      id: number; content: string | null; media_url: string | null; channels: string;
-      status: string; approval_status: string; author_id: number;
+      id: number; content: string | null; media_url: string | null; channels: string; status: string;
     }>();
     if (!row) return json({ ok: false, error: "المنشور غير موجود." }, 404);
-    if (row.approval_status !== "approved" && user.role === "teacher") {
-      return json({ ok: false, error: "المنشور بانتظار موافقة المدير." }, 409);
-    }
     if (row.status === "scheduled") {
-      return json({ ok: false, error: "المنشور مجدول — انتظر موعده أو عدّل الحالة." }, 409);
+      return json({ ok: false, error: "المنشور مجدول — انتظر موعده." }, 409);
     }
     let channels: Channel[] = [];
     try {
@@ -2460,7 +2635,8 @@ async function handleTeacher(
     }
     if (!channels.length) return json({ ok: false, error: "لا قنوات على المنشور." }, 400);
     const origin = new URL(request.url).origin;
-    const out = await deliverToChannels(env, channels, row.content, row.media_url, origin);
+    const creds = await loadUserPublishCreds(env, user.id);
+    const out = await deliverToChannels(env, channels, row.content, row.media_url, origin, creds);
     await env.DB.prepare(
       `UPDATE channel_posts SET status = ?, delivery_log = ?, approval_status = 'approved' WHERE id = ?`,
     ).bind(out.status, JSON.stringify({ at: new Date().toISOString(), delivered: out.delivered, retry: true }), id).run();
@@ -2730,11 +2906,11 @@ function harden(res: Response, pathname = ""): Response {
 /** يعالج المنشورات المجدولة المستحقّة (يُستدعى من مُشغّل cron). */
 async function processScheduledPosts(env: Env): Promise<void> {
   const { results } = await env.DB.prepare(
-    `SELECT id, content, media_url, channels FROM channel_posts
+    `SELECT id, author_id, content, media_url, channels FROM channel_posts
       WHERE status = 'scheduled' AND approval_status = 'approved'
         AND scheduled_at IS NOT NULL AND scheduled_at <= datetime('now')
       ORDER BY scheduled_at ASC LIMIT 25`,
-  ).all<{ id: number; content: string | null; media_url: string | null; channels: string | null }>();
+  ).all<{ id: number; author_id: number; content: string | null; media_url: string | null; channels: string | null }>();
 
   for (const p of results) {
     let channels: Channel[] = [];
@@ -2744,7 +2920,8 @@ async function processScheduledPosts(env: Env): Promise<void> {
     } catch {
       channels = [];
     }
-    const out = await deliverToChannels(env, channels, p.content, p.media_url, env.SITE_URL || "");
+    const creds = await loadUserPublishCreds(env, p.author_id);
+    const out = await deliverToChannels(env, channels, p.content, p.media_url, env.SITE_URL || "", creds);
     await env.DB.prepare(
       `UPDATE channel_posts SET status = ?, delivery_log = ? WHERE id = ?`,
     ).bind(out.status, JSON.stringify({ at: new Date().toISOString(), delivered: out.delivered, cron: true }), p.id).run();

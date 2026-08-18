@@ -38,6 +38,33 @@
           </div>
 
           <div class="card" style="margin-bottom:1.5rem">
+            <h3 style="color:var(--gold);margin-top:0">قنواتي الخاصة</h3>
+            <p class="muted" style="margin-top:0;font-size:.9rem">
+              كل معلّم/مدير ينشر على <strong>قناته هو</strong> — اربط تيليجرام (بوت + chat_id) و/أو Webhook Make الخاص بك.
+            </p>
+            <div id="myConnections" class="muted" style="margin-bottom:1rem">…</div>
+            <div class="grid" style="gap:1rem">
+              <form id="tgForm" class="card" style="margin:0;background:transparent;box-shadow:none;border:1px dashed var(--border)">
+                <strong>تيليجرام — قناتي</strong>
+                <div class="field" style="margin-top:.7rem"><label>Bot Token</label><input id="tgToken" type="password" placeholder="123456:ABC…" autocomplete="off" /></div>
+                <div class="field"><label>Chat ID للقناة</label><input id="tgChat" placeholder="-100…" /></div>
+                <button class="btn btn-outline" type="submit">حفظ وربط تيليجرام</button>
+                <div class="notice" id="tgMsg" hidden></div>
+              </form>
+              <form id="whForm" class="card" style="margin:0;background:transparent;box-shadow:none;border:1px dashed var(--border)">
+                <strong>Webhook — باقي المنصّات</strong>
+                <div class="field" style="margin-top:.7rem"><label>رابط Make/Zapier/n8n</label><input id="whUrl" type="url" placeholder="https://hook…" /></div>
+                <button class="btn btn-outline" type="submit">حفظ وربط Webhook</button>
+                <div class="notice" id="whMsg" hidden></div>
+                <p class="muted" style="font-size:.8rem;margin:.6rem 0 0">يوصل JSON: channels, content, media_url — وجّهه لحساباتك.</p>
+              </form>
+            </div>
+            <p class="muted" style="margin-top:1rem;font-size:.88rem">
+              رفع فيديو ليوتيوب: <a class="gold" href="/teacher/lessons">اربط حساب يوتيوب من الدروس</a> (OAuth لكل معلّم مسبقاً).
+            </p>
+          </div>
+
+          <div class="card" style="margin-bottom:1.5rem">
             <form id="publishForm">
               <div class="field">
                 <label for="content">المحتوى</label>
@@ -108,7 +135,7 @@
       var esc = RM.esc;
       var form = document.getElementById("publishForm");
       var notice = document.getElementById("pubNotice");
-      var conn = { telegram: false, webhook: false, youtube_oauth: false };
+      var conn = { telegram: false, webhook: false, youtube_oauth: false, user_telegram: false, user_webhook: false };
 
       var CH = {
         youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك",
@@ -130,19 +157,94 @@
       function paintConn() {
         var bar = document.getElementById("connBar");
         bar.innerHTML =
-          pill(conn.telegram, "تيليجرام Bot") +
-          pill(conn.webhook, "Webhook التوزيع") +
-          pill(conn.youtube_oauth, "يوتيوب OAuth (للرفع من الدروس)");
+          pill(conn.user_telegram, "تيليجرام (حسابي)") +
+          pill(conn.user_webhook, "Webhook (حسابي)") +
+          pill(!!conn.telegram && !conn.user_telegram, "تيليجرام موقع (احتياطي)") +
+          pill(!!conn.webhook && !conn.user_webhook, "Webhook موقع (احتياطي)");
         var note = document.getElementById("channelsNote");
-        if (!conn.telegram && !conn.webhook) {
-          note.innerHTML = "<strong>لا تسليم تلقائي مُعَدّ حالياً.</strong> أضِف أسرار تيليجرام و/أو PUBLISH_WEBHOOK_URL في Cloudflare. يمكنك النشر اليدوي من زر الروابط أو حفظ المنشور وإعادة المحاولة لاحقاً.";
-        } else if (!conn.webhook) {
-          note.innerHTML = "تيليجرام جاهز. لباقي القنوات اضبط <code>PUBLISH_WEBHOOK_URL</code> أو استخدم المشاركة اليدوية.";
+        if (!conn.user_telegram && !conn.user_webhook && !conn.telegram && !conn.webhook) {
+          note.innerHTML = "<strong>اربط قناتك أعلاه أولاً</strong> (تيليجرام بوت+chat_id و/أو Webhook Make). بدون ذلك استخدم المشاركة اليدوية.";
+        } else if (conn.user_telegram || conn.user_webhook) {
+          note.innerHTML = "النشر يذهب <strong>لربطك الشخصي</strong>. يوتيوب لرفع الفيديو: من صفحة الدروس.";
+        } else {
+          note.innerHTML = "يُستخدم ربط الموقع الاحتياطي إن وُجد — الأفضل ربط قناتك الخاصة حتى لا تختلط المنشورات.";
         }
       }
       function pill(on, label) {
         return '<span class="pill ' + (on ? "on" : "off") + '">' + (on ? "✓ " : "○ ") + label + "</span>";
       }
+
+      function loadSocial() {
+        RM.api("/api/teacher/social").then(function (res) {
+          var d = res.d || {};
+          var box = document.getElementById("myConnections");
+          if (!res.ok) { box.textContent = "تعذّر تحميل الربطات — تأكد من نشر الترحيل 0022."; return; }
+          var list = d.connections || [];
+          if (!list.length) {
+            box.innerHTML = '<span class="muted">لا ربطات محفوظة — أضِف تيليجرام أو Webhook أدناه.</span>';
+          } else {
+            box.innerHTML = list.map(function (c) {
+              return '<div style="display:flex;justify-content:space-between;gap:.6rem;align-items:center;margin:.3rem 0">' +
+                "<span>" + esc(c.channel) + " · " + esc(c.label) +
+                (c.hint ? ' <span class="muted">(' + esc(c.hint) + ")</span>" : "") + "</span>" +
+                '<a href="#" class="gold rm-unsub" data-id="' + c.id + '">فكّ الربط</a></div>';
+            }).join("");
+          }
+          if (d.ready) {
+            conn.user_telegram = !!d.ready.telegram;
+            conn.user_webhook = !!d.ready.webhook;
+            conn.telegram = !!d.ready.telegram || !!d.ready.site_telegram_fallback;
+            conn.webhook = !!d.ready.webhook || !!d.ready.site_webhook_fallback;
+          }
+          if (d.youtube && d.youtube.connected) {
+            box.innerHTML += '<div class="muted" style="margin-top:.5rem">يوتيوب (رفع فيديو): ' + esc(d.youtube.title || "مربوط") + "</div>";
+          }
+          paintConn();
+        });
+      }
+
+      document.getElementById("myConnections").addEventListener("click", function (e) {
+        var a = e.target.closest(".rm-unsub");
+        if (!a) return;
+        e.preventDefault();
+        if (!confirm("فكّ هذا الربط؟")) return;
+        RM.api("/api/teacher/social/" + a.getAttribute("data-id"), { method: "DELETE" }).then(loadSocial);
+      });
+
+      document.getElementById("tgForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var msg = document.getElementById("tgMsg");
+        msg.hidden = false; msg.textContent = "جارٍ التحقق…";
+        RM.api("/api/teacher/social", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            channel: "telegram",
+            bot_token: document.getElementById("tgToken").value.trim(),
+            chat_id: document.getElementById("tgChat").value.trim(),
+          }),
+        }).then(function (res) {
+          msg.textContent = (res.ok && res.d.ok) ? "تمّ ربط تيليجرام ✓" : (res.d.error || "فشل");
+          if (res.ok) { document.getElementById("tgToken").value = ""; loadSocial(); }
+        });
+      });
+
+      document.getElementById("whForm").addEventListener("submit", function (e) {
+        e.preventDefault();
+        var msg = document.getElementById("whMsg");
+        msg.hidden = false; msg.textContent = "جارٍ الحفظ…";
+        RM.api("/api/teacher/social", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            channel: "webhook",
+            url: document.getElementById("whUrl").value.trim(),
+          }),
+        }).then(function (res) {
+          msg.textContent = (res.ok && res.d.ok) ? "تمّ ربط Webhook ✓" : (res.d.error || "فشل");
+          if (res.ok) { document.getElementById("whUrl").value = ""; loadSocial(); }
+        });
+      });
 
       var contentEl = document.getElementById("content");
       function updateCount() {
@@ -315,6 +417,7 @@
         }
       });
 
+      loadSocial();
       loadPosts();
     })();
   </script>

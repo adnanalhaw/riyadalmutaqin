@@ -13,6 +13,7 @@
     { href: "/manager/settings", label: "⚙️ إعدادات الموقع" },
     { href: "/manager/analytics", label: "📈 تحليل البيانات" },
     { href: "/manager/growth", label: "🎯 مسار المليون د.ك" },
+    { href: "/teacher/publish", label: "📤 نشري على قنواتي" },
   ];
 
   function active(l) {
