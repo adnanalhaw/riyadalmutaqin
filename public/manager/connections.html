@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ربط حسابات النشر — مدير الموقع</title>
+  <meta name="description" content="اربط صفحة فيسبوك وحساب انستقرام وقناة يوتيوب مرّة واحدة، فيُنشَر محتواك عليها تلقائياً." />
+  <meta name="theme-color" content="#03130b" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .conn{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;margin-bottom:1.1rem}
+    .conn .ic{font-size:2rem;flex:none;width:3rem;text-align:center}
+    .conn .body{flex:1;min-width:200px}
+    .conn h3{margin:0 0 .2rem;color:var(--gold)}
+    .pill{display:inline-block;padding:.12rem .6rem;border-radius:999px;font-size:.76rem;font-weight:800}
+    .pill.on{background:#12341f;color:#8be8ab}
+    .pill.off{background:#3a3413;color:#e8d48b}
+    .pill.no{background:#3a1616;color:#e89c8b}
+    .conn .act{flex:none;display:flex;gap:.5rem;flex-wrap:wrap}
+    .muted-s{font-size:.85rem;color:var(--muted);margin:.25rem 0 0}
+  </style>
+</head>
+<body>
+  <div data-header></div>
+  <main>
+    <div class="container">
+      <div class="portal">
+        <aside class="sidebar" data-manager-nav></aside>
+
+        <section>
+          <div class="page-head" style="padding-top:0">
+            <h1>🔗 ربط حسابات النشر</h1>
+            <p>اربط حساباتك <strong>مرّة واحدة</strong> — وبعدها كل ما تنشره من
+              <a class="gold" href="/teacher/editor">استوديو المونتاج</a> أو
+              <a class="gold" href="/teacher/publish">صفحة النشر</a> يصل إليها تلقائياً.</p>
+          </div>
+
+          <div class="notice" id="msg" hidden style="margin-bottom:1.2rem"></div>
+
+          <div class="card" style="margin-bottom:1.2rem">
+            <div class="conn">
+              <span class="ic">📘</span>
+              <div class="body">
+                <h3>فيسبوك — صفحتك</h3>
+                <span class="pill off" id="fbPill">جارٍ الفحص…</span>
+                <p class="muted-s" id="fbInfo">ننشر على صفحتك عبر واجهة Meta الرسمية — لا كلمة مرور ولا دخول نيابةً عنك.</p>
+              </div>
+              <div class="act">
+                <a class="btn btn-primary" id="fbConnect" href="/api/connections/meta/connect" hidden>ربط فيسبوك</a>
+                <button class="btn btn-outline" id="fbDisconnect" hidden type="button">فكّ الربط</button>
+              </div>
+            </div>
+
+            <div class="conn" style="border-top:1px solid var(--border);padding-top:1.1rem">
+              <span class="ic">📸</span>
+              <div class="body">
+                <h3>انستقرام — حساب أعمال</h3>
+                <span class="pill off" id="igPill">جارٍ الفحص…</span>
+                <p class="muted-s" id="igInfo">يُربط تلقائياً مع فيسبوك — بشرط أن يكون حساب انستقرام <strong>Business</strong> ومرتبطاً بصفحتك.</p>
+              </div>
+            </div>
+
+            <div id="pagesWrap" hidden style="border-top:1px solid var(--border);padding-top:1.1rem">
+              <label for="pageSel" style="font-weight:700">الصفحة المستخدمة للنشر</label>
+              <select id="pageSel" style="margin-top:.4rem"></select>
+              <button class="btn btn-outline" id="pageSave" type="button" style="margin-top:.6rem">اعتمد هذه الصفحة</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="conn">
+              <span class="ic">▶️</span>
+              <div class="body">
+                <h3>يوتيوب — قناتك</h3>
+                <span class="pill off" id="ytPill">جارٍ الفحص…</span>
+                <p class="muted-s" id="ytInfo">يُرفع الفيديو فعلياً إلى قناتك عبر YouTube Data API.</p>
+              </div>
+              <div class="act">
+                <a class="btn btn-primary" id="ytConnect" href="/api/connections/youtube/connect" hidden>ربط يوتيوب</a>
+                <button class="btn btn-outline" id="ytDisconnect" hidden type="button">فكّ الربط</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="notice" style="margin-top:1.2rem">
+            <strong>ملاحظة صادقة:</strong> تيك توك وإكس ليس لهما ربط مباشر بعد — تُسلَّم عبر
+            <strong>Webhook التوزيع</strong> إن ضُبط (راجِع README)، وإلّا تبقى في قائمة الإصدار.
+          </div>
+        </section>
+      </div>
+    </div>
+  </main>
+  <div data-footer></div>
+  <script src="/layout.js"></script>
+  <script src="/manager/nav.js"></script>
+  <script src="/content.js"></script>
+  <script>
+    (function () {
+      "use strict";
+      var esc = RM.esc, api = RM.api;
+      function el(id) { return document.getElementById(id); }
+
+      RM.getMe().then(function (u) {
+        if (!u) { location.href = "/login"; return; }
+        if (u.role !== "manager" && u.role !== "admin") { location.href = "/"; return; }
+        flash();
+        load();
+      });
+
+      // رسالة العودة من شاشة الموافقة (نجاح/فشل)
+      function flash() {
+        var q = new URLSearchParams(location.search);
+        var map = {
+          "fb=connected": ["تمّ ربط فيسبوك بنجاح ✓", false],
+          "fb=error": ["تعذّر ربط فيسبوك — حاوِل مجدداً.", true],
+          "fb=nopages": ["لا توجد صفحة فيسبوك على حسابك — أنشئ صفحة أولاً ثم أعِد الربط.", true],
+          "yt=connected": ["تمّ ربط يوتيوب بنجاح ✓", false],
+          "yt=error": ["تعذّر ربط يوتيوب — حاوِل مجدداً.", true],
+        };
+        for (var k in map) {
+          var kv = k.split("=");
+          if (q.get(kv[0]) === kv[1]) {
+            var m = el("msg"); m.hidden = false; m.textContent = map[k][0];
+            history.replaceState({}, "", location.pathname);
+            break;
+          }
+        }
+      }
+
+      function setPill(id, cls, text) {
+        var p = el(id); p.className = "pill " + cls; p.textContent = text;
+      }
+
+      function load() {
+        api("/api/connections/status").then(function (res) {
+          if (!res.ok || !res.d.ok) return;
+          var d = res.d;
+
+          // ── فيسبوك ──
+          if (!d.meta.configured) {
+            setPill("fbPill", "no", "غير مُفعَّل");
+            el("fbInfo").textContent = "لم تُضبَط مفاتيح Meta بعد (FB_APP_ID و FB_APP_SECRET) — راجِع README.";
+          } else if (d.meta.connected) {
+            setPill("fbPill", "on", "مربوط ✓");
+            el("fbInfo").textContent = "الصفحة: " + (d.meta.page || "—");
+            el("fbDisconnect").hidden = false;
+            loadPages();
+          } else {
+            setPill("fbPill", "off", "غير مربوط");
+            el("fbConnect").hidden = false;
+          }
+
+          // ── انستقرام ──
+          if (!d.meta.configured) setPill("igPill", "no", "غير مُفعَّل");
+          else if (d.meta.instagram_linked) {
+            setPill("igPill", "on", "مربوط ✓");
+            el("igInfo").textContent = "الحساب: @" + (d.meta.instagram || "—");
+          } else if (d.meta.connected) {
+            setPill("igPill", "off", "غير مرتبط بالصفحة");
+            el("igInfo").textContent = "حوّل انستقرام لحساب Business واربطه بصفحة فيسبوك، ثمّ أعِد الربط.";
+          } else {
+            setPill("igPill", "off", "يتبع فيسبوك");
+          }
+
+          // ── يوتيوب ──
+          if (!d.youtube.configured) {
+            setPill("ytPill", "no", "غير مُفعَّل");
+            el("ytInfo").textContent = "لم تُضبَط مفاتيح Google بعد (GOOGLE_CLIENT_ID و GOOGLE_CLIENT_SECRET) — راجِع README.";
+          } else if (d.youtube.connected) {
+            setPill("ytPill", "on", "مربوط ✓");
+            el("ytInfo").textContent = "القناة: " + (d.youtube.channel || "—");
+            el("ytDisconnect").hidden = false;
+          } else {
+            setPill("ytPill", "off", "غير مربوط");
+            el("ytConnect").hidden = false;
+          }
+        });
+      }
+
+      // اختيار الصفحة حين يملك أكثر من صفحة
+      function loadPages() {
+        api("/api/connections/meta/pages").then(function (res) {
+          if (!res.ok || !res.d.ok) return;
+          var pages = res.d.pages || [];
+          if (pages.length < 2) return;
+          var sel = el("pageSel");
+          sel.innerHTML = pages.map(function (p) {
+            return '<option value="' + esc(p.id) + '"' + (p.id === res.d.current ? " selected" : "") + ">" + esc(p.name) + "</option>";
+          }).join("");
+          el("pagesWrap").hidden = false;
+        });
+      }
+
+      el("pageSave").addEventListener("click", function () {
+        var m = el("msg"); m.hidden = false; m.textContent = "لحظات…";
+        api("/api/connections/meta/select", {
+          method: "POST", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ page_id: el("pageSel").value }),
+        }).then(function (res) {
+          m.textContent = (res.ok && res.d.ok) ? "اعتُمدت الصفحة ✓" : ((res.d && res.d.error) || "تعذّر التبديل.");
+          load();
+        });
+      });
+
+      function disconnect(path, label) {
+        return function () {
+          if (!window.confirm("سيتوقّف النشر التلقائي على " + label + ". متأكّد؟")) return;
+          api(path, { method: "POST" }).then(function () { location.reload(); });
+        };
+      }
+      el("fbDisconnect").addEventListener("click", disconnect("/api/connections/meta/disconnect", "فيسبوك وانستقرام"));
+      el("ytDisconnect").addEventListener("click", disconnect("/api/connections/youtube/disconnect", "يوتيوب"));
+    })();
+  </script>
+</body>
+</html>

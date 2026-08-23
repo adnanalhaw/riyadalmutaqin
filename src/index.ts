@@ -18,6 +18,7 @@ import {
   type AuthUser,
 } from "./auth";
 import * as yt from "./youtube";
+import * as meta from "./meta";
 
 export interface Env {
   /** أصول الموقع العام (Static Assets). */
@@ -44,6 +45,9 @@ export interface Env {
   OWNER_EMAIL?: string;
   /** Webhook تسليم المنشورات (Make/Zapier/n8n) — يوزّع على بقية المنصّات (سرّ اختياري). */
   PUBLISH_WEBHOOK_URL?: string;
+  /** تطبيق Meta لربط صفحة فيسبوك وحساب انستقرام الأعمال (النشر التلقائي). */
+  FB_APP_ID?: string;
+  FB_APP_SECRET?: string;
 }
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -762,12 +766,24 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleManager(request, env, user, path, route);
   }
 
+  // ===== ربط حسابات النشر (يوتيوب + Meta) — لمدير الموقع والمعلّم والأدمن =====
+  if (path.startsWith("/api/connections/")) {
+    const user = await getSessionUser(request, env.DB);
+    if (!user) return json({ ok: false, error: "unauthorized" }, 401);
+    if (user.mustChangePassword) return mustChange();
+    if (!["teacher", "manager", "admin"].includes(user.role)) {
+      return json({ ok: false, error: "forbidden" }, 403);
+    }
+    return handleConnections(request, env, user, route);
+  }
+
   // ===== المعلّم (يتطلّب دور teacher/admin) =====
   if (path.startsWith("/api/teacher/")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
     if (user.mustChangePassword) return mustChange();
-    if (user.role !== "teacher" && user.role !== "admin") {
+    // مدير الموقع يملك أدوات المعلّم كاملةً (مونتاج/وسائط/نشر) — كلٌّ على محتواه.
+    if (!["teacher", "manager", "admin"].includes(user.role)) {
       return json({ ok: false, error: "forbidden" }, 403);
     }
     return handleTeacher(request, env, user, path, route);
@@ -1956,28 +1972,22 @@ async function handleTeacher(
       return json({ ok: true, id, status: "queued", approval_status: approval, delivered: [] }, 201);
     }
 
-    // التسليم الفعلي عند «النشر الآن»: تيليجرام مباشرةً، وبقيّة القنوات دفعةً واحدة عبر
-    // Webhook التوزيع إن ضُبط (استعادة «الربط والنشر» من النسخة القديمة — من الخادم).
-    const delivered: { channel: Channel; ok: boolean; error?: string }[] = [];
+    // التسليم الفعلي عند «النشر الآن» — نقطة واحدة مشتركة مع المنشورات المجدولة.
+    let delivered: DeliveryResult[] = [];
     let status = initial;
     if (!schedule) {
       const origin = new URL(request.url).origin;
-      if (channels.includes("telegram") && telegramConfigured(env)) {
-        const r = await sendTelegramPost(env, content || null, mediaUrl, origin);
-        delivered.push({ channel: "telegram", ok: r.ok, error: r.error });
-      }
-      const rest = channels.filter((c) => c !== "telegram");
-      if (rest.length && webhookConfigured(env)) {
-        const r = await sendWebhookPost(env, rest, content || null, mediaUrl, origin);
-        for (const c of rest) delivered.push({ channel: c, ok: r.ok, error: r.error });
-      }
+      const out = await deliverPost(env, {
+        channels, content: content || null, mediaUrl, authorId: user.id, origin,
+      });
+      delivered = out.delivered;
       if (delivered.length) {
-        // published إن نجح أيّ تسليم؛ failed إن فشلت المحاولات وكانت تغطّي كلّ القنوات؛
-        // وإلّا queued — القنوات بلا وسيلة تسليم تبقى في قائمة الإصدار (السلوك الأصلي).
-        const anyOk = delivered.some((d) => d.ok);
-        const covered = delivered.length >= channels.length;
-        status = anyOk ? "published" : covered ? "failed" : "queued";
-        await env.DB.prepare("UPDATE channel_posts SET status = ? WHERE id = ?").bind(status, id).run();
+        status = postStatus(delivered, channels);
+        // حاوية انستقرام لم تكتمل معالجتها بعد → يكملها مشغّل cron بدل أن تضيع.
+        if (out.igPending) status = "scheduled";
+        await env.DB.prepare(
+          "UPDATE channel_posts SET status = ?, delivery = ?, ig_creation_id = ? WHERE id = ?",
+        ).bind(status, JSON.stringify(delivered), out.igPending ?? null, id).run();
       }
     }
     return json({ ok: true, id, status, delivered }, 201);
@@ -2000,6 +2010,147 @@ async function handleTeacher(
 
   // بقيّة واجهات المعلّم تُربط لاحقاً.
   return notReady("teacher." + path.slice("/api/teacher/".length));
+}
+
+/** ربط حسابات النشر: يوتيوب (Google) وMeta (فيسبوك + انستقرام). */
+async function handleConnections(
+  request: Request,
+  env: Env,
+  user: AuthUser,
+  route: string,
+): Promise<Response> {
+  const origin = new URL(request.url).origin;
+  const ytRedirect = `${origin}/api/connections/youtube/callback`;
+  const metaRedirect = `${origin}/api/connections/meta/callback`;
+  // المعلّم يعود لصفحة دروسه (فيها بطاقة يوتيوب)، والمدير لصفحة ربط الحسابات.
+  const back = user.role === "teacher" ? "/teacher/lessons" : "/manager/connections";
+
+  // حالة الربط الموحّدة (تغذّي صفحة «ربط الحسابات»)
+  if (route === "GET /api/connections/status") {
+    const ytAcc = await env.DB.prepare(
+      "SELECT channel_title, refresh_token FROM youtube_accounts WHERE teacher_id = ?",
+    ).bind(user.id).first<{ channel_title: string | null; refresh_token: string | null }>();
+    const m = await meta.getAccount(env, user.id);
+    return json({
+      ok: true,
+      youtube: {
+        configured: yt.isConfigured(env),
+        connected: Boolean(ytAcc && ytAcc.refresh_token),
+        channel: ytAcc?.channel_title ?? null,
+      },
+      meta: {
+        configured: meta.isConfigured(env),
+        connected: Boolean(m && m.page_token),
+        page: m?.page_name ?? null,
+        instagram: m?.ig_username ?? null,
+        instagram_linked: Boolean(m?.ig_user_id),
+      },
+    });
+  }
+
+  // ── يوتيوب ──
+  if (route === "GET /api/connections/youtube/connect") {
+    if (!yt.isConfigured(env)) {
+      return json({ ok: false, error: "لم تُضبَط مفاتيح Google بعد (GOOGLE_CLIENT_ID/SECRET)." }, 503);
+    }
+    const state = crypto.randomUUID();
+    return redirect(yt.buildAuthUrl(env, ytRedirect, state),
+      `yt_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+  }
+
+  if (route === "GET /api/connections/youtube/callback") {
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const saved = readCookie(request, "yt_state");
+    if (!code || !state || !saved || state !== saved) return redirect(`${origin}${back}?yt=error`);
+    try {
+      const tokens = await yt.exchangeCode(env, code, ytRedirect);
+      const channel = await yt.getChannel(tokens.access_token);
+      await yt.saveAccount(env, user.id, tokens, channel);
+      await audit(env, user.email, "youtube.connect", channel?.id ?? "");
+      return redirect(`${origin}${back}?yt=connected`, "yt_state=; Path=/; Max-Age=0");
+    } catch {
+      return redirect(`${origin}${back}?yt=error`);
+    }
+  }
+
+  if (route === "POST /api/connections/youtube/disconnect") {
+    await env.DB.prepare("DELETE FROM youtube_accounts WHERE teacher_id = ?").bind(user.id).run();
+    await audit(env, user.email, "youtube.disconnect", "");
+    return json({ ok: true });
+  }
+
+  // ── Meta (فيسبوك + انستقرام) ──
+  if (route === "GET /api/connections/meta/connect") {
+    if (!meta.isConfigured(env)) {
+      return json({ ok: false, error: "لم تُضبَط مفاتيح Meta بعد (FB_APP_ID/FB_APP_SECRET)." }, 503);
+    }
+    const state = crypto.randomUUID();
+    return redirect(meta.buildAuthUrl(env, metaRedirect, state),
+      `fb_state=${state}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=600`);
+  }
+
+  if (route === "GET /api/connections/meta/callback") {
+    const url = new URL(request.url);
+    const code = url.searchParams.get("code");
+    const state = url.searchParams.get("state");
+    const saved = readCookie(request, "fb_state");
+    if (!code || !state || !saved || state !== saved) return redirect(`${origin}${back}?fb=error`);
+    try {
+      const userToken = await meta.exchangeCode(env, code, metaRedirect);
+      const pages = await meta.listPages(userToken);
+      if (!pages.length) return redirect(`${origin}${back}?fb=nopages`);
+      // نربط أوّل صفحة تلقائياً (الحالة الغالبة)، ويستطيع تبديلها من الصفحة إن ملك أكثر.
+      const page = pages[0];
+      const ig = await meta.getInstagram(page.id, page.access_token);
+      await meta.saveAccount(env, user.id,
+        { ...page, ig_user_id: ig?.id ?? null, ig_username: ig?.username ?? null }, userToken);
+      await audit(env, user.email, "meta.connect", page.id);
+      return redirect(`${origin}${back}?fb=connected`, "fb_state=; Path=/; Max-Age=0");
+    } catch {
+      return redirect(`${origin}${back}?fb=error`);
+    }
+  }
+
+  // سرد صفحاته لتبديل الصفحة المربوطة (حين يملك أكثر من صفحة)
+  if (route === "GET /api/connections/meta/pages") {
+    const acc = await meta.getAccount(env, user.id);
+    if (!acc?.user_token) return json({ ok: true, pages: [] });
+    try {
+      const pages = await meta.listPages(acc.user_token);
+      return json({ ok: true, current: acc.page_id, pages: pages.map((p) => ({ id: p.id, name: p.name })) });
+    } catch (err) {
+      return json({ ok: false, error: err instanceof Error ? err.message : "تعذّر جلب الصفحات." }, 502);
+    }
+  }
+
+  if (route === "POST /api/connections/meta/select") {
+    const b = await readJson(request);
+    const pageId = String(b.page_id ?? "");
+    const acc = await meta.getAccount(env, user.id);
+    if (!acc?.user_token) return json({ ok: false, error: "أعِد الربط أولاً." }, 400);
+    try {
+      const pages = await meta.listPages(acc.user_token);
+      const page = pages.find((p) => p.id === pageId);
+      if (!page) return json({ ok: false, error: "الصفحة غير متاحة لحسابك." }, 400);
+      const ig = await meta.getInstagram(page.id, page.access_token);
+      await meta.saveAccount(env, user.id,
+        { ...page, ig_user_id: ig?.id ?? null, ig_username: ig?.username ?? null }, acc.user_token);
+      await audit(env, user.email, "meta.select_page", page.id);
+      return json({ ok: true, page: page.name, instagram: ig?.username ?? null });
+    } catch (err) {
+      return json({ ok: false, error: err instanceof Error ? err.message : "تعذّر التبديل." }, 502);
+    }
+  }
+
+  if (route === "POST /api/connections/meta/disconnect") {
+    await env.DB.prepare("DELETE FROM meta_accounts WHERE user_id = ?").bind(user.id).run();
+    await audit(env, user.email, "meta.disconnect", "");
+    return json({ ok: true });
+  }
+
+  return json({ ok: false, error: "Not Found" }, 404);
 }
 
 async function handleYouTube(
@@ -2157,14 +2308,127 @@ function harden(res: Response, pathname = ""): Response {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 
+export interface DeliveryResult {
+  channel: string;
+  ok: boolean;
+  id?: string;
+  error?: string;
+}
+
+/**
+ * التسليم الموحّد لمنشور على قنواته — نقطة واحدة يستعملها «النشر الآن» ومشغّل
+ * المنشورات المجدولة معاً (فلا يتباعد سلوكهما).
+ *
+ * الترتيب: تيليجرام مباشرةً · فيسبوك/انستقرام عبر Meta Graph بحساب الناشر
+ * (أو حساب الموقع الرسمي إن لم يربط) · يوتيوب برفع فعليّ للفيديو ·
+ * وما بقي بلا وسيلة تسليم يذهب إلى Webhook التوزيع إن ضُبط، وإلّا يبقى في
+ * قائمة الإصدار. كل قناة تُعيد نتيجتها الصادقة (نجاح/سبب الفشل).
+ */
+async function deliverPost(
+  env: Env,
+  opts: {
+    channels: string[];
+    content: string | null;
+    mediaUrl: string | null;
+    authorId: number | null;
+    origin: string;
+  },
+): Promise<{ delivered: DeliveryResult[]; igPending?: string }> {
+  const { channels, content, mediaUrl, authorId, origin } = opts;
+  const delivered: DeliveryResult[] = [];
+  let igPending: string | undefined;
+  const absMedia = mediaUrl
+    ? (/^https?:\/\//.test(mediaUrl) ? mediaUrl : `${siteBase(env, origin)}${mediaUrl}`)
+    : null;
+
+  // ١) تيليجرام
+  if (channels.includes("telegram") && telegramConfigured(env)) {
+    const r = await sendTelegramPost(env, content, mediaUrl, origin);
+    delivered.push({ channel: "telegram", ok: r.ok, error: r.error });
+  }
+
+  // ٢) فيسبوك وانستقرام (Meta Graph API الرسمي)
+  const wantsMeta = channels.includes("facebook") || channels.includes("instagram");
+  if (wantsMeta && meta.isConfigured(env)) {
+    // حساب الناشر أولاً، وإلّا حساب الموقع الرسمي (ربط مدير الموقع/الأدمن)
+    const acc = (authorId ? await meta.getAccount(env, authorId) : null) ?? (await meta.getSiteAccount(env));
+    if (!acc || !acc.page_token) {
+      for (const c of ["facebook", "instagram"].filter((c) => channels.includes(c))) {
+        delivered.push({ channel: c, ok: false, error: "لا حساب Meta مربوط — اربطه من «ربط الحسابات»." });
+      }
+    } else {
+      if (channels.includes("facebook")) {
+        const r = await meta.publishFacebook(acc, content, absMedia);
+        delivered.push({ channel: "facebook", ok: r.ok, id: r.id, error: r.error });
+      }
+      if (channels.includes("instagram")) {
+        if (!absMedia) {
+          delivered.push({ channel: "instagram", ok: false, error: "انستقرام يتطلّب صورة أو فيديو." });
+        } else {
+          const r = await meta.publishInstagram(acc, content, absMedia);
+          if (r.pending) igPending = r.pending;
+          delivered.push({ channel: "instagram", ok: r.ok, id: r.id, error: r.error });
+        }
+      }
+    }
+  }
+
+  // ٣) يوتيوب — رفع الفيديو فعلياً لقناة الناشر المربوطة
+  if (channels.includes("youtube")) {
+    const isVid = absMedia ? /\/video\/|\.(mp4|mov|webm|m4v)(\?|$)/i.test(absMedia) : false;
+    if (!absMedia || !isVid) {
+      delivered.push({ channel: "youtube", ok: false, error: "يوتيوب يتطلّب مقطع فيديو." });
+    } else if (!authorId) {
+      delivered.push({ channel: "youtube", ok: false, error: "لا ناشر معروف للمنشور." });
+    } else {
+      const token = await yt.getValidAccessToken(env, authorId);
+      if (!token) {
+        delivered.push({ channel: "youtube", ok: false, error: "قناة يوتيوب غير مربوطة — اربطها من «ربط الحسابات»." });
+      } else {
+        try {
+          const res = await fetch(absMedia);
+          if (!res.ok) throw new Error(`تعذّر جلب الوسيط (HTTP ${res.status})`);
+          const bytes = await res.arrayBuffer();
+          const title = (content ?? "").split("\n")[0].slice(0, 90) || "رياض المتقين";
+          const v = await yt.uploadVideo(token, bytes, res.headers.get("content-type") || "video/mp4", {
+            title,
+            description: content ?? "",
+            privacy: "public",
+          });
+          delivered.push({ channel: "youtube", ok: true, id: v.id });
+        } catch (err) {
+          delivered.push({ channel: "youtube", ok: false, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }
+  }
+
+  // ٤) ما بقي بلا وسيلة تسليم مباشرة → Webhook التوزيع (تيك توك/إكس وغيرها)
+  const handled = new Set(delivered.map((d) => d.channel));
+  const rest = channels.filter((c) => !handled.has(c));
+  if (rest.length && webhookConfigured(env)) {
+    const r = await sendWebhookPost(env, rest, content, mediaUrl, origin);
+    for (const c of rest) delivered.push({ channel: c, ok: r.ok, error: r.error });
+  }
+
+  return { delivered, igPending };
+}
+
+/** حالة المنشور من نتائج التسليم: نجح أيٌّ منها → published، فشل الكلّ → failed. */
+function postStatus(delivered: DeliveryResult[], channels: string[]): string {
+  if (!delivered.length) return "queued";
+  if (delivered.some((d) => d.ok)) return "published";
+  return delivered.length >= channels.length ? "failed" : "queued";
+}
+
 /** يعالج المنشورات المجدولة المستحقّة (يُستدعى من مُشغّل cron). */
 async function processScheduledPosts(env: Env): Promise<void> {
   const { results } = await env.DB.prepare(
-    `SELECT id, content, media_url, channels FROM channel_posts
+    `SELECT id, content, media_url, channels, author_id, ig_creation_id FROM channel_posts
       WHERE status = 'scheduled' AND approval_status = 'approved'
         AND scheduled_at IS NOT NULL AND scheduled_at <= datetime('now')
       ORDER BY scheduled_at ASC LIMIT 25`,
-  ).all<{ id: number; content: string | null; media_url: string | null; channels: string | null }>();
+  ).all<{ id: number; content: string | null; media_url: string | null; channels: string | null; author_id: number | null; ig_creation_id: string | null }>();
 
   for (const p of results) {
     let channels: string[] = [];
@@ -2173,19 +2437,32 @@ async function processScheduledPosts(env: Env): Promise<void> {
     } catch {
       channels = [];
     }
-    // التسليم الفعلي: تيليجرام مباشرةً + بقيّة القنوات عبر Webhook التوزيع إن ضُبط.
-    let attempts = 0, okCount = 0;
-    if (channels.includes("telegram") && telegramConfigured(env)) {
-      const r = await sendTelegramPost(env, p.content, p.media_url, "");
-      attempts += 1; if (r.ok) okCount += 1;
+    // حاوية انستقرام معلّقة من محاولة سابقة: نكملها بدل إعادة الرفع من الصفر.
+    if (p.ig_creation_id) {
+      const acc = (p.author_id ? await meta.getAccount(env, p.author_id) : null) ?? (await meta.getSiteAccount(env));
+      if (acc) {
+        const st = await meta.igContainerStatus(acc, p.ig_creation_id);
+        if (st === "FINISHED") {
+          const r = await meta.publishIgContainer(acc, p.ig_creation_id);
+          await env.DB.prepare(
+            "UPDATE channel_posts SET status = ?, ig_creation_id = NULL WHERE id = ?",
+          ).bind(r.ok ? "published" : "failed", p.id).run();
+        } else if (st === "ERROR" || st === "EXPIRED") {
+          await env.DB.prepare(
+            "UPDATE channel_posts SET status = 'failed', ig_creation_id = NULL WHERE id = ?",
+          ).bind(p.id).run();
+        }
+        continue; // ما زال يُعالَج → نعاود في الدورة التالية
+      }
     }
-    const rest = channels.filter((c) => c !== "telegram");
-    if (rest.length && webhookConfigured(env)) {
-      const r = await sendWebhookPost(env, rest, p.content, p.media_url, "");
-      attempts += rest.length; if (r.ok) okCount += rest.length;
-    }
-    const status = okCount > 0 ? "published" : attempts >= channels.length && attempts > 0 ? "failed" : "queued";
-    await env.DB.prepare("UPDATE channel_posts SET status = ? WHERE id = ?").bind(status, p.id).run();
+
+    const out = await deliverPost(env, {
+      channels, content: p.content, mediaUrl: p.media_url, authorId: p.author_id, origin: siteBase(env, ""),
+    });
+    const status = out.igPending ? "scheduled" : postStatus(out.delivered, channels);
+    await env.DB.prepare(
+      "UPDATE channel_posts SET status = ?, delivery = ?, ig_creation_id = ? WHERE id = ?",
+    ).bind(status, JSON.stringify(out.delivered), out.igPending ?? null, p.id).run();
   }
 }
 

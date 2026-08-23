@@ -9,6 +9,9 @@
     { href: "/manager/applications", label: "📝 طلبات التعليم" },
     { href: "/manager/approvals", label: "✅ الموافقة على المحتوى" },
     { href: "/manager/training", label: "🤖 مراجعة بيانات التدريب" },
+    { href: "/manager/connections", label: "🔗 ربط حسابات النشر" },
+    { href: "/teacher/editor", label: "🎬 استوديو المونتاج" },
+    { href: "/teacher/publish", label: "📣 النشر على القنوات" },
     { href: "/manager/analytics", label: "📈 تحليل البيانات" },
   ];
 

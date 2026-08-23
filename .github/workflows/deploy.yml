@@ -18,6 +18,10 @@ jobs:
     env:
       OWNER_EMAIL: ${{ secrets.OWNER_EMAIL }}
       PUBLISH_WEBHOOK_URL: ${{ secrets.PUBLISH_WEBHOOK_URL }}
+      FB_APP_ID: ${{ secrets.FB_APP_ID }}
+      FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+      GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+      GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
     steps:
       - name: استنساخ المستودع
         uses: actions/checkout@v4
@@ -68,3 +72,25 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           secrets: |
             PUBLISH_WEBHOOK_URL
+
+      # اختياري: مفاتيح Meta لربط فيسبوك/انستقرام (غيابها لا يكسر النشر)
+      - name: تثبيت مفاتيح Meta
+        if: ${{ env.FB_APP_ID != '' && env.FB_APP_SECRET != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            FB_APP_ID
+            FB_APP_SECRET
+
+      # اختياري: مفاتيح Google لرفع يوتيوب
+      - name: تثبيت مفاتيح يوتيوب
+        if: ${{ env.GOOGLE_CLIENT_ID != '' && env.GOOGLE_CLIENT_SECRET != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            GOOGLE_CLIENT_ID
+            GOOGLE_CLIENT_SECRET

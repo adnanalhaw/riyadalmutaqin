@@ -161,3 +161,26 @@ npm run deploy
 إعدادات المستودع (Settings → Secrets → Actions). بعدها كل «نشر الآن» أو منشور
 مجدول يُرسَل للوسيط بحمولة JSON واحدة `{channels, content, media_url}` والوسيط
 يوزّعه على يوتيوب/تيك توك/فيسبوك/إكس حسب توجيهك داخل السيناريو.
+
+### ربط فيسبوك وانستقرام (النشر التلقائي)
+
+يربط مدير الموقع حساباته مرّة واحدة من `/manager/connections`، فيُنشَر كل ما يخرج من
+الاستوديو تلقائياً. الإعداد لمرّة واحدة:
+
+1. **صفحة فيسبوك**: أنشئ صفحة للقناة (Pages → Create).
+2. **انستقرام أعمال**: حوّل الحساب إلى Business واربطه بصفحة فيسبوك
+   (Instagram → Settings → Business → Connect a Facebook Page). بدون هذا الربط
+   يعمل فيسبوك وحده.
+3. **تطبيق Meta**: [developers.facebook.com](https://developers.facebook.com) →
+   My Apps → Create App → نوع **Business**.
+4. **رابط العودة**: في إعدادات Facebook Login أضِف Valid OAuth Redirect URI:
+   `https://riyadalmutaqin.com/api/connections/meta/callback`
+5. **الصلاحيات** (تُطلب تلقائياً عند الربط): `pages_show_list` · `pages_manage_posts` ·
+   `pages_read_engagement` · `instagram_basic` · `instagram_content_publish`.
+6. **الأسرار**: أضِف في إعدادات المستودع (Settings → Secrets → Actions):
+   `FB_APP_ID` و`FB_APP_SECRET` — يثبّتهما النشر تلقائياً في Cloudflare.
+
+> **لا نحفظ كلمة مرور أبداً**: تدفّق OAuth الرسمي يعطينا *Page Access Token* طويل
+> الأمد فقط، وفكّ الربط من الصفحة يحذفه نهائياً.
+> **انستقرام والفيديو**: يحتاج وقت معالجة عند Meta — إن لم يجهز خلال المهلة يُستكمل
+> نشره تلقائياً في دورة المُشغّل الدوري (كل ٥ دقائق) بدل أن يضيع.
