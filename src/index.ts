@@ -2324,6 +2324,10 @@ export interface DeliveryResult {
  * وما بقي بلا وسيلة تسليم يذهب إلى Webhook التوزيع إن ضُبط، وإلّا يبقى في
  * قائمة الإصدار. كل قناة تُعيد نتيجتها الصادقة (نجاح/سبب الفشل).
  */
+// أقصى حجم فيديو يُرفع عبر الـ Worker. الحدّ الفعلي للذاكرة عند كلاودفلير 128MB،
+// ونترك هامشاً للبقيّة (الطلب، الاستجابة، تشغيل الشيفرة). ما فوقه يُرفض برسالة صريحة.
+const YT_MAX_UPLOAD_BYTES = 90 * 1024 * 1024; // 90MB
+
 async function deliverPost(
   env: Env,
   opts: {
@@ -2388,7 +2392,26 @@ async function deliverPost(
         try {
           const res = await fetch(absMedia);
           if (!res.ok) throw new Error(`تعذّر جلب الوسيط (HTTP ${res.status})`);
+          // حارس الذاكرة: الرفع يمرّ عبر ذاكرة الـ Worker (حدّها 128MB عند كلاودفلير).
+          // درسٌ مسجّل يتجاوزها بسهولة فيُقتل الطلب بلا رسالة مفهومة — نرفض مبكراً
+          // برسالة تقول للمدير ما العمل بدل «فشل» غامض.
+          const declared = Number(res.headers.get("content-length") ?? 0);
+          if (declared > YT_MAX_UPLOAD_BYTES) {
+            throw new Error(
+              `حجم الفيديو ${(declared / 1048576).toFixed(0)}MB يتجاوز حدّ الرفع ${
+                YT_MAX_UPLOAD_BYTES / 1048576
+              }MB. ارفعه إلى يوتيوب مباشرةً، أو اضغطه أوّلاً.`,
+            );
+          }
           const bytes = await res.arrayBuffer();
+          // بعض المصادر لا تُرسل content-length — نفحص الحجم الفعلي أيضاً قبل الرفع.
+          if (bytes.byteLength > YT_MAX_UPLOAD_BYTES) {
+            throw new Error(
+              `حجم الفيديو ${(bytes.byteLength / 1048576).toFixed(0)}MB يتجاوز حدّ الرفع ${
+                YT_MAX_UPLOAD_BYTES / 1048576
+              }MB. ارفعه إلى يوتيوب مباشرةً، أو اضغطه أوّلاً.`,
+            );
+          }
           const title = (content ?? "").split("\n")[0].slice(0, 90) || "رياض المتقين";
           const v = await yt.uploadVideo(token, bytes, res.headers.get("content-type") || "video/mp4", {
             title,

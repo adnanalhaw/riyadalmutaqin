@@ -1,6 +1,16 @@
 # انسخ هذا الملف إلى .dev.vars للتطوير المحلي (لا يُرفع إلى Git).
 # الأسرار في الإنتاج تُضاف عبر:  wrangler secret put <NAME>
+# أو تلقائياً من أسرار GitHub عند النشر (انظر .github/workflows/deploy.yml).
 
 # تكامل يوتيوب (OAuth) — من Google Cloud Console:
+# رابط العودة المطلوب تسجيله:
+#   https://riyadalmutaqin.com/api/connections/youtube/callback
 # GOOGLE_CLIENT_ID="xxxxxxxx.apps.googleusercontent.com"
 # GOOGLE_CLIENT_SECRET="xxxxxxxxxxxxxxxxxxxx"
+
+# تكامل فيسبوك وانستقرام (Meta) — من developers.facebook.com (تطبيق نوع Business):
+# رابط العودة المطلوب تسجيله في إعدادات Facebook Login:
+#   https://riyadalmutaqin.com/api/connections/meta/callback
+# بدون هذين المفتاحين تظهر بطاقة فيسبوك/انستقرام «غير مُفعَّل» في /manager/connections.
+# FB_APP_ID="xxxxxxxxxxxxxxx"
+# FB_APP_SECRET="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

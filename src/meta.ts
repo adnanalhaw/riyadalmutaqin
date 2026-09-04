@@ -251,7 +251,9 @@ export async function publishIgContainer(
       }),
       "نشر انستقرام",
     );
-    return { ok: true, id: d.id };
+    // لا نُعلن نجاحاً بلا معرّف: ردٌّ 200 بلا id ليس إثبات نشر، وتسجيله كنجاح
+    // يُخفي عن المدير منشوراً لم يظهر فعلاً على الحساب.
+    return d.id ? { ok: true, id: d.id } : { ok: false, error: "لم يُرجِع انستقرام معرّف المنشور — لم يُؤكَّد النشر." };
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
