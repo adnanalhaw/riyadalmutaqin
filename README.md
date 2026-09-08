@@ -176,7 +176,9 @@ npm run deploy
 4. **رابط العودة**: في إعدادات Facebook Login أضِف Valid OAuth Redirect URI:
    `https://riyadalmutaqin.com/api/connections/meta/callback`
 5. **الصلاحيات** (تُطلب تلقائياً عند الربط): `pages_show_list` · `pages_manage_posts` ·
-   `pages_read_engagement` · `instagram_basic` · `instagram_content_publish`.
+   `pages_read_engagement` · `instagram_business_basic`.
+   لا تُطلب `instagram_basic` (مهجور) ولا `instagram_content_publish` حتى يفعّله Meta
+   على التطبيق — ربط حساب انستقرام الأعمال يتم عبر حقل Graph بعد موافقة الصفحة.
 6. **الأسرار**: أضِف في إعدادات المستودع (Settings → Secrets → Actions):
    `FB_APP_ID` و`FB_APP_SECRET` — يثبّتهما النشر تلقائياً في Cloudflare.
 
