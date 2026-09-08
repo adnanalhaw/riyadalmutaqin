@@ -2100,7 +2100,10 @@ async function handleConnections(
     try {
       const userToken = await meta.exchangeCode(env, code, metaRedirect);
       const pages = await meta.listPages(userToken);
-      if (!pages.length) return redirect(`${origin}${back}?fb=nopages`);
+      if (!pages.length) {
+        const why = await meta.explainEmptyPages(userToken);
+        return redirect(`${origin}${back}?fb=nopages&why=${encodeURIComponent(why)}`);
+      }
       // نربط أوّل صفحة تلقائياً (الحالة الغالبة)، ويستطيع تبديلها من الصفحة إن ملك أكثر.
       const page = pages[0];
       const ig = await meta.getInstagram(page.id, page.access_token);

@@ -9,12 +9,16 @@
 const GRAPH = "https://graph.facebook.com/v21.0";
 
 /**
- * صلاحيات OAuth لصفحات فيسبوك فقط — تطبيق رياض المتقين نشر (1051352257686375).
+ * صلاحيات OAuth لصفحات فيسبوك — تطبيق رياض المتقين نشر (1051352257686375).
+ * حالة الاستخدام «Manage everything on your Page» تتطلّب `business_management`
+ * إضافةً إلى صلاحيات الصفحات: بدونها `/me/accounts` يُرجع قائمة فارغة إذا كانت
+ * الصفحة مربوطة بحساب أعمال (Meta Business) — وهذا حال صفحة رياض المتقين.
  * لا تُطلب أي صلاحية انستقرام في الحوار: `instagram_business_basic` يرفضه Meta
  * على هذا التطبيق (Invalid Scopes)، و`instagram_content_publish` غير مفعّل بعد.
  * ربط صفحة→حساب انستقرام الأعمال يبقى عبر حقل Graph `instagram_business_account`.
  */
 const SCOPES = [
+  "business_management",
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
@@ -46,6 +50,8 @@ export function buildAuthUrl(env: MetaEnv, redirectUri: string, state: string): 
     state,
     scope: SCOPES,
     response_type: "code",
+    // من سبق وربط بدون business_management لن يُسأل عن الصلاحية الجديدة إلا بإعادة الطلب.
+    auth_type: "rerequest",
   });
   return `https://www.facebook.com/v21.0/dialog/oauth?${p.toString()}`;
 }
@@ -92,13 +98,115 @@ export interface PageInfo {
   ig_username?: string | null;
 }
 
-/** صفحات المستخدم التي يملك حقّ النشر عليها (توكن كل صفحة يأتي معها). */
+type GraphPage = { id?: string; name?: string; access_token?: string };
+
+async function graphGet<T>(pathAndQuery: string, token: string, what: string): Promise<T> {
+  const sep = pathAndQuery.includes("?") ? "&" : "?";
+  return graphJson<T>(
+    await fetch(`${GRAPH}/${pathAndQuery}${sep}access_token=${encodeURIComponent(token)}`),
+    what,
+  );
+}
+
+function asPageInfo(raw: GraphPage[] | undefined): PageInfo[] {
+  const out: PageInfo[] = [];
+  for (const p of raw ?? []) {
+    if (p.id && p.access_token) out.push({ id: p.id, name: p.name ?? p.id, access_token: p.access_token });
+  }
+  return out;
+}
+
+/** إن وُجدت صفحة بلا توكن نشر نطلبه من عقدة الصفحة نفسها. */
+async function withPageTokens(raw: GraphPage[], userToken: string): Promise<PageInfo[]> {
+  const ready = asPageInfo(raw);
+  if (ready.length) return ready;
+  const out: PageInfo[] = [];
+  for (const p of raw) {
+    if (!p.id) continue;
+    try {
+      const d = await graphGet<GraphPage>(`${p.id}?fields=id,name,access_token`, userToken, "توكن الصفحة");
+      if (d.access_token) {
+        out.push({ id: d.id ?? p.id, name: d.name ?? p.name ?? p.id, access_token: d.access_token });
+      }
+    } catch {
+      // صفحة بلا حقّ توكن — نتخطّاها
+    }
+  }
+  return out;
+}
+
+/**
+ * صفحات المستخدم التي يملك حقّ النشر عليها.
+ * المسار الرسمي: GET /me/accounts (يعيد Page Access Token مع كل صفحة).
+ * إن كانت القائمة فارغة رغم وجود صفحة أعمال نجرّب البدائل التي توثّقها Meta
+ * لتطبيقات إدارة الصفحات / Business Manager:
+ * - /me/accounts?business={id} بعد /me/businesses
+ * - /me/assigned_pages (صفحات مُسندة بمهام — User Assigned Pages)
+ */
 export async function listPages(userToken: string): Promise<PageInfo[]> {
-  const d = await graphJson<{ data?: PageInfo[] }>(
-    await fetch(`${GRAPH}/me/accounts?fields=id,name,access_token&access_token=${encodeURIComponent(userToken)}`),
+  const accounts = await graphGet<{ data?: GraphPage[] }>(
+    "me/accounts?fields=id,name,access_token",
+    userToken,
     "جلب الصفحات",
   );
-  return d.data ?? [];
+  const fromAccounts = await withPageTokens(accounts.data ?? [], userToken);
+  if (fromAccounts.length) return fromAccounts;
+
+  try {
+    const businesses = await graphGet<{ data?: Array<{ id: string }> }>(
+      "me/businesses?fields=id",
+      userToken,
+      "جلب الأعمال",
+    );
+    for (const b of businesses.data ?? []) {
+      const scoped = await graphGet<{ data?: GraphPage[] }>(
+        `me/accounts?fields=id,name,access_token&business=${encodeURIComponent(b.id)}`,
+        userToken,
+        "صفحات العمل",
+      );
+      const pages = await withPageTokens(scoped.data ?? [], userToken);
+      if (pages.length) return pages;
+    }
+  } catch {
+    // بلا business_management أو بلا أعمال — ننتقل للبديل التالي
+  }
+
+  try {
+    const assigned = await graphGet<{ data?: GraphPage[] }>(
+      "me/assigned_pages?fields=id,name,access_token",
+      userToken,
+      "الصفحات المُسندة",
+    );
+    const pages = await withPageTokens(assigned.data ?? [], userToken);
+    if (pages.length) return pages;
+  } catch {
+    // /me/assigned_pages يفشل على مستخدم غير business-scoped — طبيعي
+  }
+
+  return [];
+}
+
+/** سبب قصير يُمرَّر في ?why= حين تبقى القائمة فارغة بعد البدائل. */
+export type EmptyPagesWhy = "need_biz" | "need_pages" | "empty";
+
+export async function explainEmptyPages(userToken: string): Promise<EmptyPagesWhy> {
+  try {
+    const perms = await graphGet<{ data?: Array<{ permission?: string; status?: string }> }>(
+      "me/permissions",
+      userToken,
+      "صلاحيات التوكن",
+    );
+    const granted = new Set(
+      (perms.data ?? [])
+        .filter((p) => p.status === "granted" && p.permission)
+        .map((p) => p.permission as string),
+    );
+    if (!granted.has("business_management")) return "need_biz";
+    if (!granted.has("pages_show_list")) return "need_pages";
+  } catch {
+    // فشل التشخيص لا يمنع الرسالة العامة
+  }
+  return "empty";
 }
 
 /** حساب انستقرام الأعمال المرتبط بالصفحة (اختياري — قد لا يكون مربوطاً). */

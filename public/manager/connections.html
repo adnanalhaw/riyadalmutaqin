@@ -113,17 +113,29 @@
       // رسالة العودة من شاشة الموافقة (نجاح/فشل)
       function flash() {
         var q = new URLSearchParams(location.search);
+        var m = el("msg");
+        if (q.get("fb") === "nopages") {
+          var why = q.get("why");
+          var reasons = {
+            need_biz: "الربط اكتمل لكن Graph لم يُرجع صفحتك — امنح صلاحية إدارة الأعمال ثم أعد الربط.",
+            need_pages: "لم تُمنَح صلاحيات الصفحة — أعد الربط ووافق عليها.",
+            empty: "لا توجد صفحة متاحة — تأكد أن حسابك أدمن للصفحة ثم أعد الربط.",
+          };
+          m.hidden = false;
+          m.textContent = reasons[why] || "لا توجد صفحة فيسبوك على حسابك — أنشئ صفحة أولاً ثم أعِد الربط.";
+          history.replaceState({}, "", location.pathname);
+          return;
+        }
         var map = {
           "fb=connected": ["تمّ ربط فيسبوك بنجاح ✓", false],
           "fb=error": ["تعذّر ربط فيسبوك — حاوِل مجدداً.", true],
-          "fb=nopages": ["لا توجد صفحة فيسبوك على حسابك — أنشئ صفحة أولاً ثم أعِد الربط.", true],
           "yt=connected": ["تمّ ربط يوتيوب بنجاح ✓", false],
           "yt=error": ["تعذّر ربط يوتيوب — حاوِل مجدداً.", true],
         };
         for (var k in map) {
           var kv = k.split("=");
           if (q.get(kv[0]) === kv[1]) {
-            var m = el("msg"); m.hidden = false; m.textContent = map[k][0];
+            m.hidden = false; m.textContent = map[k][0];
             history.replaceState({}, "", location.pathname);
             break;
           }
