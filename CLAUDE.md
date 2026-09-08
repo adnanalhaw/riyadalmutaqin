@@ -90,6 +90,9 @@ npm run db:migrate:local   # ترحيلات محلية
    `TELEGRAM_BOT_TOKEN/CHAT_ID` (نشر) · `PUBLISH_WEBHOOK_URL` (توزيع المنصّات) ·
    `RESEND_API_KEY` (بريد استعادة كلمة المرور). كلها يثبّتها النشر الآلي من أسرار
    GitHub، وغيابها لا يكسر شيئاً — تظهر القناة «غير مُفعَّلة» بصدق.
+   **صلاحيات Meta الحالية:** `pages_show_list` · `pages_manage_posts` ·
+   `pages_read_engagement` · `instagram_business_basic`. نشر انستقرام مؤجَّل
+   حتى يفعّل Meta صلاحية `instagram_content_publish` على التطبيق.
 7. **البث المباشر (المرحلة ٧)** — لم يُبنَ.
 
 ## الوثائق المرجعية

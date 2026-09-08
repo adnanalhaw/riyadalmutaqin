@@ -8,13 +8,17 @@
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
-/** الصلاحيات المطلوبة: قراءة صفحاته، النشر عليها، والنشر على انستقرام الأعمال. */
+/**
+ * صلاحيات تطبيق Meta الحالي (رياض المتقين نشر · 1051352257686375).
+ * `instagram_basic` مهجور — يُستبدل بـ `instagram_business_basic`.
+ * `instagram_content_publish` مؤجَّل: تعذّر تفعيله في لوحة Meta («حاول لاحقاً»).
+ * ربط صفحة→حساب انستقرام الأعمال يبقى عبر حقل Graph `instagram_business_account`.
+ */
 const SCOPES = [
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
-  "instagram_basic",
-  "instagram_content_publish",
+  "instagram_business_basic",
 ].join(",");
 
 export interface MetaEnv {
