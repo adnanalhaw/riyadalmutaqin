@@ -9,16 +9,15 @@
 const GRAPH = "https://graph.facebook.com/v21.0";
 
 /**
- * صلاحيات تطبيق Meta الحالي (رياض المتقين نشر · 1051352257686375).
- * `instagram_basic` مهجور — يُستبدل بـ `instagram_business_basic`.
- * `instagram_content_publish` مؤجَّل: تعذّر تفعيله في لوحة Meta («حاول لاحقاً»).
+ * صلاحيات OAuth لصفحات فيسبوك فقط — تطبيق رياض المتقين نشر (1051352257686375).
+ * لا تُطلب أي صلاحية انستقرام في الحوار: `instagram_business_basic` يرفضه Meta
+ * على هذا التطبيق (Invalid Scopes)، و`instagram_content_publish` غير مفعّل بعد.
  * ربط صفحة→حساب انستقرام الأعمال يبقى عبر حقل Graph `instagram_business_account`.
  */
 const SCOPES = [
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
-  "instagram_business_basic",
 ].join(",");
 
 export interface MetaEnv {

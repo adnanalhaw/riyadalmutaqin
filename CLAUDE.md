@@ -44,7 +44,7 @@ npm run db:migrate:local   # ترحيلات محلية
    والاعتماد معاً.
 6. **RTL:** النصوص عربية، وكل كلمة إنجليزية بين قوسين على سطر منفصل في الردود.
 
-## الحالة الآن (2026-08-12 — مُحدَّثة بعد أول نشر ناجح)
+## الحالة الآن (2026-09-08 — صلاحيات Meta OAuth صفحات فقط)
 
 **✅ مبنيّ ومنشور ويعمل:**
 - **الأدوار الأربعة:** متعلّم · معلّم · مدير الموقع (manager) · مدير النظام (admin)
@@ -90,9 +90,10 @@ npm run db:migrate:local   # ترحيلات محلية
    `TELEGRAM_BOT_TOKEN/CHAT_ID` (نشر) · `PUBLISH_WEBHOOK_URL` (توزيع المنصّات) ·
    `RESEND_API_KEY` (بريد استعادة كلمة المرور). كلها يثبّتها النشر الآلي من أسرار
    GitHub، وغيابها لا يكسر شيئاً — تظهر القناة «غير مُفعَّلة» بصدق.
-   **صلاحيات Meta الحالية:** `pages_show_list` · `pages_manage_posts` ·
-   `pages_read_engagement` · `instagram_business_basic`. نشر انستقرام مؤجَّل
-   حتى يفعّل Meta صلاحية `instagram_content_publish` على التطبيق.
+   **صلاحيات Meta الحالية (صفحات فقط):** `pages_show_list` · `pages_manage_posts` ·
+   `pages_read_engagement`. لا تُطلب صلاحيات انستقرام في OAuth — الاكتشاف عبر
+   حقل Graph `instagram_business_account`. نشر انستقرام مؤجَّل حتى يفعّل Meta
+   صلاحية `instagram_content_publish` على التطبيق.
 7. **البث المباشر (المرحلة ٧)** — لم يُبنَ.
 
 ## الوثائق المرجعية
