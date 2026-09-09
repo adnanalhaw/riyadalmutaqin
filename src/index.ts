@@ -2106,7 +2106,7 @@ async function handleConnections(
       }
       // نربط أوّل صفحة تلقائياً (الحالة الغالبة)، ويستطيع تبديلها من الصفحة إن ملك أكثر.
       const page = pages[0];
-      const ig = await meta.getInstagram(page.id, page.access_token);
+      const ig = await meta.getInstagram(page.id, page.access_token, userToken);
       await meta.saveAccount(env, user.id,
         { ...page, ig_user_id: ig?.id ?? null, ig_username: ig?.username ?? null }, userToken);
       await audit(env, user.email, "meta.connect", page.id);
@@ -2137,7 +2137,7 @@ async function handleConnections(
       const pages = await meta.listPages(acc.user_token);
       const page = pages.find((p) => p.id === pageId);
       if (!page) return json({ ok: false, error: "الصفحة غير متاحة لحسابك." }, 400);
-      const ig = await meta.getInstagram(page.id, page.access_token);
+      const ig = await meta.getInstagram(page.id, page.access_token, acc.user_token);
       await meta.saveAccount(env, user.id,
         { ...page, ig_user_id: ig?.id ?? null, ig_username: ig?.username ?? null }, acc.user_token);
       await audit(env, user.email, "meta.select_page", page.id);
@@ -2154,13 +2154,22 @@ async function handleConnections(
     }
     try {
       const ig = await meta.refreshSavedInstagram(env, user.id);
-      await audit(env, user.email, "meta.refresh_instagram", ig.ig_user_id ?? "");
+      await audit(env, user.email, "meta.refresh_instagram", ig.ig_user_id);
       return json({
         ok: true,
         instagram: ig.ig_username,
-        instagram_linked: Boolean(ig.ig_user_id),
+        instagram_linked: true,
       });
     } catch (err) {
+      if (meta.isInstagramNotLinkedError(err)) {
+        return json({
+          ok: false,
+          instagram: null,
+          instagram_linked: false,
+          why: err.why,
+          error: err.message,
+        });
+      }
       return json({ ok: false, error: err instanceof Error ? err.message : "تعذّر تحديث انستقرام." }, 502);
     }
   }

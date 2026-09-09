@@ -182,9 +182,13 @@ npm run deploy
    لا تُطلب أي صلاحية انستقرام في OAuth — `instagram_business_basic` و
    `instagram_business_content_publish` يرفضهما Meta على هذا التطبيق
    (Invalid Scopes) حتى إن ظهرت «جاهزة للاختبار». نشر انستقرام مؤجَّل إلى أن
-   يقبل Meta تلك الصلاحيات. ربط الحساب نفسه يتم عبر صفحة فيسبوك في Meta ثم
-   حقل Graph `instagram_business_account` (زر «تحديث انستقرام» إن كان فيسبوك
-   مربوطاً مسبقاً — بلا إعادة OAuth).
+   يقبل Meta تلك الصلاحيات. اكتشاف الحساب يتم عبر حقول Graph على الصفحة:
+   `instagram_business_account` ثم `connected_instagram_account` ثم عقدة
+   `instagram_accounts`، وإن وُجد توكن مستخدم بـ `business_management` نجرّب
+   أصول الأعمال (`owned_instagram_accounts` / `instagram_accounts` /
+   `instagram_business_accounts`). زر «تحديث انستقرام» يعيد الاكتشاف بلا OAuth.
+   ربط مركز الحسابات وحده يظهر في إعدادات الصفحة ولا يملأ هذه الحقول — يلزم
+   حساب احترافي مربوط بالصفحة من إعدادات انستقرام.
 6. **الأسرار**: أضِف في إعدادات المستودع (Settings → Secrets → Actions):
    `FB_APP_ID` و`FB_APP_SECRET` — يثبّتهما النشر تلقائياً في Cloudflare.
 
