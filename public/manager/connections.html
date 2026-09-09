@@ -39,7 +39,13 @@
             <p class="muted-s" style="line-height:1.85">ربط فيسبوك وانستقرام الرسميين وتوكن النشر الحيّ
               <strong>لمدير الموقع/النظام فقط</strong>. بعد تفعيل Facebook Login for Business
               <br />(<span dir="ltr">FB_LOGIN_CONFIG_ID</span>)
-              افصل الربط ثم أعده مرّة واحدة لطلب صلاحيات نشر انستقرام.</p>
+              افصل الربط ثم أعده مرّة واحدة لطلب صلاحيات نشر انستقرام.
+              إن نجح فيسبوك وبقي انستقرام يرفض بـ
+              <span dir="ltr">(#10) Application does not have permission</span>
+              فالخلل في صلاحية التطبيق عند Meta
+              (<span dir="ltr">instagram_content_publish</span>
+              ناقصة أو غير معتمدة أو «جاهزة للاختبار» فقط) — إعادة الربط وحدها لا تصلحه.
+              راجِع لوحة تطبيق Meta ← Permissions وإعداد Login for Business.</p>
           </div>
 
           <div class="notice" id="msg" hidden style="margin-bottom:1.2rem"></div>

@@ -103,6 +103,11 @@ test("OAuth يبقى بلا صلاحيات انستقرام حتى مع المس
   assert.doesNotMatch(block, /instagram_/);
   assert.match(metaSrc, /Login for Business/);
   assert.match(metaSrc, /IG_SCOPE_PUBLISH_ERROR/);
+  assert.match(metaSrc, /IG_APP_PERMISSION_PUBLISH_ERROR/);
+  assert.match(metaSrc, /usesLoginForBusiness/);
+  assert.match(metaSrc, /looksLikeIgAppPermissionDenied/);
+  assert.match(indexSrc, /publishInstagram\(acc, content, absMedia, env\)/);
+  assert.match(indexSrc, /publishIgContainer\(target\.acc, p\.ig_creation_id, env\)/);
 });
 
 function buildAuthUrl(env, redirectUri, state) {
@@ -168,6 +173,8 @@ test("النشر الآلي يمرّر FB_LOGIN_CONFIG_ID عند وجوده", ()
 test("واجهة الربط تذكّر أن فيسبوك/انستقرام الرسميين لمدير الموقع وأن إعادة الربط لازمة", () => {
   assert.match(connHtml, /لمدير الموقع\/النظام فقط|لمدير الموقع فقط/);
   assert.match(connHtml, /افصل الربط ثم أعده/);
+  assert.match(connHtml, /instagram_content_publish/);
+  assert.match(connHtml, /إعادة الربط وحدها لا تصلحه/);
 });
 
 test("ربط Meta مفتوح للمعلّم على صفحته والرفض إن طابقت الرسمية", () => {
@@ -207,6 +214,30 @@ function looksLikeIgPermissionError(message) {
   );
 }
 
+function usesLoginForBusiness(env) {
+  return Boolean(env?.FB_LOGIN_CONFIG_ID?.trim());
+}
+
+function looksLikeIgAppPermissionDenied(message) {
+  return /\(#10\)/.test(message) || /application does not have permission/i.test(message);
+}
+
+const IG_SCOPE_PUBLISH_ERROR =
+  "توكن الصفحة لا يملك صلاحية نشر انستقرام (instagram_content_publish / instagram_business_content_publish). الربط اليدوي يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع، لكن Meta ترفض إنشاء/نشر الحاوية إلى أن يُضبط Facebook Login for Business (سرّ FB_LOGIN_CONFIG_ID من لوحة المطوّر) ثم يُعاد ربط فيسبوك من /manager/connections. لا تُضاف تلك الصلاحيات إلى OAuth العادي لأنها تُرفض فوراً (Invalid Scopes).";
+
+const IG_APP_PERMISSION_PUBLISH_ERROR =
+  "رفضت Meta نشر انستقرام على مستوى صلاحية التطبيق: instagram_content_publish قد تكون ناقصة أو غير معتمدة أو «جاهزة للاختبار» فقط. فيسبوك قد ينجح في الوقت نفسه؛ إعادة الربط وحدها لا تكفي. راجِع لوحة تطبيق Meta ← Permissions وإعداد Facebook Login for Business وتأكد أن instagram_content_publish مضمّنة ومعتمدة (أو مفعّلة للاختبار على حسابات تجريبية).";
+
+function explainIgPublishError(err, env) {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (!looksLikeIgPermissionError(raw)) return raw;
+  const hint =
+    usesLoginForBusiness(env) || looksLikeIgAppPermissionDenied(raw)
+      ? IG_APP_PERMISSION_PUBLISH_ERROR
+      : IG_SCOPE_PUBLISH_ERROR;
+  return `${hint} — تفاصيل Meta: ${raw}`;
+}
+
 test("parseIgUserId يقبل أرقاماً فقط", () => {
   assert.equal(parseIgUserId("17841405822304914"), "17841405822304914");
   assert.equal(parseIgUserId(" 42 "), "42");
@@ -231,6 +262,69 @@ test("looksLikeIgPermissionError يلتقط رفض صلاحية النشر", () 
   );
   assert.equal(looksLikeIgPermissionError("Requires instagram_content_publish permission"), true);
   assert.equal(looksLikeIgPermissionError("تعذّرت معالجة الوسيط (ERROR)."), false);
+});
+
+function extractExportString(src, name) {
+  const start = src.indexOf(`export const ${name} =`);
+  assert.notEqual(start, -1, name);
+  const q1 = src.indexOf('"', start);
+  const q2 = src.indexOf('"', q1 + 1);
+  return src.slice(q1 + 1, q2);
+}
+
+test("رسائل المصدر تفرّق إعادة الربط عن رفض صلاحية التطبيق", () => {
+  assert.equal(extractExportString(metaSrc, "IG_SCOPE_PUBLISH_ERROR"), IG_SCOPE_PUBLISH_ERROR);
+  assert.equal(extractExportString(metaSrc, "IG_APP_PERMISSION_PUBLISH_ERROR"), IG_APP_PERMISSION_PUBLISH_ERROR);
+  assert.match(metaSrc, /FB_LOGIN_CONFIG_ID من لوحة المطوّر/);
+  assert.match(metaSrc, /إعادة الربط وحدها لا تكفي/);
+  assert.match(metaSrc, /جاهزة للاختبار/);
+  assert.match(metaSrc, /تفاصيل Meta/);
+  assert.doesNotMatch(
+    metaSrc.slice(metaSrc.indexOf("export const IG_APP_PERMISSION_PUBLISH_ERROR"), metaSrc.indexOf("export function looksLikeIgPermissionError")),
+    /افصل الربط ثم أعده/,
+  );
+});
+
+test("explainIgPublishError: بلا FLB وخطأ صلاحية عام يوجّه لضبط Login for Business", () => {
+  const raw = "Requires instagram_content_publish permission";
+  const msg = explainIgPublishError(new Error(raw));
+  assert.match(msg, /FB_LOGIN_CONFIG_ID/);
+  assert.match(msg, /تفاصيل Meta: Requires instagram_content_publish permission/);
+  assert.doesNotMatch(msg, /إعادة الربط وحدها لا تكفي/);
+});
+
+test("explainIgPublishError: #10 يعطي رسالة صلاحية التطبيق حتى بلا FLB", () => {
+  const raw = "تجهيز منشور انستقرام: (#10) Application does not have permission for this action";
+  const msg = explainIgPublishError(new Error(raw));
+  assert.match(msg, /مستوى صلاحية التطبيق/);
+  assert.match(msg, /إعادة الربط وحدها لا تكفي/);
+  assert.match(msg, /تفاصيل Meta:/);
+  assert.match(msg, /\(#10\)/);
+  assert.doesNotMatch(msg, /ثم يُعاد ربط فيسبوك/);
+});
+
+test("explainIgPublishError: مع FLB يوجّه للوحة صلاحيات التطبيق لا إعادة الربط", () => {
+  const raw = "User hasn't authorized the application for this action";
+  const msg = explainIgPublishError(new Error(raw), { FB_LOGIN_CONFIG_ID: " 999 " });
+  assert.match(msg, /مستوى صلاحية التطبيق/);
+  assert.match(msg, /instagram_content_publish/);
+  assert.match(msg, /تفاصيل Meta: User hasn't authorized the application for this action/);
+  assert.doesNotMatch(msg, /ثم يُعاد ربط فيسبوك/);
+});
+
+test("explainIgPublishError: خطأ غير صلاحية يُعاد كما هو", () => {
+  assert.equal(explainIgPublishError(new Error("تعذّرت معالجة الوسيط (ERROR).")), "تعذّرت معالجة الوسيط (ERROR).");
+});
+
+test("looksLikeIgAppPermissionDenied يميّز #10 عن صلاحية عامة", () => {
+  assert.equal(
+    looksLikeIgAppPermissionDenied("(#10) Application does not have permission for this action"),
+    true,
+  );
+  assert.equal(looksLikeIgAppPermissionDenied("Requires instagram_content_publish permission"), false);
+  assert.equal(usesLoginForBusiness({ FB_LOGIN_CONFIG_ID: " 1 " }), true);
+  assert.equal(usesLoginForBusiness({ FB_LOGIN_CONFIG_ID: "  " }), false);
+  assert.equal(usesLoginForBusiness({}), false);
 });
 
 test("pickPageInstagramUser يفضّل instagram_business_account", () => {

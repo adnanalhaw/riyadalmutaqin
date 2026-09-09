@@ -270,9 +270,24 @@ export const BUSINESS_IG_EDGES = [
 export const IG_NOT_API_READY =
   "واجهة Graph لم تجد حساب انستقرام احترافياً مربوطاً بالصفحة بعد تجربة instagram_business_account و connected_instagram_account و instagram_accounts وأصول الأعمال. ظهور الحساب «متصلاً» في إعدادات الصفحة قد يكون ربط مركز الحسابات فقط — وهذا لا يكفي للنشر عبر الواجهة. حوّل انستقرام إلى حساب احترافي (أعمال أو منشئ) واربطه بالصفحة من إعدادات انستقرام ← الصفحة (لا من مركز الحسابات وحده)، ثم اضغط «تحديث انستقرام». إن بقي الحساب ظاهراً في Meta Business Suite والحقول فارغة هنا، الصق معرّف حساب انستقرام للأعمال يدوياً من إعدادات الأعمال ← حسابات انستقرام.";
 
-/** نشر Graph على انستقرام يتطلّب صلاحية محتوى لا تُطلب في OAuth هذا التطبيق. */
+/** هل الحوار يستخدم Facebook Login for Business (`config_id`) بدل scope الكلاسيكي. */
+export function usesLoginForBusiness(env?: Pick<MetaEnv, "FB_LOGIN_CONFIG_ID"> | null): boolean {
+  return Boolean(env?.FB_LOGIN_CONFIG_ID?.trim());
+}
+
+/**
+ * إرشاد إعادة الربط — فقط إن لم يُضبط Login for Business بعد.
+ * لا تُعرض بعد أن يكون `FB_LOGIN_CONFIG_ID` موجوداً أو بعد رفض Meta (#10).
+ */
 export const IG_SCOPE_PUBLISH_ERROR =
-  "توكن الصفحة لا يملك صلاحية نشر انستقرام (instagram_content_publish / instagram_business_content_publish). الربط اليدوي يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع، لكن Meta ترفض إنشاء/نشر الحاوية إلى أن يربط مدير الموقع فيسبوك من جديد عبر Facebook Login for Business (سرّ FB_LOGIN_CONFIG_ID من لوحة المطوّر). افصل الربط ثم أعده من /manager/connections — لا تُضاف تلك الصلاحيات إلى OAuth العادي لأنها تُرفض فوراً (Invalid Scopes).";
+  "توكن الصفحة لا يملك صلاحية نشر انستقرام (instagram_content_publish / instagram_business_content_publish). الربط اليدوي يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع، لكن Meta ترفض إنشاء/نشر الحاوية إلى أن يُضبط Facebook Login for Business (سرّ FB_LOGIN_CONFIG_ID من لوحة المطوّر) ثم يُعاد ربط فيسبوك من /manager/connections. لا تُضاف تلك الصلاحيات إلى OAuth العادي لأنها تُرفض فوراً (Invalid Scopes).";
+
+/**
+ * رفض على مستوى صلاحية التطبيق — فيسبوك قد ينجح؛ إعادة الربط وحدها لا تكفي.
+ * يظهر بعد Login for Business أو عند Meta (#10) / Application does not have permission.
+ */
+export const IG_APP_PERMISSION_PUBLISH_ERROR =
+  "رفضت Meta نشر انستقرام على مستوى صلاحية التطبيق: instagram_content_publish قد تكون ناقصة أو غير معتمدة أو «جاهزة للاختبار» فقط. فيسبوك قد ينجح في الوقت نفسه؛ إعادة الربط وحدها لا تكفي. راجِع لوحة تطبيق Meta ← Permissions وإعداد Facebook Login for Business وتأكد أن instagram_content_publish مضمّنة ومعتمدة (أو مفعّلة للاختبار على حسابات تجريبية).";
 
 /** يميّز رفض Graph بسبب صلاحية انستقرام الناقصة عن أخطاء أخرى. */
 export function looksLikeIgPermissionError(message: string): boolean {
@@ -289,12 +304,22 @@ export function looksLikeIgPermissionError(message: string): boolean {
   );
 }
 
-export function explainIgPublishError(err: unknown): string {
+/** رفض Meta (#10) على مستوى صلاحية التطبيق — لا يُعالَج بإعادة الربط. */
+export function looksLikeIgAppPermissionDenied(message: string): boolean {
+  return /\(#10\)/.test(message) || /application does not have permission/i.test(message);
+}
+
+export function explainIgPublishError(
+  err: unknown,
+  env?: Pick<MetaEnv, "FB_LOGIN_CONFIG_ID"> | null,
+): string {
   const raw = err instanceof Error ? err.message : String(err);
-  if (looksLikeIgPermissionError(raw)) {
-    return `${IG_SCOPE_PUBLISH_ERROR} — تفاصيل Meta: ${raw}`;
-  }
-  return raw;
+  if (!looksLikeIgPermissionError(raw)) return raw;
+  const hint =
+    usesLoginForBusiness(env) || looksLikeIgAppPermissionDenied(raw)
+      ? IG_APP_PERMISSION_PUBLISH_ERROR
+      : IG_SCOPE_PUBLISH_ERROR;
+  return `${hint} — تفاصيل Meta: ${raw}`;
 }
 
 /** معرّف حساب انستقرام للأعمال: أرقام فقط (مثل 17841405822304914). */
@@ -698,6 +723,7 @@ export async function createIgContainer(
   acc: MetaAccount,
   content: string | null,
   mediaUrl: string,
+  env?: Pick<MetaEnv, "FB_LOGIN_CONFIG_ID"> | null,
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   if (!acc.ig_user_id || !acc.page_token) return { ok: false, error: "لا حساب انستقرام أعمال مربوط." };
   try {
@@ -719,7 +745,7 @@ export async function createIgContainer(
     );
     return d.id ? { ok: true, id: d.id } : { ok: false, error: "لم يُرجِع انستقرام معرّف الحاوية." };
   } catch (err) {
-    return { ok: false, error: explainIgPublishError(err) };
+    return { ok: false, error: explainIgPublishError(err, env) };
   }
 }
 
@@ -741,6 +767,7 @@ export async function igContainerStatus(acc: MetaAccount, creationId: string): P
 export async function publishIgContainer(
   acc: MetaAccount,
   creationId: string,
+  env?: Pick<MetaEnv, "FB_LOGIN_CONFIG_ID"> | null,
 ): Promise<{ ok: boolean; id?: string; error?: string }> {
   try {
     const d = await graphJson<{ id?: string }>(
@@ -753,7 +780,7 @@ export async function publishIgContainer(
     );
     return { ok: true, id: d.id };
   } catch (err) {
-    return { ok: false, error: explainIgPublishError(err) };
+    return { ok: false, error: explainIgPublishError(err, env) };
   }
 }
 
@@ -766,16 +793,17 @@ export async function publishInstagram(
   acc: MetaAccount,
   content: string | null,
   mediaUrl: string | null,
+  env?: Pick<MetaEnv, "FB_LOGIN_CONFIG_ID"> | null,
   maxWaitMs = 24000,
 ): Promise<{ ok: boolean; id?: string; error?: string; pending?: string }> {
   if (!mediaUrl) return { ok: false, error: "انستقرام يتطلّب صورة أو فيديو." };
-  const c = await createIgContainer(acc, content, mediaUrl);
+  const c = await createIgContainer(acc, content, mediaUrl, env);
   if (!c.ok || !c.id) return { ok: false, error: c.error };
 
   const deadline = Date.now() + maxWaitMs;
   for (;;) {
     const st = await igContainerStatus(acc, c.id);
-    if (st === "FINISHED") return await publishIgContainer(acc, c.id);
+    if (st === "FINISHED") return await publishIgContainer(acc, c.id, env);
     if (st === "ERROR" || st === "EXPIRED") return { ok: false, error: `تعذّرت معالجة الوسيط (${st}).` };
     if (Date.now() >= deadline) return { ok: false, pending: c.id, error: "الفيديو ما زال يُعالَج — سيُنشر تلقائياً خلال دقائق." };
     await new Promise((r) => setTimeout(r, 3000));
