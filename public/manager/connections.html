@@ -274,7 +274,9 @@
       el("igRefresh").addEventListener("click", function () {
         var m = el("msg"); m.hidden = false; m.textContent = "لحظات…";
         api("/api/connections/meta/refresh-instagram", { method: "POST" }).then(function (res) {
-          if (res.ok && res.d.ok && res.d.instagram_linked) {
+          if (res.ok && res.d.ok && res.d.kept_manual) {
+            m.textContent = (res.d.error) || "واجهة Graph فارغة، والربط اليدوي ما زال فعّالاً.";
+          } else if (res.ok && res.d.ok && res.d.instagram_linked) {
             m.textContent = "ظهر حساب انستقرام: @" + (res.d.instagram || "—") + " ✓";
           } else {
             m.textContent = (res.d && res.d.error) || "تعذّر تحديث انستقرام.";

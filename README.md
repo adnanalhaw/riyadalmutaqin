@@ -194,6 +194,8 @@ npm run deploy
    **إعدادات الأعمال ← حسابات انستقرام**
    (Meta Business Settings → Instagram accounts)
    عبر `POST /api/connections/meta/set-instagram` — فيظهر `instagram_linked`.
+   «تحديث انستقرام» لا يمسح المعرّف اليدوي إن بقي Graph فارغاً (مركز الحسابات)؛
+   يظهر أن الربط اليدوي ما زال فعّالاً. المسح فقط عند فكّ ربط فيسبوك.
    الربط اليدوي يحفظ المعرّف؛ نشر المحتوى عبر Graph ما زال يحتاج صلاحية
    `instagram_content_publish` التي لا تُطلب في OAuth الكلاسيكي
    (Invalid Scopes). الطريق الوحيد لطلب أصول انستقرام دون الإضافة المباشرة
