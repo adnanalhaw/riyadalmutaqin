@@ -12,6 +12,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const metaSrc = readFileSync(join(root, "src/meta.ts"), "utf8");
 const indexSrc = readFileSync(join(root, "src/index.ts"), "utf8");
 const connHtml = readFileSync(join(root, "public/manager/connections.html"), "utf8");
+const deployYml = readFileSync(join(root, ".github/workflows/deploy.yml"), "utf8");
 
 /** نسخة موازية لـ pickPageInstagramUser في src/meta.ts — أي اختلاف يُعدّ انحداراً في الترتيب. */
 function pickPageInstagramUser(page) {
@@ -90,6 +91,8 @@ test("set-instagram مسار احتياطي لمدير الموقع/النظام
   assert.match(connHtml, /igManualWrap/);
   assert.match(connHtml, /\/api\/connections\/meta\/set-instagram/);
   assert.match(connHtml, /إعدادات الأعمال في Meta ← حسابات انستقرام/);
+  assert.match(connHtml, /لمدير الموقع فقط/);
+  assert.match(connHtml, /افصل الربط ثم أعده/);
   assert.match(indexSrc, /"instagram"/);
 });
 
@@ -100,6 +103,86 @@ test("OAuth يبقى بلا صلاحيات انستقرام حتى مع المس
   assert.doesNotMatch(block, /instagram_/);
   assert.match(metaSrc, /Login for Business/);
   assert.match(metaSrc, /IG_SCOPE_PUBLISH_ERROR/);
+});
+
+function buildAuthUrl(env, redirectUri, state) {
+  const p = new URLSearchParams({
+    client_id: env.FB_APP_ID ?? "",
+    redirect_uri: redirectUri,
+    state,
+    response_type: "code",
+    auth_type: "rerequest",
+  });
+  const configId = env.FB_LOGIN_CONFIG_ID?.trim();
+  if (configId) {
+    p.set("config_id", configId);
+  } else {
+    p.set("scope", "business_management,pages_show_list,pages_manage_posts,pages_read_engagement");
+  }
+  return `https://www.facebook.com/v21.0/dialog/oauth?${p.toString()}`;
+}
+
+test("buildAuthUrl يمرّر config_id بدل scope عند وجود FB_LOGIN_CONFIG_ID", () => {
+  const withCfg = buildAuthUrl(
+    { FB_APP_ID: "1051352257686375", FB_LOGIN_CONFIG_ID: " 1234567890 " },
+    "https://riyadalmutaqin.com/api/connections/meta/callback",
+    "st",
+  );
+  const u = new URL(withCfg);
+  assert.equal(u.searchParams.get("config_id"), "1234567890");
+  assert.equal(u.searchParams.get("scope"), null);
+  assert.equal(u.searchParams.get("response_type"), "code");
+  assert.equal(u.searchParams.get("client_id"), "1051352257686375");
+  assert.equal(u.searchParams.get("auth_type"), "rerequest");
+  assert.ok(u.searchParams.get("redirect_uri"));
+  assert.ok(u.searchParams.get("state"));
+
+  const classic = buildAuthUrl(
+    { FB_APP_ID: "1051352257686375" },
+    "https://riyadalmutaqin.com/api/connections/meta/callback",
+    "st",
+  );
+  const c = new URL(classic);
+  assert.equal(c.searchParams.get("config_id"), null);
+  assert.match(c.searchParams.get("scope") || "", /business_management/);
+  assert.doesNotMatch(c.searchParams.get("scope") || "", /instagram_/);
+});
+
+test("المصدر يفعّل Login for Business من FB_LOGIN_CONFIG_ID دون scope", () => {
+  const start = metaSrc.indexOf("export function buildAuthUrl");
+  const end = metaSrc.indexOf("export async function exchangeCode");
+  const fn = metaSrc.slice(start, end);
+  assert.match(fn, /FB_LOGIN_CONFIG_ID/);
+  assert.match(fn, /config_id/);
+  assert.match(fn, /p\.set\("config_id"/);
+  assert.match(fn, /p\.set\("scope"/);
+  assert.match(indexSrc, /FB_LOGIN_CONFIG_ID\?: string/);
+});
+
+test("النشر الآلي يمرّر FB_LOGIN_CONFIG_ID عند وجوده", () => {
+  assert.ok(deployYml.includes("FB_LOGIN_CONFIG_ID: ${{ secrets.FB_LOGIN_CONFIG_ID }}"));
+  assert.match(deployYml, /تثبيت معرّف Login for Business/);
+  assert.ok(deployYml.includes("env.FB_LOGIN_CONFIG_ID != ''"));
+});
+
+test("واجهة الربط تذكّر أن فيسبوك/انستقرام لمدير الموقع وأن إعادة الربط لازمة", () => {
+  assert.match(connHtml, /لمدير الموقع فقط/);
+  assert.match(connHtml, /افصل الربط ثم أعده/);
+});
+
+test("ربط Meta وتسليمه لمدير الموقع فقط وبحساب الموقع الرسمي", () => {
+  assert.match(indexSrc, /ربط فيسبوك\/انستقرام لمدير الموقع فقط/);
+  assert.match(indexSrc, /path\.startsWith\("\/api\/connections\/meta\/"\)/);
+  assert.match(indexSrc, /getSiteAccount\(env\)/);
+  assert.match(indexSrc, /يربطه مدير الموقع من «ربط حسابات النشر»/);
+  const deliver = indexSrc.slice(indexSrc.indexOf("async function deliverPost"), indexSrc.indexOf("function postStatus"));
+  assert.match(deliver, /await meta\.getSiteAccount\(env\)/);
+  assert.doesNotMatch(deliver, /getAccount\(env, authorId\)/);
+  const scheduled = indexSrc.slice(indexSrc.indexOf("async function processScheduledPosts"));
+  assert.doesNotMatch(
+    scheduled.slice(0, scheduled.indexOf("export default")),
+    /getAccount\(env, p\.author_id\)/,
+  );
 });
 
 function parseIgUserId(raw) {

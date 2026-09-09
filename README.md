@@ -193,14 +193,21 @@ npm run deploy
    (Meta Business Settings → Instagram accounts)
    عبر `POST /api/connections/meta/set-instagram` — فيظهر `instagram_linked`.
    الربط اليدوي يحفظ المعرّف؛ نشر المحتوى عبر Graph ما زال يحتاج صلاحية
-   `instagram_content_publish` التي لا تُطلب في OAuth هذا التطبيق
+   `instagram_content_publish` التي لا تُطلب في OAuth الكلاسيكي
    (Invalid Scopes). الطريق الوحيد لطلب أصول انستقرام دون الإضافة المباشرة
-   للصلاحيات هو إعداد **Facebook Login for Business** في لوحة المطوّر ثم تمرير
-   `config_id` في الحوار — غير مفعّل حتى يُنشأ الإعداد في التطبيق.
+   للصلاحيات هو **Facebook Login for Business**: من لوحة المطوّر
+   (Meta App Dashboard → Facebook Login for Business → Configurations)
+   أنشئ تكويناً يشمل صلاحيات الصفحة ونشر انستقرام، ثم أضِف سرّ
+   `FB_LOGIN_CONFIG_ID` (معرّف التكوين). إن وُجد السرّ يُمرَّر `config_id`
+   في الحوار **بدل** `scope`. بعد ضبط السرّ: افصل ربط فيسبوك من
+   `/manager/connections` ثم أعده مرّة واحدة.
+   ربط فيسبوك/انستقرام وتوكن النشر **لمدير الموقع أو مدير النظام فقط** —
+   المعلّم يصوغ المنشور وينتظر الموافقة، والتسليم يتم بحساب الموقع الرسمي.
    ربط مركز الحسابات وحده يظهر في إعدادات الصفحة ولا يملأ هذه الحقول — يلزم
    حساب احترافي مربوط بالصفحة من إعدادات انستقرام.
 6. **الأسرار**: أضِف في إعدادات المستودع (Settings → Secrets → Actions):
-   `FB_APP_ID` و`FB_APP_SECRET` — يثبّتهما النشر تلقائياً في Cloudflare.
+   `FB_APP_ID` و`FB_APP_SECRET` و`FB_LOGIN_CONFIG_ID` (اختياري — Login for
+   Business) — يثبّتها النشر تلقائياً في Cloudflare.
 
 > **لا نحفظ كلمة مرور أبداً**: تدفّق OAuth الرسمي يعطينا *Page Access Token* طويل
 > الأمد فقط، وفكّ الربط من الصفحة يحذفه نهائياً.
