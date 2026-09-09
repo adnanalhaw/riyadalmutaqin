@@ -2514,7 +2514,10 @@ async function deliverPost(
     } else {
       const acc = target.acc;
       if (channels.includes("facebook")) {
-        const r = await meta.publishFacebook(acc, content, absMedia);
+        const r = await meta.publishFacebook(acc, content, absMedia, {
+          media: env.MEDIA,
+          siteUrl: siteBase(env, origin),
+        });
         delivered.push({ channel: "facebook", ok: r.ok, id: r.id, error: r.error });
       }
       if (channels.includes("instagram")) {
