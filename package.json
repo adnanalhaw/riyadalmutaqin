@@ -9,7 +9,7 @@
     "start": "wrangler dev",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
-    "test": "node --test scripts/test-instagram-lookup.mjs scripts/test-teacher-meta-delivery.mjs",
+    "test": "node --test scripts/test-instagram-lookup.mjs scripts/test-teacher-meta-delivery.mjs scripts/test-facebook-reels.mjs",
     "cf-typegen": "wrangler types",
     "db:migrate:local": "wrangler d1 migrations apply riyad_db --local",
     "db:migrate:remote": "wrangler d1 migrations apply riyad_db --remote"

@@ -753,21 +753,280 @@ export function decideMetaDelivery(opts: {
 
 const isVideo = (url: string): boolean => /\/video\/|\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);
 
-/** نشر على صفحة فيسبوك: فيديو أو صورة أو نصّ — حسب ما هو متاح. */
+export type FacebookVideoPath = "reels" | "videos";
+
+/**
+ * مسار فيديو فيسبوك: الريل العمودي يظهر في تبويب الريلز عبر Page Reels API.
+ * POST /{page}/videos بـ file_url ينشئ فيديو صفحة فقط — لا يظهر في الريلز.
+ * الأفقي الواضح (عرض > ارتفاع، مثل 16:9) يبقى على /videos.
+ * المجهول → ريلز لأن استوديو المعلّم ينتج 9:16 للقنوات.
+ */
+export function facebookVideoPublishPath(
+  dims: { width: number; height: number } | null,
+): FacebookVideoPath {
+  if (dims && dims.width > dims.height) return "videos";
+  return "reels";
+}
+
+/** رابط rupload الذي ترجعه Meta فقط — لا نرسل البايتات إلى مضيف آخر. */
+export function isMetaRuploadUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && u.hostname === "rupload.facebook.com";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * يقرأ عرض/ارتفاع مسار الفيديو من tkhd (ISO BMFF).
+ * المسارات الصوتية عرضها وارتفاعها صفر فتُتجاهل.
+ */
+export function parseMp4Dimensions(buf: ArrayBuffer): { width: number; height: number } | null {
+  const view = new DataView(buf);
+  const found: { width: number; height: number }[] = [];
+
+  const readType = (offset: number): string =>
+    String.fromCharCode(
+      view.getUint8(offset),
+      view.getUint8(offset + 1),
+      view.getUint8(offset + 2),
+      view.getUint8(offset + 3),
+    );
+
+  const readTkhd = (start: number, end: number): { width: number; height: number } | null => {
+    if (start + 8 > end) return null;
+    const version = view.getUint8(start);
+    const dimOffset = version === 1 ? start + 88 : start + 76;
+    if (dimOffset + 8 > end) return null;
+    const width = Math.round(view.getUint32(dimOffset) / 65536);
+    const height = Math.round(view.getUint32(dimOffset + 4) / 65536);
+    if (width <= 0 || height <= 0) return null;
+    return { width, height };
+  };
+
+  const walk = (start: number, end: number): void => {
+    let offset = start;
+    while (offset + 8 <= end) {
+      let size = view.getUint32(offset);
+      const type = readType(offset + 4);
+      let header = 8;
+      if (size === 1) {
+        if (offset + 16 > end) break;
+        if (view.getUint32(offset + 8) !== 0) break;
+        size = view.getUint32(offset + 12);
+        header = 16;
+      } else if (size === 0) {
+        size = end - offset;
+      }
+      if (size < header || offset + size > end) break;
+      const payloadStart = offset + header;
+      const payloadEnd = offset + size;
+      if (type === "moov" || type === "trak" || type === "mdia") {
+        walk(payloadStart, payloadEnd);
+      } else if (type === "tkhd") {
+        const dims = readTkhd(payloadStart, payloadEnd);
+        if (dims) found.push(dims);
+      }
+      offset += size;
+    }
+  };
+
+  try {
+    walk(0, view.byteLength);
+  } catch {
+    return null;
+  }
+  if (!found.length) return null;
+  found.sort((a, b) => b.width * b.height - a.width * a.height);
+  return found[0];
+}
+
+/** رسائل عربية لأخطاء نشر فيسبوك (ريلز أو فيديو صفحة). */
+export function explainFacebookPublishError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (/1363040|aspect ratio/i.test(raw)) {
+    return `نسبة أبعاد الفيديو غير مدعومة لريلز فيسبوك (يلزم تقريباً 9:16). — تفاصيل Meta: ${raw}`;
+  }
+  if (/1363127|resolution too low|minimum resolution/i.test(raw)) {
+    return `دقة الفيديو أقل من الحد الأدنى لريلز فيسبوك (540×960 على الأقل، يُفضَّل 1080×1920). — تفاصيل Meta: ${raw}`;
+  }
+  if (/1363128|duration/i.test(raw)) {
+    return `مدة الريل يجب أن تكون بين 3 و90 ثانية. — تفاصيل Meta: ${raw}`;
+  }
+  if (/1363129|frame rate/i.test(raw)) {
+    return `معدل إطارات الريل يجب أن يكون بين 24 و60 إطاراً في الثانية. — تفاصيل Meta: ${raw}`;
+  }
+  if (/rate limit|#4\b|30 API-published|publishing limit/i.test(raw)) {
+    return `تجاوزت حد نشر ريلز فيسبوك (30 منشوراً كل 24 ساعة). — تفاصيل Meta: ${raw}`;
+  }
+  return raw;
+}
+
+async function fetchVideoBytes(mediaUrl: string): Promise<ArrayBuffer> {
+  const res = await fetch(mediaUrl);
+  if (!res.ok) throw new Error(`تعذّر جلب الفيديو من الخادم (HTTP ${res.status}).`);
+  const bytes = await res.arrayBuffer();
+  if (!bytes.byteLength) throw new Error("ملف الفيديو فارغ.");
+  return bytes;
+}
+
+function reelCaption(content: string | null): { title?: string; description?: string } {
+  const text = (content ?? "").trim();
+  if (!text) return {};
+  const title = text.split("\n")[0].slice(0, 90);
+  return { title, description: text };
+}
+
+/** فيديو صفحة (تبويب الفيديوهات) — ليس ريلاً. احتياطي أو للأفقي 16:9. */
+async function publishFacebookPageVideo(
+  acc: MetaAccount,
+  content: string | null,
+  mediaUrl: string,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const body: Record<string, string> = { access_token: acc.page_token ?? "", file_url: mediaUrl };
+  if (content) body.description = content;
+  const d = await graphJson<{ id?: string; post_id?: string }>(
+    await fetch(`${GRAPH}/${acc.page_id}/videos`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+    "النشر على فيسبوك (فيديو صفحة)",
+  );
+  return { ok: true, id: d.post_id ?? d.id };
+}
+
+/**
+ * Page Reels API — ثلاث مراحل:
+ * 1) POST /{page}/video_reels upload_phase=start → video_id + upload_url
+ * 2) POST بايتات الفيديو إلى rupload.facebook.com (Authorization: OAuth)
+ * 3) POST /{page}/video_reels upload_phase=finish video_state=PUBLISHED
+ * الدليل: https://developers.facebook.com/docs/video-api/guides/reels-publishing/
+ */
+async function publishFacebookReel(
+  acc: MetaAccount,
+  content: string | null,
+  mediaUrl: string,
+  bytes: ArrayBuffer,
+): Promise<{ ok: boolean; id?: string; error?: string }> {
+  const pageId = acc.page_id ?? "";
+  const token = acc.page_token ?? "";
+  const start = await graphJson<{ video_id?: string; upload_url?: string }>(
+    await fetch(`${GRAPH}/${pageId}/video_reels`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ upload_phase: "start", access_token: token }),
+    }),
+    "بدء رفع ريل فيسبوك",
+  );
+  if (!start.video_id || !start.upload_url) {
+    throw new Error("لم تُرجِع Meta معرّف الريل أو رابط الرفع.");
+  }
+  if (!isMetaRuploadUrl(start.upload_url)) {
+    throw new Error("رابط رفع الريل ليس من rupload.facebook.com — أُوقف الرفع.");
+  }
+
+  const up = await fetch(start.upload_url, {
+    method: "POST",
+    headers: {
+      Authorization: `OAuth ${token}`,
+      offset: "0",
+      file_size: String(bytes.byteLength),
+      "content-type": "application/octet-stream",
+    },
+    body: new Uint8Array(bytes),
+  });
+  const upData = (await up.json().catch(() => ({}))) as {
+    success?: boolean;
+    error?: { message?: string };
+  };
+  if (!up.ok || upData.error || upData.success === false) {
+    // احتياطي داخل جلسة الريل: ملف مستضاف علناً إن رفض rupload البايتات.
+    const hosted = await fetch(start.upload_url, {
+      method: "POST",
+      headers: {
+        Authorization: `OAuth ${token}`,
+        file_url: mediaUrl,
+      },
+    });
+    const hostedData = (await hosted.json().catch(() => ({}))) as {
+      success?: boolean;
+      error?: { message?: string };
+    };
+    if (!hosted.ok || hostedData.error || hostedData.success === false) {
+      throw new Error(
+        `رفع ملف الريل: ${upData.error?.message ?? hostedData.error?.message ?? `HTTP ${up.status}`}`,
+      );
+    }
+  }
+
+  const cap = reelCaption(content);
+  const finishBody: Record<string, string> = {
+    upload_phase: "finish",
+    video_id: start.video_id,
+    video_state: "PUBLISHED",
+    access_token: token,
+  };
+  if (cap.description) finishBody.description = cap.description;
+  if (cap.title) finishBody.title = cap.title;
+
+  const finish = await graphJson<{ success?: boolean; post_id?: string; video_id?: string }>(
+    await fetch(`${GRAPH}/${pageId}/video_reels`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(finishBody),
+    }),
+    "نشر ريل فيسبوك",
+  );
+  if (finish.success === false) {
+    throw new Error("رفضت Meta إنهاء نشر الريل.");
+  }
+  return { ok: true, id: finish.post_id ?? finish.video_id ?? start.video_id };
+}
+
+/**
+ * نشر على صفحة فيسبوك: فيديو أو صورة أو نصّ.
+ * الفيديو العمودي (والريلز 9:16 من الاستوديو) → Page Reels API.
+ * الفيديو الأفقي → /videos. إن فشل الريل نرجع احتياطياً إلى /videos حتى لا يضيع المنشور
+ * (يظهر في تبويب الفيديوهات لا الريلز).
+ */
 export async function publishFacebook(
   acc: MetaAccount,
   content: string | null,
   mediaUrl: string | null,
-): Promise<{ ok: boolean; id?: string; error?: string }> {
+): Promise<{ ok: boolean; id?: string; error?: string; via?: "reels" | "videos" | "videos_fallback" }> {
   if (!acc.page_id || !acc.page_token) return { ok: false, error: "لا صفحة فيسبوك مربوطة." };
   try {
+    if (mediaUrl && isVideo(mediaUrl)) {
+      const bytes = await fetchVideoBytes(mediaUrl);
+      const path = facebookVideoPublishPath(parseMp4Dimensions(bytes));
+      if (path === "reels") {
+        try {
+          const reel = await publishFacebookReel(acc, content, mediaUrl, bytes);
+          return { ...reel, via: "reels" };
+        } catch (reelErr) {
+          // /videos ينشئ فيديو صفحة لا ريلاً — نستخدمه فقط حتى لا يضيع المقطع بعد فشل الريلز.
+          try {
+            const fallback = await publishFacebookPageVideo(acc, content, mediaUrl);
+            return { ...fallback, via: "videos_fallback" };
+          } catch (pageErr) {
+            const reelMsg = explainFacebookPublishError(reelErr);
+            const pageMsg = explainFacebookPublishError(pageErr);
+            return {
+              ok: false,
+              error: `فشل نشر الريل على فيسبوك (${reelMsg}). كما فشل الرفع الاحتياطي كفيديو صفحة: ${pageMsg}`,
+            };
+          }
+        }
+      }
+      const page = await publishFacebookPageVideo(acc, content, mediaUrl);
+      return { ...page, via: "videos" };
+    }
+
     let endpoint = `${GRAPH}/${acc.page_id}/feed`;
     const body: Record<string, string> = { access_token: acc.page_token };
-    if (mediaUrl && isVideo(mediaUrl)) {
-      endpoint = `${GRAPH}/${acc.page_id}/videos`;
-      body.file_url = mediaUrl;
-      if (content) body.description = content;
-    } else if (mediaUrl) {
+    if (mediaUrl) {
       endpoint = `${GRAPH}/${acc.page_id}/photos`;
       body.url = mediaUrl;
       if (content) body.caption = content;
@@ -784,7 +1043,7 @@ export async function publishFacebook(
     );
     return { ok: true, id: d.post_id ?? d.id };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: explainFacebookPublishError(err) };
   }
 }
 
