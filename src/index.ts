@@ -1479,7 +1479,7 @@ async function audit(env: Env, email: string, action: string, target: string): P
 }
 
 /** القنوات المدعومة للنشر. */
-const CHANNELS = ["youtube", "tiktok", "facebook", "x", "telegram"] as const;
+const CHANNELS = ["youtube", "tiktok", "facebook", "instagram", "x", "telegram"] as const;
 type Channel = (typeof CHANNELS)[number];
 
 /** هل تكامل تيليجرام مُعَدّ (أسرار موجودة)؟ */
@@ -2171,6 +2171,38 @@ async function handleConnections(
         });
       }
       return json({ ok: false, error: err instanceof Error ? err.message : "تعذّر تحديث انستقرام." }, 502);
+    }
+  }
+
+  // احتياطي لمدير الموقع/النظام: لصق معرّف انستقرام عندما تفرغ حقول Graph.
+  // المعلّم لا يحفظ المعرّف يدوياً — الاكتشاف عبر refresh-instagram أو OAuth.
+  if (route === "POST /api/connections/meta/set-instagram") {
+    if (user.role !== "admin" && user.role !== "manager") {
+      return json({ ok: false, error: "الربط اليدوي لمدير الموقع أو مدير النظام فقط." }, 403);
+    }
+    const b = await readJson(request);
+    const igUserId = meta.parseIgUserId(b.ig_user_id);
+    if (!igUserId) {
+      return json({ ok: false, error: "معرّف انستقرام يجب أن يكون أرقاماً فقط." }, 400);
+    }
+    const rawName = b.ig_username;
+    if (rawName != null && String(rawName).trim() !== "" && !meta.normalizeIgUsername(rawName)) {
+      return json({ ok: false, error: "اسم المستخدم غير صالح." }, 400);
+    }
+    const igUsername = meta.normalizeIgUsername(rawName);
+    try {
+      const ig = await meta.setSavedInstagram(env, user.id, igUserId, igUsername);
+      await audit(env, user.email, "meta.set_instagram", ig.ig_user_id);
+      return json({
+        ok: true,
+        instagram: ig.ig_username,
+        instagram_linked: true,
+        ig_user_id: ig.ig_user_id,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "تعذّر حفظ انستقرام.";
+      const code = /اربط فيسبوك/.test(msg) ? 400 : 502;
+      return json({ ok: false, error: msg }, code);
     }
   }
 

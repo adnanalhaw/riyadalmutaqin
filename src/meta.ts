@@ -18,6 +18,11 @@ const GRAPH = "https://graph.facebook.com/v21.0";
  * (Invalid Scopes) حتى إن ظهرت «جاهزة للاختبار» في لوحة المطوّر.
  * اكتشاف صفحة→انستقرام يتم عبر حقول Graph الموثّقة على الصفحة وأصول الأعمال
  * (بدون صلاحية انستقرام في OAuth). انظر `fetchInstagram`.
+ * إن بقيت الحقول فارغة رغم ظهور الحساب في Meta Business Suite، المسار الاحتياطي
+ * هو `setSavedInstagram` (لصق المعرّف يدوياً) — لا نعيد صلاحيات انستقرام إلى
+ * OAuth الكلاسيكي. مسار Login for Business (`config_id` من لوحة المطوّر) هو
+ * الطريق الوحيد لطلب أصول انستقرام دون Invalid Scopes، ويتطلّب إعداداً في
+ * التطبيق قبل تمرير المعرّف في الحوار — غير مفعّل هنا حتى يُنشأ الإعداد.
  */
 export const META_OAUTH_SCOPES = [
   "business_management",
@@ -255,7 +260,51 @@ export const BUSINESS_IG_EDGES = [
 ] as const;
 
 export const IG_NOT_API_READY =
-  "واجهة Graph لم تجد حساب انستقرام احترافياً مربوطاً بالصفحة بعد تجربة instagram_business_account و connected_instagram_account و instagram_accounts وأصول الأعمال. ظهور الحساب «متصلاً» في إعدادات الصفحة قد يكون ربط مركز الحسابات فقط — وهذا لا يكفي للنشر عبر الواجهة. حوّل انستقرام إلى حساب احترافي (أعمال أو منشئ) واربطه بالصفحة من إعدادات انستقرام ← الصفحة (لا من مركز الحسابات وحده)، ثم اضغط «تحديث انستقرام».";
+  "واجهة Graph لم تجد حساب انستقرام احترافياً مربوطاً بالصفحة بعد تجربة instagram_business_account و connected_instagram_account و instagram_accounts وأصول الأعمال. ظهور الحساب «متصلاً» في إعدادات الصفحة قد يكون ربط مركز الحسابات فقط — وهذا لا يكفي للنشر عبر الواجهة. حوّل انستقرام إلى حساب احترافي (أعمال أو منشئ) واربطه بالصفحة من إعدادات انستقرام ← الصفحة (لا من مركز الحسابات وحده)، ثم اضغط «تحديث انستقرام». إن بقي الحساب ظاهراً في Meta Business Suite والحقول فارغة هنا، الصق معرّف حساب انستقرام للأعمال يدوياً من إعدادات الأعمال ← حسابات انستقرام.";
+
+/** نشر Graph على انستقرام يتطلّب صلاحية محتوى لا تُطلب في OAuth هذا التطبيق. */
+export const IG_SCOPE_PUBLISH_ERROR =
+  "توكن الصفحة لا يملك صلاحية نشر انستقرام (instagram_content_publish / instagram_business_content_publish). الربط اليدوي يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع، لكن Meta ترفض إنشاء/نشر الحاوية إلى أن تُمنَح صلاحية المحتوى عبر إعداد Facebook Login for Business في لوحة المطوّر (config_id) — لا تُضاف تلك الصلاحيات إلى OAuth العادي لأنها تُرفض فوراً (Invalid Scopes).";
+
+/** يميّز رفض Graph بسبب صلاحية انستقرام الناقصة عن أخطاء أخرى. */
+export function looksLikeIgPermissionError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    /instagram_(business_)?(basic|content_publish|manage_insights|manage_comments)/.test(m) ||
+    /does not have permission/.test(m) ||
+    /hasn't authorized the application/.test(m) ||
+    /requires.{0,80}permission/.test(m) ||
+    /\(#10\)/.test(message) ||
+    /\(#200\)/.test(message) ||
+    /invalid scopes/.test(m) ||
+    /permission denied/.test(m)
+  );
+}
+
+export function explainIgPublishError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  if (looksLikeIgPermissionError(raw)) {
+    return `${IG_SCOPE_PUBLISH_ERROR} — تفاصيل Meta: ${raw}`;
+  }
+  return raw;
+}
+
+/** معرّف حساب انستقرام للأعمال: أرقام فقط (مثل 17841405822304914). */
+export function parseIgUserId(raw: unknown): string | null {
+  const s = String(raw ?? "").trim();
+  return /^\d+$/.test(s) ? s : null;
+}
+
+/** اسم مستخدم انستقرام اختياري — يُزال @ الافتتاحي. */
+export function normalizeIgUsername(raw: unknown): string | null {
+  const s = String(raw ?? "")
+    .trim()
+    .replace(/^@+/, "")
+    .trim();
+  if (!s) return null;
+  if (s.length > 64 || /[\s/\\]/.test(s)) return null;
+  return s;
+}
 
 export class InstagramNotLinkedError extends Error {
   readonly why = "accounts_center_or_not_professional" as const;
@@ -505,6 +554,32 @@ export async function refreshSavedInstagram(
   return { ig_user_id: ig.id, ig_username: ig.username };
 }
 
+/**
+ * مسار احتياطي: يحفظ معرّف انستقرام يدوياً عندما يظهر الحساب في Meta UI
+ * وتبقى حقول Graph فارغة. يتطلّب صفحة فيسبوك مربوطة مسبقاً.
+ */
+export async function setSavedInstagram(
+  env: MetaEnv,
+  userId: number,
+  igUserId: string,
+  igUsername?: string | null,
+): Promise<{ ig_user_id: string; ig_username: string | null }> {
+  const acc = await getAccount(env, userId);
+  if (!acc?.page_id || !acc.page_token) {
+    throw new Error("اربط فيسبوك أولاً ثم احفظ معرّف انستقرام.");
+  }
+  let username = igUsername ?? null;
+  if (!username) {
+    username = await readIgUsername(igUserId, acc.page_token);
+  }
+  await env.DB.prepare(
+    "UPDATE meta_accounts SET ig_user_id = ?, ig_username = ? WHERE user_id = ?",
+  )
+    .bind(igUserId, username, userId)
+    .run();
+  return { ig_user_id: igUserId, ig_username: username };
+}
+
 /** حساب «رسمي» للموقع: أوّل ربطٍ لمدير الموقع/الأدمن — يُستعمل حين لا يملك الناشر ربطاً. */
 export async function getSiteAccount(env: MetaEnv): Promise<MetaAccount | null> {
   return await env.DB.prepare(
@@ -577,7 +652,7 @@ export async function createIgContainer(
     );
     return d.id ? { ok: true, id: d.id } : { ok: false, error: "لم يُرجِع انستقرام معرّف الحاوية." };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: explainIgPublishError(err) };
   }
 }
 
@@ -611,7 +686,7 @@ export async function publishIgContainer(
     );
     return { ok: true, id: d.id };
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    return { ok: false, error: explainIgPublishError(err) };
   }
 }
 

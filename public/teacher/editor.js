@@ -304,16 +304,21 @@
         return fetch("/api/teacher/posts", { method: "POST", headers: { "content-type": "application/json" },
           body: JSON.stringify({ content: title, media_url: url, channels: channels, action: "now" }) })
           .then(function (r) { return r.json(); }).then(function (d) {
-            var tg = (d.delivered || []).filter(function (x) { return x.channel === "telegram"; })[0];
-            return { name: "القنوات", ok: !!d.ok, tg: tg, error: d.error };
+            return { name: "القنوات", ok: !!d.ok, delivered: d.delivered || [], error: d.error };
           });
       }).catch(function () { return { name: "القنوات", ok: false }; }));
     }
     Promise.all(jobs).then(function (rs) {
       var msgs = rs.map(function (r) {
         if (r.name === "الموقع") return r.ok ? "الموقع ✓" : "الموقع ✗ " + (r.error || "");
-        var p = []; if (r.tg && r.tg.ok) p.push("تيليجرام ✓"); else if (r.tg) p.push("تيليجرام ✗");
-        p.push(r.ok ? "حُفِظ للقنوات" : "تعذّر"); return p.join(" — ");
+        if (r.delivered && r.delivered.length) {
+          var names = { youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك", instagram: "انستقرام", x: "إكس", telegram: "تيليجرام" };
+          return r.delivered.map(function (x) {
+            var name = names[x.channel] || x.channel;
+            return x.ok ? (name + " ✓") : (name + ": " + (x.error || "فشل"));
+          }).join(" — ");
+        }
+        return r.ok ? "حُفِظ للقنوات" : ("تعذّر " + (r.error || ""));
       });
       pubShow(msgs.join("  •  ") + "  (نُشِر ناتج واحد؛ بقيّة المقاسات نزّلها وانشرها يدويّاً)");
     }).catch(function (e) { pubShow(e.message || "تعذّر النشر."); }).then(function () { $("pubBtn").disabled = false; });

@@ -186,7 +186,17 @@ npm run deploy
    `instagram_business_account` ثم `connected_instagram_account` ثم عقدة
    `instagram_accounts`، وإن وُجد توكن مستخدم بـ `business_management` نجرّب
    أصول الأعمال (`owned_instagram_accounts` / `instagram_accounts` /
-   `instagram_business_accounts`). زر «تحديث انستقرام» يعيد الاكتشاف بلا OAuth.
+   `instagram_business_accounts`). زر «تحديث انستقرام» يعيد الاكتشاف بلا OAuth
+   وهو المسار الأساسي. إن ظهر الحساب في Meta Business Suite وبقيت الحقول فارغة،
+   مدير الموقع/النظام يلصق معرّف حساب انستقرام للأعمال من
+   **إعدادات الأعمال ← حسابات انستقرام**
+   (Meta Business Settings → Instagram accounts)
+   عبر `POST /api/connections/meta/set-instagram` — فيظهر `instagram_linked`.
+   الربط اليدوي يحفظ المعرّف؛ نشر المحتوى عبر Graph ما زال يحتاج صلاحية
+   `instagram_content_publish` التي لا تُطلب في OAuth هذا التطبيق
+   (Invalid Scopes). الطريق الوحيد لطلب أصول انستقرام دون الإضافة المباشرة
+   للصلاحيات هو إعداد **Facebook Login for Business** في لوحة المطوّر ثم تمرير
+   `config_id` في الحوار — غير مفعّل حتى يُنشأ الإعداد في التطبيق.
    ربط مركز الحسابات وحده يظهر في إعدادات الصفحة ولا يملأ هذه الحقول — يلزم
    حساب احترافي مربوط بالصفحة من إعدادات انستقرام.
 6. **الأسرار**: أضِف في إعدادات المستودع (Settings → Secrets → Actions):
