@@ -159,8 +159,8 @@ img { max-width: 100%; display: block; }
   background: var(--navy-800); border: 1px solid var(--border); color: var(--ink);
 }
 .field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--gold); }
-.tabs { display: flex; gap: .5rem; background: var(--navy-800); padding: .35rem; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 1.5rem; }
-.tabs button { flex: 1; padding: .6rem; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; font-family: inherit; }
+.tabs { display: flex; flex-wrap: wrap; gap: .35rem; background: var(--navy-800); padding: .35rem; border-radius: 12px; border: 1px solid var(--border); margin-bottom: 1.5rem; }
+.tabs button { flex: 1 1 5.2rem; padding: .5rem .3rem; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; font-family: inherit; font-size: .82rem; line-height: 1.3; }
 .tabs button.active { background: var(--gold-faint); color: var(--gold); }
 
 /* ===== شارة/وسم ===== */
