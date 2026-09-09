@@ -768,7 +768,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleManager(request, env, user, path, route);
   }
 
-  // ===== ربط حسابات النشر: يوتيوب للمعلّم/المدير · Meta لمدير الموقع/الأدمن فقط =====
+  // ===== ربط حسابات النشر: يوتيوب لأي معلّم/مدير · Meta شخصي للمعلّم ورسمي للمدير =====
   if (path.startsWith("/api/connections/")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
@@ -1203,6 +1203,36 @@ async function handleManager(
       await env.DB.prepare(
         `UPDATE channel_posts SET approval_status = ?, reviewed_by = ? WHERE id = ?`,
       ).bind(status, user.id, id).run();
+      // عند اعتماد منشور معلّق غير مجدول: نُسلّمه الآن (فيسبوك/انستقرام لصفحته الشخصية فقط).
+      if (status === "approved") {
+        const post = await env.DB.prepare(
+          `SELECT id, content, media_url, channels, author_id, status, scheduled_at
+             FROM channel_posts WHERE id = ?`,
+        ).bind(id).first<{
+          id: number;
+          content: string | null;
+          media_url: string | null;
+          channels: string | null;
+          author_id: number | null;
+          status: string;
+          scheduled_at: string | null;
+        }>();
+        if (post && post.status === "queued") {
+          const channels = parsePostChannels(post.channels);
+          const origin = siteBase(env, new URL(request.url).origin);
+          const out = await deliverPost(env, {
+            channels,
+            content: post.content,
+            mediaUrl: post.media_url,
+            authorId: post.author_id,
+            origin,
+          });
+          const next = out.igPending ? "scheduled" : postStatus(out.delivered, channels);
+          await env.DB.prepare(
+            "UPDATE channel_posts SET status = ?, delivery = ?, ig_creation_id = ? WHERE id = ?",
+          ).bind(next, JSON.stringify(out.delivered), out.igPending ?? null, post.id).run();
+        }
+      }
     }
     await audit(env, user.email, `manager.${mp[1]}.${b.action}`, `${mp[1]}:${id}`);
     return json({ ok: true });
@@ -1946,8 +1976,8 @@ async function handleTeacher(
     const scheduledAt = schedule && b.scheduled_at ? String(b.scheduled_at) : null;
     if (schedule && !scheduledAt) return json({ ok: false, error: "حدّد موعد الجدولة." }, 400);
 
-    // محتوى المعلّم يحتاج موافقة مدير الموقع قبل أيّ تسليم (بما فيه فيسبوك/انستقرام
-    // على حساب الموقع الرسمي). المعلّم لا يفرض تسليماً فورياً. الأدمن/المدير يُسلَّمان مباشرةً.
+    // محتوى المعلّم يحتاج موافقة مدير الموقع قبل أيّ تسليم. فيسبوك/انستقرام للمعلّم
+    // يصلان إلى صفحته الشخصية فقط — لا إلى حساب الموقع الرسمي. الأدمن/المدير يُسلَّمان مباشرةً.
     const needsApproval = user.role === "teacher";
     const approval = needsApproval ? "pending" : "approved";
 
@@ -2024,19 +2054,21 @@ async function handleConnections(
 ): Promise<Response> {
   const urlObj = new URL(request.url);
   const origin = urlObj.origin;
-  const path = urlObj.pathname;
   const ytRedirect = `${origin}/api/connections/youtube/callback`;
   const metaRedirect = `${origin}/api/connections/meta/callback`;
-  // المعلّم يعود لصفحة دروسه (فيها بطاقة يوتيوب)، والمدير لصفحة ربط الحسابات.
-  const back = user.role === "teacher" ? "/teacher/lessons" : "/manager/connections";
+  // المعلّم يعود لصفحة النشر (فيها ربط صفحته الخاصة)، والمدير لصفحة الربط الرسمي.
+  const back = user.role === "teacher" ? "/teacher/publish" : "/manager/connections";
 
-  // حالة الربط الموحّدة (تغذّي صفحة «ربط الحسابات»)
+  // حالة الربط الموحّدة (تغذّي صفحة «ربط الحسابات» وصفحة نشر المعلّم)
   if (route === "GET /api/connections/status") {
     const ytAcc = await env.DB.prepare(
       "SELECT channel_title, refresh_token FROM youtube_accounts WHERE teacher_id = ?",
     ).bind(user.id).first<{ channel_title: string | null; refresh_token: string | null }>();
-    // حالة Meta للموقع الرسمي (ربط المدير) — للقراءة للجميع، والربط للمدير فقط.
-    const m = await meta.getSiteAccount(env);
+    const personal = await meta.getAccount(env, user.id);
+    const official = await meta.getSiteAccount(env);
+    const staff = user.role === "manager" || user.role === "admin";
+    // المدير يرى الحساب الرسمي (صفحته تُستعمل للموقع). المعلّم يرى صفحته الشخصية فقط.
+    const shown = staff ? official : personal;
     return json({
       ok: true,
       youtube: {
@@ -2046,11 +2078,15 @@ async function handleConnections(
       },
       meta: {
         configured: meta.isConfigured(env),
-        connected: Boolean(m && m.page_token),
-        page: m?.page_name ?? null,
-        instagram: m?.ig_username ?? null,
-        instagram_linked: Boolean(m?.ig_user_id),
-        can_manage: user.role === "manager" || user.role === "admin",
+        connected: Boolean(shown && shown.page_token),
+        page: shown?.page_name ?? null,
+        page_id: shown?.page_id ?? null,
+        instagram: shown?.ig_username ?? null,
+        instagram_linked: Boolean(shown?.ig_user_id),
+        can_manage: user.role === "teacher" || staff,
+        scope: staff ? "official" : "personal",
+        official_page: official?.page_name ?? null,
+        official_page_id: official?.page_id ?? null,
         login_for_business: Boolean(env.FB_LOGIN_CONFIG_ID?.trim()),
       },
     });
@@ -2089,13 +2125,7 @@ async function handleConnections(
     return json({ ok: true });
   }
 
-  // ── Meta (فيسبوك + انستقرام) — الربط وتوكن الصفحة لمدير الموقع/النظام فقط ──
-  if (path.startsWith("/api/connections/meta/")) {
-    if (user.role !== "manager" && user.role !== "admin") {
-      return json({ ok: false, error: "ربط فيسبوك/انستقرام لمدير الموقع فقط" }, 403);
-    }
-  }
-
+  // ── Meta (فيسبوك + انستقرام) — المعلّم يربط صفحته · المدير يربط حساب الموقع ──
   if (route === "GET /api/connections/meta/connect") {
     if (!meta.isConfigured(env)) {
       return json({ ok: false, error: "لم تُضبَط مفاتيح Meta بعد (FB_APP_ID/FB_APP_SECRET)." }, 503);
@@ -2118,8 +2148,15 @@ async function handleConnections(
         const why = await meta.explainEmptyPages(userToken);
         return redirect(`${origin}${back}?fb=nopages&why=${encodeURIComponent(why)}`);
       }
-      // نربط أوّل صفحة تلقائياً (الحالة الغالبة)، ويستطيع تبديلها من الصفحة إن ملك أكثر.
-      const page = pages[0];
+      const official = await meta.getSiteAccount(env);
+      const allowed = user.role === "teacher"
+        ? pages.filter((p) => meta.teacherMayLinkPage(p.id, official?.page_id))
+        : pages;
+      if (!allowed.length) {
+        return redirect(`${origin}${back}?fb=official`, "fb_state=; Path=/; Max-Age=0");
+      }
+      // نربط أوّل صفحة مسموحة تلقائياً، ويستطيع تبديلها من الصفحة إن ملك أكثر.
+      const page = allowed[0];
       const ig = await meta.getInstagram(page.id, page.access_token, userToken);
       await meta.saveAccount(env, user.id,
         { ...page, ig_user_id: ig?.id ?? null, ig_username: ig?.username ?? null }, userToken);
@@ -2136,7 +2173,11 @@ async function handleConnections(
     if (!acc?.user_token) return json({ ok: true, pages: [] });
     try {
       const pages = await meta.listPages(acc.user_token);
-      return json({ ok: true, current: acc.page_id, pages: pages.map((p) => ({ id: p.id, name: p.name })) });
+      const official = user.role === "teacher" ? await meta.getSiteAccount(env) : null;
+      const visible = official?.page_id
+        ? pages.filter((p) => meta.teacherMayLinkPage(p.id, official.page_id))
+        : pages;
+      return json({ ok: true, current: acc.page_id, pages: visible.map((p) => ({ id: p.id, name: p.name })) });
     } catch (err) {
       return json({ ok: false, error: err instanceof Error ? err.message : "تعذّر جلب الصفحات." }, 502);
     }
@@ -2151,6 +2192,12 @@ async function handleConnections(
       const pages = await meta.listPages(acc.user_token);
       const page = pages.find((p) => p.id === pageId);
       if (!page) return json({ ok: false, error: "الصفحة غير متاحة لحسابك." }, 400);
+      if (user.role === "teacher") {
+        const official = await meta.getSiteAccount(env);
+        if (!meta.teacherMayLinkPage(page.id, official?.page_id)) {
+          return json({ ok: false, error: meta.ERR_TEACHER_META_OFFICIAL }, 403);
+        }
+      }
       const ig = await meta.getInstagram(page.id, page.access_token, acc.user_token);
       await meta.saveAccount(env, user.id,
         { ...page, ig_user_id: ig?.id ?? null, ig_username: ig?.username ?? null }, acc.user_token);
@@ -2391,14 +2438,40 @@ export interface DeliveryResult {
   error?: string;
 }
 
+function parsePostChannels(raw: string | null | undefined): string[] {
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** يختار حساب Meta حسب دور الناشر: معلّم → صفحته · مدير/أدمن → الرسمي. */
+async function resolveMetaForAuthor(
+  env: Env,
+  authorId: number | null,
+): Promise<meta.MetaDeliveryDecision> {
+  let authorRole: string | null = null;
+  if (authorId != null) {
+    const row = await env.DB.prepare("SELECT role FROM users WHERE id = ?")
+      .bind(authorId)
+      .first<{ role: string }>();
+    authorRole = row?.role ?? null;
+  }
+  const personal = authorId != null ? await meta.getAccount(env, authorId) : null;
+  const official = await meta.getSiteAccount(env);
+  return meta.decideMetaDelivery({ authorRole, personal, official });
+}
+
 /**
  * التسليم الموحّد لمنشور على قنواته — نقطة واحدة يستعملها «النشر الآن» ومشغّل
- * المنشورات المجدولة معاً (فلا يتباعد سلوكهما).
+ * المنشورات المجدولة وموافقة المدير معاً (فلا يتباعد سلوكهما).
  *
- * الترتيب: تيليجرام مباشرةً · فيسبوك/انستقرام عبر Meta Graph بحساب الموقع
- * الرسمي فقط (ربط مدير الموقع/الأدمن) · يوتيوب برفع فعليّ للفيديو ·
- * وما بقي بلا وسيلة تسليم يذهب إلى Webhook التوزيع إن ضُبط، وإلّا يبقى في
- * قائمة الإصدار. كل قناة تُعيد نتيجتها الصادقة (نجاح/سبب الفشل).
+ * الترتيب: تيليجرام مباشرةً · فيسبوك/انستقرام عبر Meta Graph
+ * (المعلّم → صفحته الشخصية فقط · المدير/الأدمن → حساب الموقع الرسمي) ·
+ * يوتيوب برفع فعليّ للفيديو · وما بقي بلا وسيلة تسليم يذهب إلى Webhook
+ * التوزيع إن ضُبط، وإلّا يبقى في قائمة الإصدار.
  */
 async function deliverPost(
   env: Env,
@@ -2423,19 +2496,16 @@ async function deliverPost(
     delivered.push({ channel: "telegram", ok: r.ok, error: r.error });
   }
 
-  // ٢) فيسبوك وانستقرام — حساب الموقع الرسمي فقط (لا توكن معلّم شخصي)
+  // ٢) فيسبوك وانستقرام — معلّم: صفحته فقط · مدير/أدمن: حساب الموقع الرسمي
   const wantsMeta = channels.includes("facebook") || channels.includes("instagram");
   if (wantsMeta && meta.isConfigured(env)) {
-    const acc = await meta.getSiteAccount(env);
-    if (!acc || !acc.page_token) {
+    const target = await resolveMetaForAuthor(env, authorId);
+    if (!target.ok) {
       for (const c of ["facebook", "instagram"].filter((c) => channels.includes(c))) {
-        delivered.push({
-          channel: c,
-          ok: false,
-          error: "لا حساب Meta رسمي مربوط — يربطه مدير الموقع من «ربط حسابات النشر» (/manager/connections).",
-        });
+        delivered.push({ channel: c, ok: false, error: target.error });
       }
     } else {
+      const acc = target.acc;
       if (channels.includes("facebook")) {
         const r = await meta.publishFacebook(acc, content, absMedia);
         delivered.push({ channel: "facebook", ok: r.ok, id: r.id, error: r.error });
@@ -2510,19 +2580,14 @@ async function processScheduledPosts(env: Env): Promise<void> {
   ).all<{ id: number; content: string | null; media_url: string | null; channels: string | null; author_id: number | null; ig_creation_id: string | null }>();
 
   for (const p of results) {
-    let channels: string[] = [];
-    try {
-      channels = JSON.parse(p.channels || "[]");
-    } catch {
-      channels = [];
-    }
+    const channels = parsePostChannels(p.channels);
     // حاوية انستقرام معلّقة من محاولة سابقة: نكملها بدل إعادة الرفع من الصفر.
     if (p.ig_creation_id) {
-      const acc = await meta.getSiteAccount(env);
-      if (acc) {
-        const st = await meta.igContainerStatus(acc, p.ig_creation_id);
+      const target = await resolveMetaForAuthor(env, p.author_id);
+      if (target.ok) {
+        const st = await meta.igContainerStatus(target.acc, p.ig_creation_id);
         if (st === "FINISHED") {
-          const r = await meta.publishIgContainer(acc, p.ig_creation_id);
+          const r = await meta.publishIgContainer(target.acc, p.ig_creation_id);
           await env.DB.prepare(
             "UPDATE channel_posts SET status = ?, ig_creation_id = NULL WHERE id = ?",
           ).bind(r.ok ? "published" : "failed", p.id).run();

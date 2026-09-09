@@ -39,6 +39,8 @@
     .then(function (d) {
       if (d && d.user && d.user.role === "admin") {
         renderNav([{ href: "/admin", label: "↩ لوحة الأدمن" }]);
+      } else if (d && d.user && d.user.role === "manager") {
+        renderNav([{ href: "/manager", label: "↩ لوحة مدير الموقع" }]);
       }
     })
     .catch(function () {});

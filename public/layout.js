@@ -202,9 +202,13 @@
     }
 
     // حماية صفحات المعلّم على جهة العميل (الحماية الفعلية على الـ API).
+    // مدير الموقع يستخدم أدوات المعلّم (مونتاج/نشر) من لوحة المدير.
     if (path.indexOf("/teacher") === 0) {
       if (!user) { location.href = "/login?role=teacher"; return; }
-      if (user.role !== "teacher" && user.role !== "admin") { location.href = "/"; return; }
+      if (user.role !== "teacher" && user.role !== "manager" && user.role !== "admin") {
+        location.href = "/";
+        return;
+      }
     }
     // حماية صفحات مدير الموقع (manager/admin فقط).
     if (path.indexOf("/manager") === 0) {
