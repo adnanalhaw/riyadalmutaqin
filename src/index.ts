@@ -1228,9 +1228,7 @@ async function handleManager(
             origin,
           });
           const next = out.igPending ? "scheduled" : postStatus(out.delivered, channels);
-          await env.DB.prepare(
-            "UPDATE channel_posts SET status = ?, delivery = ?, ig_creation_id = ? WHERE id = ?",
-          ).bind(next, JSON.stringify(out.delivered), out.igPending ?? null, post.id).run();
+          await persistPostDelivery(env, post.id, next, out.delivered, out.igPending);
         }
       }
     }
@@ -1954,7 +1952,7 @@ async function handleTeacher(
   if (route === "GET /api/teacher/posts") {
     // مُقيَّد بمالك المنشورات (اتّساقاً مع الحذف؛ كلٌّ يدير منشوراته).
     const { results } = await env.DB.prepare(
-      `SELECT id, content, media_url, channels, scheduled_at, status, created_at
+      `SELECT id, content, media_url, channels, scheduled_at, status, created_at, delivery, ig_creation_id
          FROM channel_posts WHERE author_id = ? ORDER BY created_at DESC LIMIT 100`,
     )
       .bind(user.id)
@@ -2018,9 +2016,7 @@ async function handleTeacher(
         status = postStatus(delivered, channels);
         // حاوية انستقرام لم تكتمل معالجتها بعد → يكملها مشغّل cron بدل أن تضيع.
         if (out.igPending) status = "scheduled";
-        await env.DB.prepare(
-          "UPDATE channel_posts SET status = ?, delivery = ?, ig_creation_id = ? WHERE id = ?",
-        ).bind(status, JSON.stringify(delivered), out.igPending ?? null, id).run();
+        await persistPostDelivery(env, id, status, delivered, out.igPending);
       }
     }
     return json({ ok: true, id, status, delivered }, 201);
@@ -2581,43 +2577,138 @@ function postStatus(delivered: DeliveryResult[], channels: string[]): string {
   return delivered.length >= channels.length ? "failed" : "queued";
 }
 
-/** يعالج المنشورات المجدولة المستحقّة (يُستدعى من مُشغّل cron). */
+/** يدمج نتيجة قناة في JSON التسليم السابق (cron يكمّل انستقرام دون مسح فيسبوك). */
+export function upsertChannelDelivery(
+  raw: string | null | undefined,
+  result: DeliveryResult,
+): DeliveryResult[] {
+  let list: DeliveryResult[] = [];
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (Array.isArray(parsed)) {
+      list = parsed.filter(
+        (x): x is DeliveryResult =>
+          Boolean(x) && typeof x === "object" && typeof (x as DeliveryResult).channel === "string",
+      );
+    }
+  } catch {
+    list = [];
+  }
+  const i = list.findIndex((d) => d.channel === result.channel);
+  if (i >= 0) list[i] = result;
+  else list.push(result);
+  return list;
+}
+
+/**
+ * يحفظ نتيجة التسليم.
+ * إن بقيت حاوية انستقرام معلّقة نملأ `scheduled_at` إن كان فارغاً حتى يلتقطها cron
+ * (منشور «الآن» كان يُترك scheduled_at=null فلا يُكمَل أبداً — منشور 13).
+ */
+async function persistPostDelivery(
+  env: Env,
+  id: number,
+  status: string,
+  delivered: DeliveryResult[],
+  igPending?: string | null,
+): Promise<void> {
+  const ig = igPending ?? null;
+  if (ig) {
+    await env.DB.prepare(
+      `UPDATE channel_posts
+          SET status = ?, delivery = ?, ig_creation_id = ?,
+              scheduled_at = COALESCE(scheduled_at, datetime('now'))
+        WHERE id = ?`,
+    )
+      .bind(status, JSON.stringify(delivered), ig, id)
+      .run();
+    return;
+  }
+  await env.DB.prepare(
+    "UPDATE channel_posts SET status = ?, delivery = ?, ig_creation_id = ? WHERE id = ?",
+  )
+    .bind(status, JSON.stringify(delivered), null, id)
+    .run();
+}
+
+type ScheduledPostRow = {
+  id: number;
+  content: string | null;
+  media_url: string | null;
+  channels: string | null;
+  author_id: number | null;
+  ig_creation_id: string | null;
+  delivery: string | null;
+};
+
+/** يكمّل حاوية انستقرام معلّقة ويحدّث delivery — لا يعيد تسليم فيسبوك. */
+async function finishPendingInstagram(env: Env, p: ScheduledPostRow): Promise<void> {
+  const channels = parsePostChannels(p.channels);
+  const creationId = p.ig_creation_id;
+  if (!creationId) return;
+
+  const target = await resolveMetaForAuthor(env, p.author_id);
+  if (!target.ok) {
+    const delivered = upsertChannelDelivery(p.delivery, {
+      channel: "instagram",
+      ok: false,
+      error: target.error,
+    });
+    await persistPostDelivery(env, p.id, postStatus(delivered, channels), delivered, null);
+    return;
+  }
+
+  const st = await meta.igContainerStatus(target.acc, creationId);
+  if (st === "FINISHED") {
+    const r = await meta.publishIgContainer(target.acc, creationId, env);
+    const delivered = upsertChannelDelivery(p.delivery, {
+      channel: "instagram",
+      ok: r.ok,
+      id: r.id,
+      error: r.error,
+    });
+    await persistPostDelivery(env, p.id, postStatus(delivered, channels), delivered, null);
+    return;
+  }
+  if (st === "ERROR" || st === "EXPIRED") {
+    const delivered = upsertChannelDelivery(p.delivery, {
+      channel: "instagram",
+      ok: false,
+      error: `تعذّرت معالجة ريل انستقرام (${st}).`,
+    });
+    await persistPostDelivery(env, p.id, postStatus(delivered, channels), delivered, null);
+  }
+  // IN_PROGRESS → الدورة التالية
+}
+
+/** يعالج المنشورات المجدولة والمستحقّة + حاويات انستقرام المعلّقة (cron كل ٥ دقائق). */
 async function processScheduledPosts(env: Env): Promise<void> {
+  // منشور «الآن» يضع ig_creation_id بلا scheduled_at — لا نشترط الموعد.
   const { results } = await env.DB.prepare(
-    `SELECT id, content, media_url, channels, author_id, ig_creation_id FROM channel_posts
+    `SELECT id, content, media_url, channels, author_id, ig_creation_id, delivery FROM channel_posts
       WHERE status = 'scheduled' AND approval_status = 'approved'
-        AND scheduled_at IS NOT NULL AND scheduled_at <= datetime('now')
-      ORDER BY scheduled_at ASC LIMIT 25`,
-  ).all<{ id: number; content: string | null; media_url: string | null; channels: string | null; author_id: number | null; ig_creation_id: string | null }>();
+        AND (
+          ig_creation_id IS NOT NULL
+          OR (scheduled_at IS NOT NULL AND scheduled_at <= datetime('now'))
+        )
+      ORDER BY COALESCE(scheduled_at, created_at) ASC LIMIT 25`,
+  ).all<ScheduledPostRow>();
 
   for (const p of results) {
-    const channels = parsePostChannels(p.channels);
-    // حاوية انستقرام معلّقة من محاولة سابقة: نكملها بدل إعادة الرفع من الصفر.
-    if (p.ig_creation_id) {
-      const target = await resolveMetaForAuthor(env, p.author_id);
-      if (target.ok) {
-        const st = await meta.igContainerStatus(target.acc, p.ig_creation_id);
-        if (st === "FINISHED") {
-          const r = await meta.publishIgContainer(target.acc, p.ig_creation_id, env);
-          await env.DB.prepare(
-            "UPDATE channel_posts SET status = ?, ig_creation_id = NULL WHERE id = ?",
-          ).bind(r.ok ? "published" : "failed", p.id).run();
-        } else if (st === "ERROR" || st === "EXPIRED") {
-          await env.DB.prepare(
-            "UPDATE channel_posts SET status = 'failed', ig_creation_id = NULL WHERE id = ?",
-          ).bind(p.id).run();
-        }
-        continue; // ما زال يُعالَج → نعاود في الدورة التالية
+    try {
+      if (p.ig_creation_id) {
+        await finishPendingInstagram(env, p);
+        continue;
       }
+      const channels = parsePostChannels(p.channels);
+      const out = await deliverPost(env, {
+        channels, content: p.content, mediaUrl: p.media_url, authorId: p.author_id, origin: siteBase(env, ""),
+      });
+      const status = out.igPending ? "scheduled" : postStatus(out.delivered, channels);
+      await persistPostDelivery(env, p.id, status, out.delivered, out.igPending);
+    } catch {
+      // منشور واحد لا يوقف بقيّة الدفعة
     }
-
-    const out = await deliverPost(env, {
-      channels, content: p.content, mediaUrl: p.media_url, authorId: p.author_id, origin: siteBase(env, ""),
-    });
-    const status = out.igPending ? "scheduled" : postStatus(out.delivered, channels);
-    await env.DB.prepare(
-      "UPDATE channel_posts SET status = ?, delivery = ?, ig_creation_id = ? WHERE id = ?",
-    ).bind(status, JSON.stringify(out.delivered), out.igPending ?? null, p.id).run();
   }
 }
 

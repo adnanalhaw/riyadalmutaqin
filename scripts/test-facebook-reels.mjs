@@ -208,3 +208,105 @@ test("انستقرام ما زال REELS ويوتيوب لم يُمسّ", () => 
   assert.match(youtubeSrc, /googleapis\.com\/upload\/youtube/);
   assert.doesNotMatch(youtubeSrc, /video_reels/);
 });
+
+function isDueForIgOrScheduleCron(p) {
+  if (p.status !== "scheduled" || p.approval_status !== "approved") return false;
+  if (p.ig_creation_id) return true;
+  return Boolean(p.scheduled_at && p.scheduled_at <= "2026-09-09 19:10:00");
+}
+
+function upsertChannelDelivery(raw, result) {
+  let list = [];
+  try {
+    const parsed = JSON.parse(raw || "[]");
+    if (Array.isArray(parsed)) {
+      list = parsed.filter((x) => x && typeof x === "object" && typeof x.channel === "string");
+    }
+  } catch {
+    list = [];
+  }
+  const i = list.findIndex((d) => d.channel === result.channel);
+  if (i >= 0) list[i] = result;
+  else list.push(result);
+  return list;
+}
+
+test("cron يلتقط حاوية انستقرام المعلّقة بلا scheduled_at (منشور 13)", () => {
+  const cron = indexSrc.slice(
+    indexSrc.indexOf("async function processScheduledPosts"),
+    indexSrc.indexOf("export default"),
+  );
+  assert.match(cron, /ig_creation_id IS NOT NULL/);
+  assert.match(cron, /ig_creation_id IS NOT NULL\s*\n\s*OR \(scheduled_at IS NOT NULL AND scheduled_at <= datetime\('now'\)\)/);
+  assert.doesNotMatch(
+    cron,
+    /WHERE status = 'scheduled' AND approval_status = 'approved'\s*\n\s*AND scheduled_at IS NOT NULL AND scheduled_at <= datetime\('now'\)/,
+  );
+  assert.match(cron, /finishPendingInstagram/);
+  assert.match(indexSrc, /COALESCE\(scheduled_at, datetime\('now'\)\)/);
+  assert.match(indexSrc, /persistPostDelivery/);
+  assert.match(indexSrc, /upsertChannelDelivery/);
+
+  // منشور «الآن» العالق: scheduled + ig_creation_id + scheduled_at فارغ
+  assert.equal(
+    isDueForIgOrScheduleCron({
+      status: "scheduled",
+      approval_status: "approved",
+      ig_creation_id: "1789pending",
+      scheduled_at: null,
+    }),
+    true,
+  );
+  assert.equal(
+    isDueForIgOrScheduleCron({
+      status: "scheduled",
+      approval_status: "approved",
+      ig_creation_id: null,
+      scheduled_at: null,
+    }),
+    false,
+  );
+  assert.equal(
+    isDueForIgOrScheduleCron({
+      status: "scheduled",
+      approval_status: "approved",
+      ig_creation_id: null,
+      scheduled_at: "2026-09-09 18:00:00",
+    }),
+    true,
+  );
+});
+
+test("إكمال الريل من cron يحدّث delivery ولا يمسح فيسبوك", () => {
+  const merged = upsertChannelDelivery(
+    JSON.stringify([
+      { channel: "facebook", ok: true, id: "fb1" },
+      { channel: "instagram", ok: false, error: "الفيديو ما زال يُعالَج — سيُنشر تلقائياً خلال دقائق." },
+    ]),
+    { channel: "instagram", ok: true, id: "ig99" },
+  );
+  assert.equal(merged.length, 2);
+  assert.equal(merged[0].ok, true);
+  assert.equal(merged[0].id, "fb1");
+  assert.equal(merged[1].ok, true);
+  assert.equal(merged[1].id, "ig99");
+  assert.equal(merged[1].error, undefined);
+
+  const finish = indexSrc.slice(
+    indexSrc.indexOf("async function finishPendingInstagram"),
+    indexSrc.indexOf("async function processScheduledPosts"),
+  );
+  assert.match(finish, /publishIgContainer/);
+  assert.match(finish, /upsertChannelDelivery/);
+  assert.match(finish, /persistPostDelivery/);
+  assert.match(finish, /تعذّرت معالجة ريل انستقرام/);
+});
+
+test("قائمة منشورات المعلّم تعرض delivery و ig_creation_id", () => {
+  const getPosts = indexSrc.slice(
+    indexSrc.indexOf('if (route === "GET /api/teacher/posts")'),
+    indexSrc.indexOf('if (route === "POST /api/teacher/posts")'),
+  );
+  assert.match(getPosts, /delivery/);
+  assert.match(getPosts, /ig_creation_id/);
+});
