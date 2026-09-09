@@ -20,9 +20,9 @@ const GRAPH = "https://graph.facebook.com/v21.0";
  * (بدون صلاحية انستقرام في OAuth). انظر `fetchInstagram`.
  * إن بقيت الحقول فارغة رغم ظهور الحساب في Meta Business Suite، المسار الاحتياطي
  * هو `setSavedInstagram` (لصق المعرّف يدوياً) — لا نعيد صلاحيات انستقرام إلى
- * OAuth الكلاسيكي. مسار Login for Business (`config_id` من لوحة المطوّر) هو
- * الطريق الوحيد لطلب أصول انستقرام دون Invalid Scopes، ويتطلّب إعداداً في
- * التطبيق قبل تمرير المعرّف في الحوار — غير مفعّل هنا حتى يُنشأ الإعداد.
+ * OAuth الكلاسيكي. مسار Login for Business (`config_id` من لوحة المطوّر، سرّ
+ * `FB_LOGIN_CONFIG_ID`) هو الطريق الوحيد لطلب أصول انستقرام دون Invalid Scopes:
+ * إن وُجد السرّ يُمرَّر `config_id` بدل `scope` في الحوار.
  */
 export const META_OAUTH_SCOPES = [
   "business_management",
@@ -37,6 +37,8 @@ export interface MetaEnv {
   DB: D1Database;
   FB_APP_ID?: string;
   FB_APP_SECRET?: string;
+  /** معرّف إعداد Facebook Login for Business من لوحة المطوّر (يستبدل scope). */
+  FB_LOGIN_CONFIG_ID?: string;
 }
 
 export interface MetaAccount {
@@ -57,11 +59,17 @@ export function buildAuthUrl(env: MetaEnv, redirectUri: string, state: string): 
     client_id: env.FB_APP_ID ?? "",
     redirect_uri: redirectUri,
     state,
-    scope: SCOPES,
     response_type: "code",
-    // من سبق وربط بدون business_management لن يُسأل عن الصلاحية الجديدة إلا بإعادة الطلب.
+    // من سبق وربط بدون الصلاحيات الجديدة لن يُسأل عنها إلا بإعادة الطلب.
     auth_type: "rerequest",
   });
+  const configId = env.FB_LOGIN_CONFIG_ID?.trim();
+  if (configId) {
+    // Login for Business: config_id يستبدل scope — لا تُرسل الاثنتان معاً.
+    p.set("config_id", configId);
+  } else {
+    p.set("scope", SCOPES);
+  }
   return `https://www.facebook.com/v21.0/dialog/oauth?${p.toString()}`;
 }
 
@@ -264,7 +272,7 @@ export const IG_NOT_API_READY =
 
 /** نشر Graph على انستقرام يتطلّب صلاحية محتوى لا تُطلب في OAuth هذا التطبيق. */
 export const IG_SCOPE_PUBLISH_ERROR =
-  "توكن الصفحة لا يملك صلاحية نشر انستقرام (instagram_content_publish / instagram_business_content_publish). الربط اليدوي يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع، لكن Meta ترفض إنشاء/نشر الحاوية إلى أن تُمنَح صلاحية المحتوى عبر إعداد Facebook Login for Business في لوحة المطوّر (config_id) — لا تُضاف تلك الصلاحيات إلى OAuth العادي لأنها تُرفض فوراً (Invalid Scopes).";
+  "توكن الصفحة لا يملك صلاحية نشر انستقرام (instagram_content_publish / instagram_business_content_publish). الربط اليدوي يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع، لكن Meta ترفض إنشاء/نشر الحاوية إلى أن يربط مدير الموقع فيسبوك من جديد عبر Facebook Login for Business (سرّ FB_LOGIN_CONFIG_ID من لوحة المطوّر). افصل الربط ثم أعده من /manager/connections — لا تُضاف تلك الصلاحيات إلى OAuth العادي لأنها تُرفض فوراً (Invalid Scopes).";
 
 /** يميّز رفض Graph بسبب صلاحية انستقرام الناقصة عن أخطاء أخرى. */
 export function looksLikeIgPermissionError(message: string): boolean {

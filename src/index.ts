@@ -48,6 +48,8 @@ export interface Env {
   /** تطبيق Meta لربط صفحة فيسبوك وحساب انستقرام الأعمال (النشر التلقائي). */
   FB_APP_ID?: string;
   FB_APP_SECRET?: string;
+  /** إعداد Facebook Login for Business (config_id) — يستبدل scope في حوار الربط. */
+  FB_LOGIN_CONFIG_ID?: string;
 }
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -766,7 +768,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     return handleManager(request, env, user, path, route);
   }
 
-  // ===== ربط حسابات النشر (يوتيوب + Meta) — لمدير الموقع والمعلّم والأدمن =====
+  // ===== ربط حسابات النشر: يوتيوب للمعلّم/المدير · Meta لمدير الموقع/الأدمن فقط =====
   if (path.startsWith("/api/connections/")) {
     const user = await getSessionUser(request, env.DB);
     if (!user) return json({ ok: false, error: "unauthorized" }, 401);
@@ -1944,7 +1946,8 @@ async function handleTeacher(
     const scheduledAt = schedule && b.scheduled_at ? String(b.scheduled_at) : null;
     if (schedule && !scheduledAt) return json({ ok: false, error: "حدّد موعد الجدولة." }, 400);
 
-    // محتوى المعلّم يحتاج موافقة مدير الموقع قبل أيّ تسليم؛ الأدمن يُسلَّم مباشرةً.
+    // محتوى المعلّم يحتاج موافقة مدير الموقع قبل أيّ تسليم (بما فيه فيسبوك/انستقرام
+    // على حساب الموقع الرسمي). المعلّم لا يفرض تسليماً فورياً. الأدمن/المدير يُسلَّمان مباشرةً.
     const needsApproval = user.role === "teacher";
     const approval = needsApproval ? "pending" : "approved";
 
@@ -2019,7 +2022,9 @@ async function handleConnections(
   user: AuthUser,
   route: string,
 ): Promise<Response> {
-  const origin = new URL(request.url).origin;
+  const urlObj = new URL(request.url);
+  const origin = urlObj.origin;
+  const path = urlObj.pathname;
   const ytRedirect = `${origin}/api/connections/youtube/callback`;
   const metaRedirect = `${origin}/api/connections/meta/callback`;
   // المعلّم يعود لصفحة دروسه (فيها بطاقة يوتيوب)، والمدير لصفحة ربط الحسابات.
@@ -2030,7 +2035,8 @@ async function handleConnections(
     const ytAcc = await env.DB.prepare(
       "SELECT channel_title, refresh_token FROM youtube_accounts WHERE teacher_id = ?",
     ).bind(user.id).first<{ channel_title: string | null; refresh_token: string | null }>();
-    const m = await meta.getAccount(env, user.id);
+    // حالة Meta للموقع الرسمي (ربط المدير) — للقراءة للجميع، والربط للمدير فقط.
+    const m = await meta.getSiteAccount(env);
     return json({
       ok: true,
       youtube: {
@@ -2044,6 +2050,8 @@ async function handleConnections(
         page: m?.page_name ?? null,
         instagram: m?.ig_username ?? null,
         instagram_linked: Boolean(m?.ig_user_id),
+        can_manage: user.role === "manager" || user.role === "admin",
+        login_for_business: Boolean(env.FB_LOGIN_CONFIG_ID?.trim()),
       },
     });
   }
@@ -2081,7 +2089,13 @@ async function handleConnections(
     return json({ ok: true });
   }
 
-  // ── Meta (فيسبوك + انستقرام) ──
+  // ── Meta (فيسبوك + انستقرام) — الربط وتوكن الصفحة لمدير الموقع/النظام فقط ──
+  if (path.startsWith("/api/connections/meta/")) {
+    if (user.role !== "manager" && user.role !== "admin") {
+      return json({ ok: false, error: "ربط فيسبوك/انستقرام لمدير الموقع فقط" }, 403);
+    }
+  }
+
   if (route === "GET /api/connections/meta/connect") {
     if (!meta.isConfigured(env)) {
       return json({ ok: false, error: "لم تُضبَط مفاتيح Meta بعد (FB_APP_ID/FB_APP_SECRET)." }, 503);
@@ -2381,8 +2395,8 @@ export interface DeliveryResult {
  * التسليم الموحّد لمنشور على قنواته — نقطة واحدة يستعملها «النشر الآن» ومشغّل
  * المنشورات المجدولة معاً (فلا يتباعد سلوكهما).
  *
- * الترتيب: تيليجرام مباشرةً · فيسبوك/انستقرام عبر Meta Graph بحساب الناشر
- * (أو حساب الموقع الرسمي إن لم يربط) · يوتيوب برفع فعليّ للفيديو ·
+ * الترتيب: تيليجرام مباشرةً · فيسبوك/انستقرام عبر Meta Graph بحساب الموقع
+ * الرسمي فقط (ربط مدير الموقع/الأدمن) · يوتيوب برفع فعليّ للفيديو ·
  * وما بقي بلا وسيلة تسليم يذهب إلى Webhook التوزيع إن ضُبط، وإلّا يبقى في
  * قائمة الإصدار. كل قناة تُعيد نتيجتها الصادقة (نجاح/سبب الفشل).
  */
@@ -2409,14 +2423,17 @@ async function deliverPost(
     delivered.push({ channel: "telegram", ok: r.ok, error: r.error });
   }
 
-  // ٢) فيسبوك وانستقرام (Meta Graph API الرسمي)
+  // ٢) فيسبوك وانستقرام — حساب الموقع الرسمي فقط (لا توكن معلّم شخصي)
   const wantsMeta = channels.includes("facebook") || channels.includes("instagram");
   if (wantsMeta && meta.isConfigured(env)) {
-    // حساب الناشر أولاً، وإلّا حساب الموقع الرسمي (ربط مدير الموقع/الأدمن)
-    const acc = (authorId ? await meta.getAccount(env, authorId) : null) ?? (await meta.getSiteAccount(env));
+    const acc = await meta.getSiteAccount(env);
     if (!acc || !acc.page_token) {
       for (const c of ["facebook", "instagram"].filter((c) => channels.includes(c))) {
-        delivered.push({ channel: c, ok: false, error: "لا حساب Meta مربوط — اربطه من «ربط الحسابات»." });
+        delivered.push({
+          channel: c,
+          ok: false,
+          error: "لا حساب Meta رسمي مربوط — يربطه مدير الموقع من «ربط حسابات النشر» (/manager/connections).",
+        });
       }
     } else {
       if (channels.includes("facebook")) {
@@ -2501,7 +2518,7 @@ async function processScheduledPosts(env: Env): Promise<void> {
     }
     // حاوية انستقرام معلّقة من محاولة سابقة: نكملها بدل إعادة الرفع من الصفر.
     if (p.ig_creation_id) {
-      const acc = (p.author_id ? await meta.getAccount(env, p.author_id) : null) ?? (await meta.getSiteAccount(env));
+      const acc = await meta.getSiteAccount(env);
       if (acc) {
         const st = await meta.igContainerStatus(acc, p.ig_creation_id);
         if (st === "FINISHED") {

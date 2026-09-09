@@ -20,6 +20,7 @@ jobs:
       PUBLISH_WEBHOOK_URL: ${{ secrets.PUBLISH_WEBHOOK_URL }}
       FB_APP_ID: ${{ secrets.FB_APP_ID }}
       FB_APP_SECRET: ${{ secrets.FB_APP_SECRET }}
+      FB_LOGIN_CONFIG_ID: ${{ secrets.FB_LOGIN_CONFIG_ID }}
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
     steps:
@@ -86,6 +87,16 @@ jobs:
           secrets: |
             FB_APP_ID
             FB_APP_SECRET
+
+      # اختياري: إعداد Facebook Login for Business (config_id) — غيابه يُبقي OAuth بالصلاحيات الكلاسيكية
+      - name: تثبيت معرّف Login for Business
+        if: ${{ env.FB_LOGIN_CONFIG_ID != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            FB_LOGIN_CONFIG_ID
 
       # اختياري: مفاتيح Google لرفع يوتيوب
       - name: تثبيت مفاتيح يوتيوب
