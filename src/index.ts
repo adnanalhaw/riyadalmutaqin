@@ -2514,7 +2514,7 @@ async function deliverPost(
         if (!absMedia) {
           delivered.push({ channel: "instagram", ok: false, error: "انستقرام يتطلّب صورة أو فيديو." });
         } else {
-          const r = await meta.publishInstagram(acc, content, absMedia);
+          const r = await meta.publishInstagram(acc, content, absMedia, env);
           if (r.pending) igPending = r.pending;
           delivered.push({ channel: "instagram", ok: r.ok, id: r.id, error: r.error });
         }
@@ -2587,7 +2587,7 @@ async function processScheduledPosts(env: Env): Promise<void> {
       if (target.ok) {
         const st = await meta.igContainerStatus(target.acc, p.ig_creation_id);
         if (st === "FINISHED") {
-          const r = await meta.publishIgContainer(target.acc, p.ig_creation_id);
+          const r = await meta.publishIgContainer(target.acc, p.ig_creation_id, env);
           await env.DB.prepare(
             "UPDATE channel_posts SET status = ?, ig_creation_id = NULL WHERE id = ?",
           ).bind(r.ok ? "published" : "failed", p.id).run();
