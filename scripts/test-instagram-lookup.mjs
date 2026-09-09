@@ -128,7 +128,7 @@ test("OAuth يبقى بلا صلاحيات انستقرام حتى مع المس
   assert.match(metaSrc, /usesLoginForBusiness/);
   assert.match(metaSrc, /looksLikeIgAppPermissionDenied/);
   assert.match(indexSrc, /publishInstagram\(acc, content, absMedia, env\)/);
-  assert.match(indexSrc, /publishIgContainer\(target\.acc, p\.ig_creation_id, env\)/);
+  assert.match(indexSrc, /publishIgContainer\(target\.acc, creationId, env\)/);
 });
 
 function buildAuthUrl(env, redirectUri, state) {

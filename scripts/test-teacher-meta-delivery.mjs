@@ -131,9 +131,10 @@ test("المصدر يصدّر decideMetaDelivery ويمنع تسليم المع�
   );
   assert.match(deliver, /resolveMetaForAuthor/);
   assert.doesNotMatch(deliver, /const acc = await meta\.getSiteAccount\(env\)/);
-  const scheduled = indexSrc.slice(indexSrc.indexOf("async function processScheduledPosts"));
+  const scheduled = indexSrc.slice(indexSrc.indexOf("async function finishPendingInstagram"));
   const cron = scheduled.slice(0, scheduled.indexOf("export default"));
   assert.match(cron, /resolveMetaForAuthor/);
+  assert.match(cron, /ig_creation_id IS NOT NULL/);
   assert.doesNotMatch(cron, /const acc = await meta\.getSiteAccount\(env\)/);
 });
 

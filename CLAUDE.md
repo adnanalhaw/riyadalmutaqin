@@ -72,8 +72,13 @@ npm run db:migrate:local   # ترحيلات محلية
   **المدير/الأدمن → حساب الموقع الرسمي** (`getSiteAccount`، صفحة رياض المتقين
   و`@almutaqyn`) · **المعلّم → صفحته الشخصية فقط** (`getAccount(authorId)` بعد
   موافقة المدير؛ يُرفض إن طابق `page_id` الرسمية) · **يوتيوب برفع فعليّ** للفيديو ·
-  وما بقي عبر Webhook التوزيع. فيديو انستقرام يحتاج معالجة عند Meta — إن لم يجهز
-  يُستكمل في دورة cron بدل أن يضيع. المعلّم يربط صفحته من `/teacher/publish`.
+  وما بقي عبر Webhook التوزيع. **فيديو فيسبوك العمودي → Page Reels API**
+  (`video_reels` start → rupload → finish/PUBLISHED) حتى يظهر في تبويب الريلز؛
+  الأفقي 16:9 يبقى على `/{page}/videos`؛ وإن فشل الريل يُرفع احتياطياً كفيديو
+  صفحة. فيديو انستقرام: حاوية `REELS` ثم انتظار `FINISHED` ثم `media_publish`؛
+  إن لم يجهز يُعلَّم `ig_creation_id` و`scheduled_at=now` إن كان فارغاً ويكمله
+  cron حتى لو `scheduled_at` كان null (عطل منشور 13: الكرون كان يشترط الموعد).
+  المعلّم يربط صفحته من `/teacher/publish`.
 - **🔐 Facebook Login for Business:** إن وُجد سرّ `FB_LOGIN_CONFIG_ID` يُمرَّر
   `config_id` في حوار OAuth **بدل** `scope` (الكلاسيكي يبقى إن غاب السرّ).
   رسالة فشل نشر انستقرام تفرّق: بلا FLB → اضبط السرّ وأعد الربط · مع FLB أو
