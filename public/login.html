@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>تسجيل الدخول — رياض المتقين</title>
-  <meta name="description" content="تسجيل الدخول إلى رياض المتقين كمتعلّم أو معلّم." />
+  <meta name="description" content="تسجيل الدخول إلى رياض المتقين كمتعلّم أو معلّم أو مدير الموقع أو أدمن." />
   <meta name="theme-color" content="#0b1430" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -25,6 +25,8 @@
         <div class="tabs" role="tablist">
           <button type="button" data-role="student" class="active">متعلّم</button>
           <button type="button" data-role="teacher">معلّم</button>
+          <button type="button" data-role="manager">مدير الموقع</button>
+          <button type="button" data-role="admin">أدمن</button>
         </div>
         <input type="hidden" name="role" id="roleField" value="student" />
 
@@ -75,7 +77,9 @@
 
       var params = new URLSearchParams(location.search);
       var qrole = params.get("role");
-      if (qrole === "teacher" || qrole === "student") setRole(qrole);
+      if (qrole === "teacher" || qrole === "student" || qrole === "manager" || qrole === "admin") {
+        setRole(qrole);
+      }
 
       var notice = document.getElementById("loginNotice");
       function show(msg) { notice.textContent = msg; notice.hidden = false; }
