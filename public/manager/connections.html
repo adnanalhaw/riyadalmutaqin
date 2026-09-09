@@ -59,11 +59,33 @@
               <div class="body">
                 <h3>انستقرام — حساب أعمال</h3>
                 <span class="pill off" id="igPill">جارٍ الفحص…</span>
-                <p class="muted-s" id="igInfo">يُكتشف عبر حقول Graph على الصفحة (instagram_business_account ثم connected_instagram_account ثم instagram_accounts) بلا صلاحية انستقرام في OAuth. ربط مركز الحسابات وحده لا يكفي.</p>
+                <p class="muted-s" id="igInfo">يُكتشف أولاً عبر حقول Graph على الصفحة. إن ظهر الحساب في Meta Business Suite وبقيت الحقول فارغة، الصق المعرّف يدوياً أدناه.</p>
               </div>
               <div class="act">
                 <button class="btn btn-outline" id="igRefresh" hidden type="button">تحديث انستقرام</button>
               </div>
+            </div>
+
+            <div id="igManualWrap" hidden style="border-top:1px solid var(--border);padding-top:1.1rem">
+              <details id="igManualDetails">
+                <summary style="cursor:pointer;font-weight:700;color:var(--gold)">ربط متقدّم — لصق معرّف انستقرام يدوياً</summary>
+                <p class="muted-s" style="margin:.7rem 0 1rem;line-height:1.85">
+                  المعرّف يأتي من <strong>إعدادات الأعمال في Meta ← حسابات انستقرام</strong>
+                  <br />(Meta Business Settings → Instagram accounts).
+                  هذا يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع. نشر المحتوى عبر الواجهة
+                  ما زال يحتاج صلاحية محتوى انستقرام عند Meta — لا تُطلب في OAuth لأنها تُرفض
+                  <span dir="ltr">(Invalid Scopes)</span>.
+                </p>
+                <div class="field">
+                  <label for="igUserId">معرّف حساب انستقرام للأعمال (أرقام فقط)</label>
+                  <input id="igUserId" inputmode="numeric" autocomplete="off" placeholder="1784140…" />
+                </div>
+                <div class="field">
+                  <label for="igUsername">اسم المستخدم (اختياري)</label>
+                  <input id="igUsername" autocomplete="off" placeholder="@almutaqyn" />
+                </div>
+                <button class="btn btn-outline" id="igManualSave" type="button">حفظ الربط اليدوي</button>
+              </details>
             </div>
 
             <div id="pagesWrap" hidden style="border-top:1px solid var(--border);padding-top:1.1rem">
@@ -149,6 +171,8 @@
         var p = el(id); p.className = "pill " + cls; p.textContent = text;
       }
 
+      var openManualAfterRefresh = false;
+
       function load() {
         api("/api/connections/status").then(function (res) {
           if (!res.ok || !res.d.ok) return;
@@ -170,15 +194,23 @@
 
           // ── انستقرام ──
           el("igRefresh").hidden = true;
+          el("igManualWrap").hidden = true;
           if (!d.meta.configured) setPill("igPill", "no", "غير مُفعَّل");
           else if (d.meta.instagram_linked) {
             setPill("igPill", "on", "مربوط ✓");
-            el("igInfo").textContent = "الحساب: @" + (d.meta.instagram || "—") + " — عبر صفحة فيسبوك في Meta.";
+            el("igInfo").textContent = d.meta.instagram
+              ? "الحساب: @" + d.meta.instagram + " — عبر صفحة فيسبوك في Meta."
+              : "الحساب مربوط بمعرّف الأعمال — عبر صفحة فيسبوك في Meta.";
             el("igRefresh").hidden = false;
           } else if (d.meta.connected) {
             setPill("igPill", "off", "غير مرتبط بالصفحة");
-            el("igInfo").textContent = "ربط مركز الحسابات لا يكفي للواجهة. حوّل انستقرام لحساب احترافي واربطه بالصفحة من إعدادات انستقرام ← الصفحة، ثم اضغط «تحديث انستقرام».";
+            el("igInfo").textContent = "جرّب «تحديث انستقرام» أولاً (اكتشاف Graph). إن ظهر الحساب في Meta Business Suite وبقيت الحقول فارغة، افتح الربط المتقدّم والصق المعرّف.";
             el("igRefresh").hidden = false;
+            el("igManualWrap").hidden = false;
+            if (openManualAfterRefresh) {
+              el("igManualDetails").open = true;
+              openManualAfterRefresh = false;
+            }
           } else {
             setPill("igPill", "off", "يتبع فيسبوك");
           }
@@ -236,6 +268,24 @@
             m.textContent = "ظهر حساب انستقرام: @" + (res.d.instagram || "—") + " ✓";
           } else {
             m.textContent = (res.d && res.d.error) || "تعذّر تحديث انستقرام.";
+            openManualAfterRefresh = true;
+          }
+          load();
+        });
+      });
+      el("igManualSave").addEventListener("click", function () {
+        var m = el("msg"); m.hidden = false; m.textContent = "لحظات…";
+        var id = (el("igUserId").value || "").trim();
+        var name = (el("igUsername").value || "").trim();
+        api("/api/connections/meta/set-instagram", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ig_user_id: id, ig_username: name || undefined }),
+        }).then(function (res) {
+          if (res.ok && res.d.ok && res.d.instagram_linked) {
+            m.textContent = "حُفظ ربط انستقرام" + (res.d.instagram ? ": @" + res.d.instagram : "") + " ✓";
+          } else {
+            m.textContent = (res.d && res.d.error) || "تعذّر حفظ انستقرام.";
           }
           load();
         });

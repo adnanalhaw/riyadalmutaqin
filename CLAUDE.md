@@ -44,7 +44,7 @@ npm run db:migrate:local   # ترحيلات محلية
    والاعتماد معاً.
 6. **RTL:** النصوص عربية، وكل كلمة إنجليزية بين قوسين على سطر منفصل في الردود.
 
-## الحالة الآن (2026-09-09 — اكتشاف انستقرام عبر بدائل Graph لا حقلاً واحداً)
+## الحالة الآن (2026-09-09 — ربط انستقرام اليدوي إن فرغت حقول Graph)
 
 **✅ مبنيّ ومنشور ويعمل:**
 - **الأدوار الأربعة:** متعلّم · معلّم · مدير الموقع (manager) · مدير النظام (admin)
@@ -95,9 +95,14 @@ npm run db:migrate:local   # ترحيلات محلية
    في OAuth (`instagram_business_*` يرفضها Meta بـ Invalid Scopes) — الاكتشاف
    عبر حقول Graph: `instagram_business_account` ثم `connected_instagram_account`
    ثم `instagram_accounts` ثم أصول الأعمال إن وُجد `business_management`.
-   `POST /api/connections/meta/refresh-instagram` يعيد الاكتشاف دون OAuth،
-   ويميّز ربط مركز الحسابات عن حساب أعمال جاهز للواجهة.
-   نشر انستقرام مؤجَّل حتى يقبل Meta صلاحية المحتوى على التطبيق.
+   `POST /api/connections/meta/refresh-instagram` يعيد الاكتشاف دون OAuth
+   (المسار الأساسي)، ويميّز ربط مركز الحسابات عن حساب أعمال جاهز للواجهة.
+   احتياطي المدير: `POST /api/connections/meta/set-instagram` يلصق
+   `ig_user_id` (أرقام) و`ig_username` اختيارياً إن ظهر الحساب في Meta UI
+   وبقيت حقول Graph فارغة — يظهر `instagram_linked`. نشر Graph ما زال يحتاج
+   صلاحية محتوى انستقرام؛ لا تُعاد إلى OAuth (Invalid Scopes). Login for
+   Business بـ `config_id` من لوحة المطوّر هو الطريق الوحيد لطلب الأصول دون
+   تلك الإضافة — غير مفعّل حتى يُنشأ الإعداد.
 7. **البث المباشر (المرحلة ٧)** — لم يُبنَ.
 
 ## الوثائق المرجعية

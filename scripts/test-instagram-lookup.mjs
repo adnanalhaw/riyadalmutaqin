@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const metaSrc = readFileSync(join(root, "src/meta.ts"), "utf8");
 const indexSrc = readFileSync(join(root, "src/index.ts"), "utf8");
+const connHtml = readFileSync(join(root, "public/manager/connections.html"), "utf8");
 
 /** نسخة موازية لـ pickPageInstagramUser في src/meta.ts — أي اختلاف يُعدّ انحداراً في الترتيب. */
 function pickPageInstagramUser(page) {
@@ -77,6 +78,83 @@ test("refreshSavedInstagram يرمي InstagramNotLinkedError بدل null صام�
   assert.match(indexSrc, /isInstagramNotLinkedError/);
   assert.match(indexSrc, /getInstagram\(page\.id, page\.access_token, userToken\)/);
   assert.match(indexSrc, /getInstagram\(page\.id, page\.access_token, acc\.user_token\)/);
+});
+
+test("set-instagram مسار احتياطي لمدير الموقع/النظام بعد فشل Graph", () => {
+  assert.match(indexSrc, /POST \/api\/connections\/meta\/set-instagram/);
+  assert.match(indexSrc, /parseIgUserId/);
+  assert.match(indexSrc, /setSavedInstagram/);
+  assert.match(indexSrc, /الربط اليدوي لمدير الموقع أو مدير النظام فقط/);
+  assert.match(metaSrc, /export async function setSavedInstagram/);
+  assert.match(metaSrc, /export function parseIgUserId/);
+  assert.match(connHtml, /igManualWrap/);
+  assert.match(connHtml, /\/api\/connections\/meta\/set-instagram/);
+  assert.match(connHtml, /إعدادات الأعمال في Meta ← حسابات انستقرام/);
+  assert.match(indexSrc, /"instagram"/);
+});
+
+test("OAuth يبقى بلا صلاحيات انستقرام حتى مع المسار اليدوي", () => {
+  const start = metaSrc.indexOf("export const META_OAUTH_SCOPES");
+  const end = metaSrc.indexOf("const SCOPES");
+  const block = metaSrc.slice(start, end);
+  assert.doesNotMatch(block, /instagram_/);
+  assert.match(metaSrc, /Login for Business/);
+  assert.match(metaSrc, /IG_SCOPE_PUBLISH_ERROR/);
+});
+
+function parseIgUserId(raw) {
+  const s = String(raw ?? "").trim();
+  return /^\d+$/.test(s) ? s : null;
+}
+
+function normalizeIgUsername(raw) {
+  const s = String(raw ?? "")
+    .trim()
+    .replace(/^@+/, "")
+    .trim();
+  if (!s) return null;
+  if (s.length > 64 || /[\s/\\]/.test(s)) return null;
+  return s;
+}
+
+function looksLikeIgPermissionError(message) {
+  const m = message.toLowerCase();
+  return (
+    /instagram_(business_)?(basic|content_publish|manage_insights|manage_comments)/.test(m) ||
+    /does not have permission/.test(m) ||
+    /hasn't authorized the application/.test(m) ||
+    /requires.{0,80}permission/.test(m) ||
+    /\(#10\)/.test(message) ||
+    /\(#200\)/.test(message) ||
+    /invalid scopes/.test(m) ||
+    /permission denied/.test(m)
+  );
+}
+
+test("parseIgUserId يقبل أرقاماً فقط", () => {
+  assert.equal(parseIgUserId("17841405822304914"), "17841405822304914");
+  assert.equal(parseIgUserId(" 42 "), "42");
+  assert.equal(parseIgUserId(""), null);
+  assert.equal(parseIgUserId("abc"), null);
+  assert.equal(parseIgUserId("17e8"), null);
+  assert.equal(parseIgUserId("178-414"), null);
+});
+
+test("normalizeIgUsername يزيل @ ويرفض الفراغ", () => {
+  assert.equal(normalizeIgUsername("@almutaqyn"), "almutaqyn");
+  assert.equal(normalizeIgUsername("almutaqyn"), "almutaqyn");
+  assert.equal(normalizeIgUsername(""), null);
+  assert.equal(normalizeIgUsername("  "), null);
+  assert.equal(normalizeIgUsername("bad name"), null);
+});
+
+test("looksLikeIgPermissionError يلتقط رفض صلاحية النشر", () => {
+  assert.equal(
+    looksLikeIgPermissionError("تجهيز منشور انستقرام: (#10) Application does not have permission for this action"),
+    true,
+  );
+  assert.equal(looksLikeIgPermissionError("Requires instagram_content_publish permission"), true);
+  assert.equal(looksLikeIgPermissionError("تعذّرت معالجة الوسيط (ERROR)."), false);
 });
 
 test("pickPageInstagramUser يفضّل instagram_business_account", () => {

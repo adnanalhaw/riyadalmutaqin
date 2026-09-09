@@ -43,6 +43,7 @@
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" checked style="width:auto" /> يوتيوب</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="tiktok" style="width:auto" /> تيك توك</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> فيسبوك</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="instagram" style="width:auto" /> انستقرام</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="x" style="width:auto" /> إكس / تويتر</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" style="width:auto" /> تيليجرام</label>
                 </div>
@@ -93,7 +94,7 @@
       var form = document.getElementById("publishForm");
       var notice = document.getElementById("pubNotice");
 
-      var CH = { youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك", x: "إكس", telegram: "تيليجرام" };
+      var CH = { youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك", instagram: "انستقرام", x: "إكس", telegram: "تيليجرام" };
       var STATUS = {
         draft: ["مسودة", "soon"], scheduled: ["مجدول", "soon"],
         queued: ["في قائمة الإصدار", "soon"],
@@ -152,11 +153,13 @@
         }).then(function (res) {
           var d = res.d || {};
           if (!res.ok || !d.ok) { show(d.error || "تعذّر النشر."); return; }
-          var tg = (d.delivered || []).filter(function (x) { return x.channel === "telegram"; })[0];
           if (action === "schedule") show("تمّت الجدولة ✓");
-          else if (tg && tg.ok) show("نُشِر على تيليجرام ✓ وحُفِظ للقنوات الأخرى.");
-          else if (tg && !tg.ok) show("تعذّر النشر على تيليجرام: " + (tg.error || "") + " — حُفِظ المنشور.");
-          else show("حُفِظ المنشور ✓ (يُربط تسليم القنوات تباعاً).");
+          else if (d.delivered && d.delivered.length) {
+            show(d.delivered.map(function (x) {
+              var name = CH[x.channel] || x.channel;
+              return x.ok ? (name + " ✓") : (name + ": " + (x.error || "فشل"));
+            }).join(" — "));
+          } else show("حُفِظ المنشور ✓ (يُربط تسليم القنوات تباعاً).");
           form.reset();
           loadPosts();
         }).catch(function (err) { show(err && err.message ? err.message : "حدث خطأ في الاتصال."); });
