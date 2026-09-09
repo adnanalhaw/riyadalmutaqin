@@ -44,7 +44,7 @@ npm run db:migrate:local   # ترحيلات محلية
    والاعتماد معاً.
 6. **RTL:** النصوص عربية، وكل كلمة إنجليزية بين قوسين على سطر منفصل في الردود.
 
-## الحالة الآن (2026-09-09 — OAuth فيسبوك بلا صلاحيات انستقرام)
+## الحالة الآن (2026-09-09 — اكتشاف انستقرام عبر بدائل Graph لا حقلاً واحداً)
 
 **✅ مبنيّ ومنشور ويعمل:**
 - **الأدوار الأربعة:** متعلّم · معلّم · مدير الموقع (manager) · مدير النظام (admin)
@@ -93,8 +93,10 @@ npm run db:migrate:local   # ترحيلات محلية
    **صلاحيات Meta الحالية:** `business_management` · `pages_show_list` ·
    `pages_manage_posts` · `pages_read_engagement`. لا تُطلب صلاحيات انستقرام
    في OAuth (`instagram_business_*` يرفضها Meta بـ Invalid Scopes) — الاكتشاف
-   عبر حقل Graph `instagram_business_account` على توكن الصفحة، أو
-   `POST /api/connections/meta/refresh-instagram` دون إعادة الحوار.
+   عبر حقول Graph: `instagram_business_account` ثم `connected_instagram_account`
+   ثم `instagram_accounts` ثم أصول الأعمال إن وُجد `business_management`.
+   `POST /api/connections/meta/refresh-instagram` يعيد الاكتشاف دون OAuth،
+   ويميّز ربط مركز الحسابات عن حساب أعمال جاهز للواجهة.
    نشر انستقرام مؤجَّل حتى يقبل Meta صلاحية المحتوى على التطبيق.
 7. **البث المباشر (المرحلة ٧)** — لم يُبنَ.
 
