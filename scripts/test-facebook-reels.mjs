@@ -203,10 +203,145 @@ test("publishFacebook لا يعتمد /videos وحده لكل الفيديوها
 test("انستقرام ما زال REELS ويوتيوب لم يُمسّ", () => {
   const ig = metaSrc.slice(metaSrc.indexOf("export async function createIgContainer"));
   assert.match(ig, /media_type = "REELS"/);
-  assert.match(indexSrc, /meta\.publishFacebook\(acc, content, absMedia\)/);
+  assert.match(ig, /body\.video_url = mediaUrl/);
+  assert.doesNotMatch(ig, /getMediaBytes|MEDIA\.get/);
+  assert.match(indexSrc, /meta\.publishFacebook\(acc, content, absMedia/);
+  assert.match(indexSrc, /media:\s*env\.MEDIA/);
   assert.match(indexSrc, /yt\.uploadVideo/);
   assert.match(youtubeSrc, /googleapis\.com\/upload\/youtube/);
   assert.doesNotMatch(youtubeSrc, /video_reels/);
+});
+
+function normalizeHostname(host) {
+  return host.toLowerCase().replace(/^www\./, "");
+}
+
+function mediaKeyFromUrl(url, siteUrl) {
+  const raw = (url ?? "").trim();
+  if (!raw) return null;
+
+  let pathname;
+  if (/^https?:\/\//i.test(raw)) {
+    let parsed;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      return null;
+    }
+    const site = (siteUrl ?? "").trim();
+    if (site) {
+      try {
+        const origin = new URL(site.includes("://") ? site : `https://${site}`);
+        if (normalizeHostname(parsed.hostname) !== normalizeHostname(origin.hostname)) {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    }
+    pathname = parsed.pathname;
+  } else {
+    const pathOnly = raw.split("#")[0].split("?")[0];
+    pathname = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`;
+  }
+
+  if (!pathname.startsWith("/api/media/")) return null;
+  try {
+    const key = decodeURIComponent(pathname.slice("/api/media/".length));
+    return key || null;
+  } catch {
+    return null;
+  }
+}
+
+test("mediaKeyFromUrl يستخرج مفتاح R2 من وسائط الموقع فقط", () => {
+  const site = "https://riyadalmutaqin.com";
+  assert.equal(mediaKeyFromUrl("/api/media/video/abc.mp4", site), "video/abc.mp4");
+  assert.equal(mediaKeyFromUrl("api/media/video/abc.mp4", site), "video/abc.mp4");
+  assert.equal(
+    mediaKeyFromUrl("https://riyadalmutaqin.com/api/media/video/abc.mp4", site),
+    "video/abc.mp4",
+  );
+  assert.equal(
+    mediaKeyFromUrl("https://www.riyadalmutaqin.com/api/media/video/abc.mp4", site),
+    "video/abc.mp4",
+  );
+  assert.equal(
+    mediaKeyFromUrl("https://riyadalmutaqin.com/api/media/video/abc.mp4?dl=1#x", site),
+    "video/abc.mp4",
+  );
+  assert.equal(
+    mediaKeyFromUrl("https://riyadalmutaqin.com/api/media/video/%D8%A7.mp4", site),
+    "video/ا.mp4",
+  );
+  assert.equal(mediaKeyFromUrl("/api/media/", site), null);
+  assert.equal(mediaKeyFromUrl("https://riyadalmutaqin.com/api/media/video/x.mp4", null), "video/x.mp4");
+  assert.equal(mediaKeyFromUrl("https://cdn.example.com/api/media/video/x.mp4", site), null);
+  assert.equal(mediaKeyFromUrl("https://youtube.com/watch?v=1", site), null);
+  assert.equal(mediaKeyFromUrl("", site), null);
+});
+
+async function getMediaBytes(mediaUrl, opts) {
+  const key = mediaKeyFromUrl(mediaUrl, opts?.siteUrl);
+  if (key) {
+    const store = opts?.media;
+    if (!store) throw new Error("تعذّر قراءة الفيديو من المخزن.");
+    const obj = await store.get(key);
+    if (!obj) throw new Error("ملف الفيديو غير موجود في المخزن.");
+    const bytes = await obj.arrayBuffer();
+    if (!bytes.byteLength) throw new Error("ملف الفيديو فارغ.");
+    return bytes;
+  }
+  const res = await fetch(mediaUrl);
+  if (!res.ok) throw new Error(`تعذّر جلب الفيديو من الخادم (HTTP ${res.status}).`);
+  const bytes = await res.arrayBuffer();
+  if (!bytes.byteLength) throw new Error("ملف الفيديو فارغ.");
+  return bytes;
+}
+
+test("getMediaBytes يقرأ من المخزن ولا يستدعي fetch لوسائط الموقع", async () => {
+  const site = "https://riyadalmutaqin.com";
+  const payload = new Uint8Array([1, 2, 3, 4]).buffer;
+  let fetched = false;
+  const origFetch = globalThis.fetch;
+  globalThis.fetch = async () => {
+    fetched = true;
+    return new Response("should-not-fetch", { status: 522 });
+  };
+  try {
+    const bytes = await getMediaBytes(`${site}/api/media/video/reel.mp4`, {
+      siteUrl: site,
+      media: {
+        async get(key) {
+          assert.equal(key, "video/reel.mp4");
+          return { arrayBuffer: async () => payload };
+        },
+      },
+    });
+    assert.equal(bytes.byteLength, 4);
+    assert.equal(fetched, false);
+  } finally {
+    globalThis.fetch = origFetch;
+  }
+});
+
+test("المصدر يقرأ وسائط الموقع من R2 ولا يعمل fetch لنطاقه", () => {
+  assert.match(metaSrc, /export function mediaKeyFromUrl/);
+  assert.match(metaSrc, /export async function getMediaBytes/);
+  assert.match(metaSrc, /path\.slice\("\/api\/media\/"\.length\)/);
+  const loader = metaSrc.slice(
+    metaSrc.indexOf("export function mediaKeyFromUrl"),
+    metaSrc.indexOf("function reelCaption"),
+  );
+  assert.match(loader, /opts\?\.media/);
+  assert.match(loader, /store\.get\(key\)/);
+  assert.match(loader, /HTTP 522/);
+  assert.match(loader, /await fetch\(mediaUrl\)/);
+  const fb = metaSrc.slice(
+    metaSrc.indexOf("export async function publishFacebook"),
+    metaSrc.indexOf("export async function createIgContainer"),
+  );
+  assert.match(fb, /getMediaBytes\(mediaUrl, env\)/);
 });
 
 function isDueForIgOrScheduleCron(p) {

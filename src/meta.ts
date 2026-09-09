@@ -863,7 +863,76 @@ export function explainFacebookPublishError(err: unknown): string {
   return raw;
 }
 
-async function fetchVideoBytes(mediaUrl: string): Promise<ArrayBuffer> {
+const SITE_MEDIA_PATH = "/api/media/";
+
+function normalizeHostname(host: string): string {
+  return host.toLowerCase().replace(/^www\./, "");
+}
+
+/**
+ * مفتاح R2 من رابط `/api/media/<key>` (نسبي أو مطلق على أصل الموقع).
+ * نفس استخراج GET `/api/media/` في الخادم: `path.slice("/api/media/".length)`.
+ * الروابط الخارجية تُرجع null حتى يبقى جلب HTTP للاحتياط فقط.
+ */
+export function mediaKeyFromUrl(url: string, siteUrl?: string | null): string | null {
+  const raw = (url ?? "").trim();
+  if (!raw) return null;
+
+  let pathname: string;
+  if (/^https?:\/\//i.test(raw)) {
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      return null;
+    }
+    const site = (siteUrl ?? "").trim();
+    if (site) {
+      try {
+        const origin = new URL(site.includes("://") ? site : `https://${site}`);
+        if (normalizeHostname(parsed.hostname) !== normalizeHostname(origin.hostname)) {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    }
+    pathname = parsed.pathname;
+  } else {
+    const pathOnly = raw.split("#")[0].split("?")[0];
+    pathname = pathOnly.startsWith("/") ? pathOnly : `/${pathOnly}`;
+  }
+
+  if (!pathname.startsWith(SITE_MEDIA_PATH)) return null;
+  try {
+    const key = decodeURIComponent(pathname.slice(SITE_MEDIA_PATH.length));
+    return key || null;
+  } catch {
+    return null;
+  }
+}
+
+export type MediaBytesSource = {
+  media?: Pick<R2Bucket, "get"> | null;
+  siteUrl?: string | null;
+};
+
+/**
+ * بايتات الفيديو: من R2 إن كان الرابط وسائط هذا الموقع، وإلا جلب HTTP خارجي.
+ * لا نعمل fetch لنطاق الموقع من داخل الـ Worker — يفشل غالباً بـ HTTP 522.
+ */
+export async function getMediaBytes(mediaUrl: string, opts?: MediaBytesSource | null): Promise<ArrayBuffer> {
+  const key = mediaKeyFromUrl(mediaUrl, opts?.siteUrl);
+  if (key) {
+    const store = opts?.media;
+    if (!store) throw new Error("تعذّر قراءة الفيديو من المخزن.");
+    const obj = await store.get(key);
+    if (!obj) throw new Error("ملف الفيديو غير موجود في المخزن.");
+    const bytes = await obj.arrayBuffer();
+    if (!bytes.byteLength) throw new Error("ملف الفيديو فارغ.");
+    return bytes;
+  }
+
   const res = await fetch(mediaUrl);
   if (!res.ok) throw new Error(`تعذّر جلب الفيديو من الخادم (HTTP ${res.status}).`);
   const bytes = await res.arrayBuffer();
@@ -995,11 +1064,12 @@ export async function publishFacebook(
   acc: MetaAccount,
   content: string | null,
   mediaUrl: string | null,
+  env?: MediaBytesSource | null,
 ): Promise<{ ok: boolean; id?: string; error?: string; via?: "reels" | "videos" | "videos_fallback" }> {
   if (!acc.page_id || !acc.page_token) return { ok: false, error: "لا صفحة فيسبوك مربوطة." };
   try {
     if (mediaUrl && isVideo(mediaUrl)) {
-      const bytes = await fetchVideoBytes(mediaUrl);
+      const bytes = await getMediaBytes(mediaUrl, env);
       const path = facebookVideoPublishPath(parseMp4Dimensions(bytes));
       if (path === "reels") {
         try {
