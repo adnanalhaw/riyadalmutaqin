@@ -91,7 +91,7 @@ test("set-instagram مسار احتياطي لمدير الموقع/النظام
   assert.match(connHtml, /igManualWrap/);
   assert.match(connHtml, /\/api\/connections\/meta\/set-instagram/);
   assert.match(connHtml, /إعدادات الأعمال في Meta ← حسابات انستقرام/);
-  assert.match(connHtml, /لمدير الموقع فقط/);
+  assert.match(connHtml, /لمدير الموقع\/النظام فقط|لمدير الموقع فقط/);
   assert.match(connHtml, /افصل الربط ثم أعده/);
   assert.match(indexSrc, /"instagram"/);
 });
@@ -165,24 +165,17 @@ test("النشر الآلي يمرّر FB_LOGIN_CONFIG_ID عند وجوده", ()
   assert.ok(deployYml.includes("env.FB_LOGIN_CONFIG_ID != ''"));
 });
 
-test("واجهة الربط تذكّر أن فيسبوك/انستقرام لمدير الموقع وأن إعادة الربط لازمة", () => {
-  assert.match(connHtml, /لمدير الموقع فقط/);
+test("واجهة الربط تذكّر أن فيسبوك/انستقرام الرسميين لمدير الموقع وأن إعادة الربط لازمة", () => {
+  assert.match(connHtml, /لمدير الموقع\/النظام فقط|لمدير الموقع فقط/);
   assert.match(connHtml, /افصل الربط ثم أعده/);
 });
 
-test("ربط Meta وتسليمه لمدير الموقع فقط وبحساب الموقع الرسمي", () => {
-  assert.match(indexSrc, /ربط فيسبوك\/انستقرام لمدير الموقع فقط/);
-  assert.match(indexSrc, /path\.startsWith\("\/api\/connections\/meta\/"\)/);
-  assert.match(indexSrc, /getSiteAccount\(env\)/);
-  assert.match(indexSrc, /يربطه مدير الموقع من «ربط حسابات النشر»/);
-  const deliver = indexSrc.slice(indexSrc.indexOf("async function deliverPost"), indexSrc.indexOf("function postStatus"));
-  assert.match(deliver, /await meta\.getSiteAccount\(env\)/);
-  assert.doesNotMatch(deliver, /getAccount\(env, authorId\)/);
-  const scheduled = indexSrc.slice(indexSrc.indexOf("async function processScheduledPosts"));
-  assert.doesNotMatch(
-    scheduled.slice(0, scheduled.indexOf("export default")),
-    /getAccount\(env, p\.author_id\)/,
-  );
+test("ربط Meta مفتوح للمعلّم على صفحته والرفض إن طابقت الرسمية", () => {
+  assert.doesNotMatch(indexSrc, /ربط فيسبوك\/انستقرام لمدير الموقع فقط/);
+  assert.match(indexSrc, /teacherMayLinkPage/);
+  assert.match(indexSrc, /ERR_TEACHER_META_OFFICIAL/);
+  assert.match(indexSrc, /user\.role === "teacher"/);
+  assert.match(indexSrc, /\/teacher\/publish/);
 });
 
 function parseIgUserId(raw) {

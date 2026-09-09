@@ -22,7 +22,8 @@
         <section>
           <div class="page-head" style="padding-top:0">
             <h1>الموافقة على المحتوى</h1>
-            <p>لا يُنشَر محتوى المعلّمين حتى تعتمده. وافِق ليظهر للجمهور، أو ارفض.</p>
+            <p>لا يُنشَر محتوى المعلّمين حتى تعتمده. وافِق ليظهر للجمهور، أو ارفض.
+              منشورات فيسبوك/انستقرام تُسلَّم إلى <strong>صفحة المعلّم الخاصة</strong> فقط — لا إلى صفحة رياض المتقين الرسمية.</p>
           </div>
 
           <h2 style="color:var(--gold);text-align:start;margin:1rem 0">المقاطع <span id="cClips" class="muted"></span></h2>
@@ -100,9 +101,16 @@
         var el = document.getElementById("posts");
         if (!list.length) { el.innerHTML = '<p class="muted">لا منشورات بانتظار الموافقة.</p>'; return; }
         el.innerHTML = list.map(function (p) {
+          var chans = [];
+          try { chans = JSON.parse(p.channels || "[]"); } catch (e) { chans = []; }
+          var names = { youtube: "يوتيوب", tiktok: "تيك توك", facebook: "فيسبوك (صفحته)", instagram: "انستقرام (صفحته)", x: "إكس", telegram: "تيليجرام" };
+          var chLabel = chans.map(function (c) { return names[c] || c; }).join(" · ");
+          var metaNote = (chans.indexOf("facebook") !== -1 || chans.indexOf("instagram") !== -1)
+            ? '<div class="muted" style="font-size:.85rem;margin-top:.35rem">التسليم إلى صفحة المعلّم الخاصة — ممنوع على الصفحة الرسمية.</div>'
+            : "";
           return '<div class="card" style="margin-bottom:1rem">' +
             '<div>' + esc(p.content || "(وسائط بلا نصّ)") + "</div>" +
-            meta("", p.author_name) + actions("posts", p.id) + "</div>";
+            meta(chLabel, p.author_name) + metaNote + actions("posts", p.id) + "</div>";
         }).join("");
       }
 

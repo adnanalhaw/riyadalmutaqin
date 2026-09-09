@@ -588,13 +588,72 @@ export async function setSavedInstagram(
   return { ig_user_id: igUserId, ig_username: username };
 }
 
-/** حساب «رسمي» للموقع: أوّل ربطٍ لمدير الموقع/الأدمن — يُستعمل حين لا يملك الناشر ربطاً. */
+/** حساب «رسمي» للموقع: ربط مدير الموقع/الأدمن — يُستعمل لنشر الصفحة الرسمية فقط. */
 export async function getSiteAccount(env: MetaEnv): Promise<MetaAccount | null> {
   return await env.DB.prepare(
     `SELECT m.page_id, m.page_name, m.page_token, m.ig_user_id, m.ig_username
        FROM meta_accounts m JOIN users u ON u.id = m.user_id
       WHERE u.role IN ('manager','admin') ORDER BY m.connected_at DESC LIMIT 1`,
   ).first<MetaAccount>();
+}
+
+/** المعلّم لم يربط صفحته الخاصة بعد. */
+export const ERR_TEACHER_META_UNLINKED =
+  "اربط صفحتك الخاصة من صفحة النشر (/teacher/publish).";
+
+/** المعلّم حاول التسليم إلى الصفحة الرسمية لرياض المتقين. */
+export const ERR_TEACHER_META_OFFICIAL =
+  "ممنوع النشر على الصفحة الرسمية لرياض المتقين — اربط صفحتك الخاصة.";
+
+/** هل الحساب الشخصي يطابق الصفحة/حساب انستقرام الرسمي؟ */
+export function isOfficialSiteAccount(
+  personal: Pick<MetaAccount, "page_id" | "ig_user_id"> | null,
+  official: Pick<MetaAccount, "page_id" | "ig_user_id"> | null,
+): boolean {
+  if (!personal || !official) return false;
+  if (personal.page_id && official.page_id && personal.page_id === official.page_id) return true;
+  if (personal.ig_user_id && official.ig_user_id && personal.ig_user_id === official.ig_user_id) {
+    return true;
+  }
+  return false;
+}
+
+/** هل يجوز للمعلّم ربط هذه الصفحة (ليست الرسمية)؟ */
+export function teacherMayLinkPage(pageId: string, officialPageId: string | null | undefined): boolean {
+  if (!officialPageId) return true;
+  return pageId !== officialPageId;
+}
+
+export type MetaDeliveryDecision =
+  | { ok: true; acc: MetaAccount; source: "personal" | "official" }
+  | { ok: false; error: string };
+
+/**
+ * يختار حساب Meta للتسليم:
+ * المعلّم → صفحته الشخصية فقط (ولا الصفحة الرسمية أبداً).
+ * المدير/الأدمن → حساب الموقع الرسمي.
+ */
+export function decideMetaDelivery(opts: {
+  authorRole: string | null | undefined;
+  personal: MetaAccount | null;
+  official: MetaAccount | null;
+}): MetaDeliveryDecision {
+  if (opts.authorRole === "teacher") {
+    if (!opts.personal?.page_token) {
+      return { ok: false, error: ERR_TEACHER_META_UNLINKED };
+    }
+    if (isOfficialSiteAccount(opts.personal, opts.official)) {
+      return { ok: false, error: ERR_TEACHER_META_OFFICIAL };
+    }
+    return { ok: true, acc: opts.personal, source: "personal" };
+  }
+  if (!opts.official?.page_token) {
+    return {
+      ok: false,
+      error: "لا حساب Meta رسمي مربوط — يربطه مدير الموقع من «ربط حسابات النشر» (/manager/connections).",
+    };
+  }
+  return { ok: true, acc: opts.official, source: "official" };
 }
 
 const isVideo = (url: string): boolean => /\/video\/|\.(mp4|mov|webm|m4v)(\?|$)/i.test(url);

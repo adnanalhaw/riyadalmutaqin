@@ -330,4 +330,17 @@
   FORMATS.forEach(function (f) { var b = $("fmt_" + f.key); if (b) b.addEventListener("change", drawPreview); });
 
   drawPreview();
+
+  fetch("/api/auth/me", { headers: { accept: "application/json" } })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      var staff = d && d.user && (d.user.role === "manager" || d.user.role === "admin");
+      document.querySelectorAll("[data-meta-label=facebook]").forEach(function (n) {
+        n.textContent = staff ? "فيسبوك — صفحة رياض المتقين الرسمية" : "فيسبوك — صفحتك الخاصة";
+      });
+      document.querySelectorAll("[data-meta-label=instagram]").forEach(function (n) {
+        n.textContent = staff ? "انستقرام — @almutaqyn الرسمي" : "انستقرام — صفحتك الخاصة";
+      });
+    })
+    .catch(function () {});
 })();

@@ -25,6 +25,30 @@
             <p>اكتب منشوراً واحداً وانشُره على عدّة قنوات دفعةً واحدة.</p>
           </div>
 
+          <div class="notice" id="fbFlash" hidden style="margin-bottom:1.2rem"></div>
+
+          <div class="card" id="metaConnectCard" style="margin-bottom:1.5rem" hidden>
+            <h3 style="color:var(--gold);margin-top:0" id="metaConnectTitle">فيسبوك وانستقرام — صفحتك الخاصة</h3>
+            <p class="muted" id="metaState" style="margin-top:0">جارٍ التحقّق من حالة الربط…</p>
+            <div id="metaActions" style="display:flex;gap:.6rem;flex-wrap:wrap"></div>
+            <div id="metaPagesWrap" hidden style="margin-top:1rem">
+              <label for="metaPageSel" style="font-weight:700">اختر صفحتك الخاصة (ليست صفحة رياض المتقين الرسمية)</label>
+              <select id="metaPageSel" style="margin-top:.4rem"></select>
+              <button class="btn btn-outline" id="metaPageSave" type="button" style="margin-top:.6rem">اعتمد هذه الصفحة</button>
+            </div>
+            <ol id="metaGuide" style="margin:1.1rem 0 0;padding-inline-start:1.3rem;line-height:1.9;font-size:.92rem">
+              <li>حوّل انستقرام لحساب احترافي إن لزم.</li>
+              <li>اربط انستقرام بصفحة فيسبوك <strong>الخاصة بك</strong>.</li>
+              <li>من الموقع اضغط «ربط فيسبوك/انستقرام».</li>
+              <li>وافق على الصلاحيات واختر صفحتك (مو صفحة رياض المتقين الرسمية).</li>
+              <li>بعد الربط يمكنك طلب نشر لمنتج الموقع على صفحتك بعد موافقة المدير.</li>
+            </ol>
+            <p class="muted" style="margin:.8rem 0 0;font-size:.88rem;line-height:1.8">
+              لا تنشر على الصفحة الرسمية لرياض المتقين — اختر صفحتك الخاصة فقط.
+              التسليم إلى فيسبوك/انستقرام يبقى بعد موافقة مدير الموقع، ويصل إلى صفحتك لا إلى <span dir="ltr">@almutaqyn</span>.
+            </p>
+          </div>
+
           <div class="card" style="margin-bottom:1.5rem">
             <form id="publishForm">
               <div class="field">
@@ -42,8 +66,8 @@
                 <div style="display:flex;flex-direction:column;gap:.6rem">
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" checked style="width:auto" /> يوتيوب</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="tiktok" style="width:auto" /> تيك توك</label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> فيسبوك</label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="instagram" style="width:auto" /> انستقرام</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> <span data-meta-label="facebook">فيسبوك — صفحتك الخاصة</span></label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="instagram" style="width:auto" /> <span data-meta-label="instagram">انستقرام — صفحتك الخاصة</span></label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="x" style="width:auto" /> إكس / تويتر</label>
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" style="width:auto" /> تيليجرام</label>
                 </div>
@@ -75,9 +99,9 @@
           </div>
 
           <div class="notice" id="channelsNote">
-            تيليجرام يُنشَر تلقائياً عند ضبط أسراره. فيسبوك وانستقرام يصلان إلى حساب
-            <strong>الموقع الرسمي فقط</strong> (يربطه مدير الموقع من «ربط حسابات النشر») —
-            منشورك كمعلّم يبقى بانتظار الموافقة قبل التسليم. يوتيوب يبقى على قناتك إن ربطتها.
+            تيليجرام يُنشَر تلقائياً عند ضبط أسراره. فيسبوك وانستقرام للمعلّم يصلان إلى
+            <strong>صفحتك الخاصة</strong> بعد موافقة المدير — لا إلى صفحة رياض المتقين الرسمية.
+            مدير الموقع ينشر على الحساب الرسمي من هنا. يوتيوب يبقى على قناتك إن ربطتها.
             بقيّة القنوات تُسلَّم عبر Webhook التوزيع عند ضبط سرّ PUBLISH_WEBHOOK_URL.
           </div>
         </section>
@@ -101,6 +125,117 @@
         queued: ["في قائمة الإصدار", "soon"],
         published: ["منشور", ""], failed: ["فشل", "live"],
       };
+      var isStaff = false;
+
+      function flashMeta() {
+        var q = new URLSearchParams(location.search);
+        var el = document.getElementById("fbFlash");
+        var map = {
+          connected: "تمّ ربط فيسبوك/انستقرام بصفحتك الخاصة ✓",
+          error: "تعذّر ربط فيسبوك — حاوِل مجدداً.",
+          official: "ممنوع ربط الصفحة الرسمية لرياض المتقين — اختر صفحتك الخاصة فقط.",
+          nopages: "لا توجد صفحة فيسبوك على حسابك — أنشئ صفحتك ثم أعِد الربط.",
+        };
+        var fb = q.get("fb");
+        if (fb && map[fb]) {
+          el.hidden = false;
+          el.textContent = map[fb];
+          history.replaceState({}, "", location.pathname);
+        }
+      }
+
+      function setMetaLabels(staff) {
+        document.querySelectorAll("[data-meta-label=facebook]").forEach(function (n) {
+          n.textContent = staff ? "فيسبوك — صفحة رياض المتقين الرسمية" : "فيسبوك — صفحتك الخاصة";
+        });
+        document.querySelectorAll("[data-meta-label=instagram]").forEach(function (n) {
+          n.textContent = staff ? "انستقرام — @almutaqyn الرسمي" : "انستقرام — صفحتك الخاصة";
+        });
+      }
+
+      function loadMetaConnect() {
+        var card = document.getElementById("metaConnectCard");
+        if (isStaff) {
+          card.hidden = true;
+          return;
+        }
+        card.hidden = false;
+        RM.api("/api/connections/status").then(function (res) {
+          var d = (res.d && res.d.meta) || {};
+          var state = document.getElementById("metaState");
+          var actions = document.getElementById("metaActions");
+          if (!d.configured) {
+            state.textContent = "لم تُضبَط مفاتيح Meta بعد — مدير الموقع يثبّتها من إعدادات النشر.";
+            actions.innerHTML = "";
+            return;
+          }
+          if (d.connected) {
+            var ig = d.instagram_linked
+              ? (" · انستقرام @" + (d.instagram || "—"))
+              : " · انستقرام غير مرتبط بعد (اضغط «تحديث انستقرام» بعد ربط صفحتك)";
+            state.innerHTML = "مربوط بصفحتك: <span class=\"gold\">" + esc(d.page || "—") + "</span>" + esc(ig);
+            actions.innerHTML =
+              '<button class="btn btn-outline" id="igRefresh" type="button">تحديث انستقرام</button>' +
+              '<button class="btn btn-ghost" id="fbDisconnect" type="button">فكّ الربط</button>';
+            var disc = document.getElementById("fbDisconnect");
+            if (disc) disc.addEventListener("click", function () {
+              if (!confirm("سيتوقّف النشر على صفحتك الخاصة. متأكّد؟")) return;
+              RM.api("/api/connections/meta/disconnect", { method: "POST" }).then(loadMetaConnect);
+            });
+            var ref = document.getElementById("igRefresh");
+            if (ref) ref.addEventListener("click", function () {
+              state.textContent = "لحظات…";
+              RM.api("/api/connections/meta/refresh-instagram", { method: "POST" }).then(function (r) {
+                var msg = document.getElementById("fbFlash");
+                msg.hidden = false;
+                msg.textContent = (r.ok && r.d.ok && r.d.instagram_linked)
+                  ? ("ظهر حساب انستقرام: @" + (r.d.instagram || "—") + " ✓")
+                  : ((r.d && r.d.error) || "تعذّر تحديث انستقرام.");
+                loadMetaConnect();
+              });
+            });
+            loadTeacherPages();
+          } else {
+            state.textContent = "غير مربوط. اربط صفحتك الخاصة — لا صفحة رياض المتقين الرسمية.";
+            actions.innerHTML = '<a class="btn btn-primary" href="/api/connections/meta/connect">ربط فيسبوك/انستقرام</a>';
+            document.getElementById("metaPagesWrap").hidden = true;
+          }
+        });
+      }
+
+      function loadTeacherPages() {
+        RM.api("/api/connections/meta/pages").then(function (res) {
+          if (!res.ok || !res.d.ok) return;
+          var pages = res.d.pages || [];
+          if (pages.length < 2) return;
+          var sel = document.getElementById("metaPageSel");
+          sel.innerHTML = pages.map(function (p) {
+            return '<option value="' + esc(p.id) + '"' + (p.id === res.d.current ? " selected" : "") + ">" + esc(p.name) + "</option>";
+          }).join("");
+          document.getElementById("metaPagesWrap").hidden = false;
+        });
+      }
+
+      document.getElementById("metaPageSave").addEventListener("click", function () {
+        var flash = document.getElementById("fbFlash");
+        flash.hidden = false;
+        flash.textContent = "لحظات…";
+        RM.api("/api/connections/meta/select", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ page_id: document.getElementById("metaPageSel").value }),
+        }).then(function (res) {
+          flash.textContent = (res.ok && res.d.ok) ? "اعتُمدت صفحتك ✓" : ((res.d && res.d.error) || "تعذّر التبديل.");
+          loadMetaConnect();
+        });
+      });
+
+      RM.getMe().then(function (u) {
+        isStaff = !!(u && (u.role === "manager" || u.role === "admin"));
+        setMetaLabels(isStaff);
+        flashMeta();
+        loadMetaConnect();
+      });
 
       // الزرّ المضغوط يحدّد الإجراء (now/schedule)
       var pendingAction = "now";
@@ -175,8 +310,9 @@
             return;
           }
           if (!d.telegram) {
-            document.getElementById("channelsNote").textContent =
-              "تيليجرام غير مُعَدّ بعد. فيسبوك وانستقرام يصلان إلى حساب الموقع الرسمي (يربطه مدير الموقع). يوتيوب على قناتك إن ربطتها.";
+            document.getElementById("channelsNote").textContent = isStaff
+              ? "تيليجرام غير مُعَدّ بعد. فيسبوك وانستقرام يصِلان إلى حساب الموقع الرسمي (من ربط حسابات النشر). يوتيوب على قناتك إن ربطتها."
+              : "تيليجرام غير مُعَدّ بعد. فيسبوك وانستقرام يصِلان إلى صفحتك الخاصة بعد موافقة المدير — لا إلى الصفحة الرسمية. يوتيوب على قناتك إن ربطتها.";
           }
           var list = d.posts || [];
           if (!list.length) { body.innerHTML = '<tr><td colspan="5" class="muted">لا توجد منشورات بعد.</td></tr>'; return; }
