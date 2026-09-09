@@ -9,12 +9,13 @@
 const GRAPH = "https://graph.facebook.com/v21.0";
 
 /**
- * صلاحيات OAuth لصفحات فيسبوك — تطبيق رياض المتقين نشر (1051352257686375).
+ * صلاحيات OAuth لصفحات فيسبوك وانستقرام — تطبيق رياض المتقين نشر (1051352257686375).
  * حالة الاستخدام «Manage everything on your Page» تتطلّب `business_management`
  * إضافةً إلى صلاحيات الصفحات: بدونها `/me/accounts` يُرجع قائمة فارغة إذا كانت
  * الصفحة مربوطة بحساب أعمال (Meta Business) — وهذا حال صفحة رياض المتقين.
- * لا تُطلب أي صلاحية انستقرام في الحوار: `instagram_business_basic` يرفضه Meta
- * على هذا التطبيق (Invalid Scopes)، و`instagram_content_publish` غير مفعّل بعد.
+ * صلاحيات انستقرام الأعمال جاهزة للاختبار على التطبيق؛ نفضّل
+ * `instagram_business_basic` و`instagram_business_content_publish` على
+ * `instagram_basic` / `instagram_content_publish` المهجورتين.
  * ربط صفحة→حساب انستقرام الأعمال يبقى عبر حقل Graph `instagram_business_account`.
  */
 const SCOPES = [
@@ -22,6 +23,8 @@ const SCOPES = [
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
+  "instagram_business_basic",
+  "instagram_business_content_publish",
 ].join(",");
 
 export interface MetaEnv {

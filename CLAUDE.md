@@ -44,7 +44,7 @@ npm run db:migrate:local   # ترحيلات محلية
    والاعتماد معاً.
 6. **RTL:** النصوص عربية، وكل كلمة إنجليزية بين قوسين على سطر منفصل في الردود.
 
-## الحالة الآن (2026-09-08 — صلاحيات Meta تشمل business_management)
+## الحالة الآن (2026-09-09 — صلاحيات Meta تشمل انستقرام الأعمال)
 
 **✅ مبنيّ ومنشور ويعمل:**
 - **الأدوار الأربعة:** متعلّم · معلّم · مدير الموقع (manager) · مدير النظام (admin)
@@ -91,9 +91,10 @@ npm run db:migrate:local   # ترحيلات محلية
    `RESEND_API_KEY` (بريد استعادة كلمة المرور). كلها يثبّتها النشر الآلي من أسرار
    GitHub، وغيابها لا يكسر شيئاً — تظهر القناة «غير مُفعَّلة» بصدق.
    **صلاحيات Meta الحالية:** `business_management` · `pages_show_list` ·
-   `pages_manage_posts` · `pages_read_engagement`. لا تُطلب صلاحيات انستقرام
-   في OAuth — الاكتشاف عبر حقل Graph `instagram_business_account`. نشر انستقرام
-   مؤجَّل حتى يفعّل Meta صلاحية `instagram_content_publish` على التطبيق.
+   `pages_manage_posts` · `pages_read_engagement` · `instagram_business_basic` ·
+   `instagram_business_content_publish`. الاكتشاف عبر حقل Graph
+   `instagram_business_account`. بعد إعادة الربط من `/manager/connections`
+   يظهر انستقرام إن كان مربوطاً بالصفحة في Meta.
 7. **البث المباشر (المرحلة ٧)** — لم يُبنَ.
 
 ## الوثائق المرجعية
