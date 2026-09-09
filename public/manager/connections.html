@@ -59,7 +59,10 @@
               <div class="body">
                 <h3>انستقرام — حساب أعمال</h3>
                 <span class="pill off" id="igPill">جارٍ الفحص…</span>
-                <p class="muted-s" id="igInfo">يُكتشف تلقائياً من صفحتك بعد ربط فيسبوك (حقل Graph). أعِد الربط ليُطلب صلاحيات انستقرام الأعمال ويظهر الحساب.</p>
+                <p class="muted-s" id="igInfo">يُربط عبر صفحة فيسبوك في Meta (حقل Graph، بلا صلاحية انستقرام في OAuth). نشر انستقرام مؤجَّل إن رفض Meta صلاحياته في الحوار.</p>
+              </div>
+              <div class="act">
+                <button class="btn btn-outline" id="igRefresh" hidden type="button">تحديث انستقرام</button>
               </div>
             </div>
 
@@ -166,13 +169,16 @@
           }
 
           // ── انستقرام ──
+          el("igRefresh").hidden = true;
           if (!d.meta.configured) setPill("igPill", "no", "غير مُفعَّل");
           else if (d.meta.instagram_linked) {
             setPill("igPill", "on", "مربوط ✓");
-            el("igInfo").textContent = "الحساب: @" + (d.meta.instagram || "—");
+            el("igInfo").textContent = "الحساب: @" + (d.meta.instagram || "—") + " — عبر صفحة فيسبوك في Meta.";
+            el("igRefresh").hidden = false;
           } else if (d.meta.connected) {
             setPill("igPill", "off", "غير مرتبط بالصفحة");
-            el("igInfo").textContent = "حوّل انستقرام لحساب Business واربطه بصفحة فيسبوك، ثمّ أعِد الربط.";
+            el("igInfo").textContent = "اربط انستقرام بالصفحة في Meta ثم اضغط «تحديث انستقرام» — بلا إعادة OAuth.";
+            el("igRefresh").hidden = false;
           } else {
             setPill("igPill", "off", "يتبع فيسبوك");
           }
@@ -223,6 +229,19 @@
           api(path, { method: "POST" }).then(function () { location.reload(); });
         };
       }
+      el("igRefresh").addEventListener("click", function () {
+        var m = el("msg"); m.hidden = false; m.textContent = "لحظات…";
+        api("/api/connections/meta/refresh-instagram", { method: "POST" }).then(function (res) {
+          if (res.ok && res.d.ok && res.d.instagram_linked) {
+            m.textContent = "ظهر حساب انستقرام: @" + (res.d.instagram || "—") + " ✓";
+          } else if (res.ok && res.d.ok) {
+            m.textContent = "الصفحة مربوطة، لكن Graph لم يجد حساب انستقرام عليها.";
+          } else {
+            m.textContent = (res.d && res.d.error) || "تعذّر تحديث انستقرام.";
+          }
+          load();
+        });
+      });
       el("fbDisconnect").addEventListener("click", disconnect("/api/connections/meta/disconnect", "فيسبوك وانستقرام"));
       el("ytDisconnect").addEventListener("click", disconnect("/api/connections/youtube/disconnect", "يوتيوب"));
     })();

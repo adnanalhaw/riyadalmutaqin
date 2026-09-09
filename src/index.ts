@@ -2147,6 +2147,24 @@ async function handleConnections(
     }
   }
 
+  if (route === "POST /api/connections/meta/refresh-instagram") {
+    const acc = await meta.getAccount(env, user.id);
+    if (!acc?.page_id || !acc.page_token) {
+      return json({ ok: false, error: "اربط فيسبوك أولاً ثم حدّث انستقرام." }, 400);
+    }
+    try {
+      const ig = await meta.refreshSavedInstagram(env, user.id);
+      await audit(env, user.email, "meta.refresh_instagram", ig.ig_user_id ?? "");
+      return json({
+        ok: true,
+        instagram: ig.ig_username,
+        instagram_linked: Boolean(ig.ig_user_id),
+      });
+    } catch (err) {
+      return json({ ok: false, error: err instanceof Error ? err.message : "تعذّر تحديث انستقرام." }, 502);
+    }
+  }
+
   if (route === "POST /api/connections/meta/disconnect") {
     await env.DB.prepare("DELETE FROM meta_accounts WHERE user_id = ?").bind(user.id).run();
     await audit(env, user.email, "meta.disconnect", "");
