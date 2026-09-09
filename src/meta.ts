@@ -9,23 +9,24 @@
 const GRAPH = "https://graph.facebook.com/v21.0";
 
 /**
- * صلاحيات OAuth لصفحات فيسبوك وانستقرام — تطبيق رياض المتقين نشر (1051352257686375).
+ * صلاحيات OAuth لصفحات فيسبوك — تطبيق رياض المتقين نشر (1051352257686375).
  * حالة الاستخدام «Manage everything on your Page» تتطلّب `business_management`
  * إضافةً إلى صلاحيات الصفحات: بدونها `/me/accounts` يُرجع قائمة فارغة إذا كانت
  * الصفحة مربوطة بحساب أعمال (Meta Business) — وهذا حال صفحة رياض المتقين.
- * صلاحيات انستقرام الأعمال جاهزة للاختبار على التطبيق؛ نفضّل
- * `instagram_business_basic` و`instagram_business_content_publish` على
- * `instagram_basic` / `instagram_content_publish` المهجورتين.
- * ربط صفحة→حساب انستقرام الأعمال يبقى عبر حقل Graph `instagram_business_account`.
+ * لا تُطلب أي صلاحية انستقرام في الحوار: `instagram_business_basic` و
+ * `instagram_business_content_publish` يرفضهما Meta على هذا التطبيق
+ * (Invalid Scopes) حتى إن ظهرت «جاهزة للاختبار» في لوحة المطوّر.
+ * ربط صفحة→حساب انستقرام الأعمال يبقى عبر حقل Graph `instagram_business_account`
+ * بعد موافقة الصفحة — بلا صلاحية انستقرام في OAuth.
  */
-const SCOPES = [
+export const META_OAUTH_SCOPES = [
   "business_management",
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
-  "instagram_business_basic",
-  "instagram_business_content_publish",
-].join(",");
+] as const;
+
+const SCOPES = META_OAUTH_SCOPES.join(",");
 
 export interface MetaEnv {
   DB: D1Database;
@@ -212,25 +213,36 @@ export async function explainEmptyPages(userToken: string): Promise<EmptyPagesWh
   return "empty";
 }
 
+/**
+ * يقرأ حساب انستقرام الأعمال من حقل الصفحة `instagram_business_account`.
+ * يرمي عند خطأ Graph؛ يعيد null إن لم يكن الحساب مربوطاً بالصفحة.
+ */
+export async function fetchInstagram(
+  pageId: string,
+  pageToken: string,
+): Promise<{ id: string; username: string | null } | null> {
+  const d = await graphJson<{ instagram_business_account?: { id: string } }>(
+    await fetch(
+      `${GRAPH}/${pageId}?fields=instagram_business_account&access_token=${encodeURIComponent(pageToken)}`,
+    ),
+    "جلب انستقرام",
+  );
+  const igId = d.instagram_business_account?.id;
+  if (!igId) return null;
+  const info = await graphJson<{ username?: string }>(
+    await fetch(`${GRAPH}/${igId}?fields=username&access_token=${encodeURIComponent(pageToken)}`),
+    "جلب اسم انستقرام",
+  );
+  return { id: igId, username: info.username ?? null };
+}
+
 /** حساب انستقرام الأعمال المرتبط بالصفحة (اختياري — قد لا يكون مربوطاً). */
 export async function getInstagram(
   pageId: string,
   pageToken: string,
 ): Promise<{ id: string; username: string | null } | null> {
   try {
-    const d = await graphJson<{ instagram_business_account?: { id: string } }>(
-      await fetch(
-        `${GRAPH}/${pageId}?fields=instagram_business_account&access_token=${encodeURIComponent(pageToken)}`,
-      ),
-      "جلب انستقرام",
-    );
-    const igId = d.instagram_business_account?.id;
-    if (!igId) return null;
-    const info = await graphJson<{ username?: string }>(
-      await fetch(`${GRAPH}/${igId}?fields=username&access_token=${encodeURIComponent(pageToken)}`),
-      "جلب اسم انستقرام",
-    );
-    return { id: igId, username: info.username ?? null };
+    return await fetchInstagram(pageId, pageToken);
   } catch {
     return null; // غياب انستقرام لا يُفشل ربط فيسبوك
   }
@@ -259,6 +271,24 @@ export async function getAccount(env: MetaEnv, userId: number): Promise<MetaAcco
   )
     .bind(userId)
     .first<MetaAccount>();
+}
+
+/** يعيد اكتشاف انستقرام للصفحة المحفوظة ويحدّث `meta_accounts` دون OAuth جديد. */
+export async function refreshSavedInstagram(
+  env: MetaEnv,
+  userId: number,
+): Promise<{ ig_user_id: string | null; ig_username: string | null }> {
+  const acc = await getAccount(env, userId);
+  if (!acc?.page_id || !acc.page_token) {
+    throw new Error("لا صفحة فيسبوك مربوطة.");
+  }
+  const ig = await fetchInstagram(acc.page_id, acc.page_token);
+  await env.DB.prepare(
+    "UPDATE meta_accounts SET ig_user_id = ?, ig_username = ? WHERE user_id = ?",
+  )
+    .bind(ig?.id ?? null, ig?.username ?? null, userId)
+    .run();
+  return { ig_user_id: ig?.id ?? null, ig_username: ig?.username ?? null };
 }
 
 /** حساب «رسمي» للموقع: أوّل ربطٍ لمدير الموقع/الأدمن — يُستعمل حين لا يملك الناشر ربطاً. */
