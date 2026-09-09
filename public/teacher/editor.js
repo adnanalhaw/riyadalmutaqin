@@ -9,10 +9,14 @@
   var FU = window.FFmpegUtil || {};
 
   var FORMATS = [
-    { key: "square", label: "مربّع 1:1",  w: 1080, h: 1080, chips: "إنستغرام · فيسبوك · تيليجرام · X" },
-    { key: "story",  label: "ستوري 9:16", w: 1080, h: 1920, chips: "تيك توك · ريلز · شورتس · ستوري" },
-    { key: "wide",   label: "أفقي 16:9",  w: 1920, h: 1080, chips: "يوتيوب · فيديو" },
+    { key: "story",  label: "ريلز 9:16", w: 1080, h: 1920, frame: "reel",
+      chips: "انستقرام ريلز · فيسبوك", caption: "معاينة انستقرام ريلز / فيسبوك" },
+    { key: "square", label: "منشور مربّع 1:1", w: 1080, h: 1080, frame: "square",
+      chips: "فيسبوك/انستقرام (تغذية)", caption: "معاينة منشور مربّع — فيسبوك/انستقرام (تغذية)" },
+    { key: "wide",   label: "أفقي 16:9", w: 1920, h: 1080, frame: "wide",
+      chips: "يوتيوب (لاحقاً)", caption: "معاينة أفقية — يوتيوب (لاحقاً)" },
   ];
+  var MIN_VIDEO_BYTES = 1024;
 
   var ff = null, loadPromise = null, busy = false, results = [], chosenFile = null;
 
@@ -25,7 +29,23 @@
   function setBar(p) { $("bar").style.width = Math.max(0, Math.min(100, p)) + "%"; }
   function human(b) { if (b == null) return ""; var u = ["B","KB","MB","GB"], i = 0, n = b; while (n >= 1024 && i < 3) { n /= 1024; i++; } return (Math.round(n*10)/10) + " " + u[i]; }
   function selectedFormats() { return FORMATS.filter(function (f) { var b = $("fmt_" + f.key); return b && b.checked; }); }
+  function previewFormat() {
+    var sel = selectedFormats();
+    var reel = sel.filter(function (f) { return f.key === "story"; })[0];
+    return reel || sel[0] || FORMATS[0];
+  }
   function val(id) { var e = $(id); return e ? (e.value || "").trim() : ""; }
+  function copyBytes(data) {
+    var src = data instanceof Uint8Array ? data : new Uint8Array(data);
+    var out = new Uint8Array(src.byteLength);
+    out.set(src);
+    return out;
+  }
+  function revokeResultUrls() {
+    results.forEach(function (r) {
+      if (r && r.url) { try { URL.revokeObjectURL(r.url); } catch (e) {} }
+    });
+  }
 
   function fields() {
     var hon = val("hon");
@@ -165,10 +185,12 @@
   // ===== المعاينة =====
   function drawPreview() {
     var c = $("preview"); if (!c) return;
-    var fmt = selectedFormats()[0] || FORMATS[0];
+    var fmt = previewFormat();
     if (c.width !== fmt.w || c.height !== fmt.h) { c.width = fmt.w; c.height = fmt.h; }
     paint(c.getContext("2d"), fmt.w, fmt.h);
-    var lbl = $("previewLbl"); if (lbl) lbl.textContent = "معاينة: " + fmt.label;
+    var lbl = $("previewLbl"); if (lbl) lbl.textContent = fmt.caption || ("معاينة: " + fmt.label);
+    var frame = $("previewFrame");
+    if (frame) frame.className = "studio-frame studio-frame--" + (fmt.frame || "reel");
   }
   function paintToBlob(fmt) {
     var c = document.createElement("canvas"); c.width = fmt.w; c.height = fmt.h;
@@ -206,7 +228,14 @@
     runVideo(fmts);
   });
 
-  function startRun() { busy = true; results = []; setBar(0); $("downloadWrap").innerHTML = ""; $("publishPanel").hidden = true; }
+  function startRun() {
+    busy = true;
+    revokeResultUrls();
+    results = [];
+    setBar(0);
+    $("downloadWrap").innerHTML = "";
+    $("publishPanel").hidden = true;
+  }
   function endRun() { busy = false; }
 
   function runVideo(fmts) {
@@ -222,13 +251,28 @@
             return paintToBlob(fmt)
               .then(function (bg) { return FU.fetchFile(bg).then(function (d) { return ff.writeFile("bg.png", d); }); })
               .then(function () {
-                return ff.exec(["-loop","1","-framerate","2","-i","bg.png","-i",inName,
-                  "-map","0:v","-map","1:a","-c:v","libx264","-tune","stillimage","-preset","veryfast",
-                  "-pix_fmt","yuv420p","-r","2","-g","20","-c:a","aac","-b:a","128k","-shortest","-movflags","+faststart","out.mp4"]);
+                // H.264 Baseline + AAC-LC + 25fps + faststart — قابل للتشغيل على سفاري/كروم الجوال
+                // (2fps + stillimage كان يُظهر أيقونة الوسائط المعطّلة على iOS).
+                return ff.exec([
+                  "-loop", "1", "-framerate", "25", "-i", "bg.png", "-i", inName,
+                  "-map", "0:v", "-map", "1:a",
+                  "-c:v", "libx264", "-profile:v", "baseline", "-level", "4.0",
+                  "-tune", "stillimage", "-preset", "veryfast",
+                  "-pix_fmt", "yuv420p", "-r", "25", "-g", "50",
+                  "-c:a", "aac", "-b:a", "128k", "-ac", "2", "-ar", "44100",
+                  "-shortest", "-movflags", "+faststart", "out.mp4",
+                ]);
               })
-              .then(function () { return ff.readFile("out.mp4"); })
+              .then(function (code) {
+                if (code !== 0 && code != null) throw new Error("فشل ترميز الفيديو (رمز " + code + ").");
+                return ff.readFile("out.mp4");
+              })
               .then(function (data) {
-                var blob = new Blob([data], { type: "video/mp4" });
+                var bytes = copyBytes(data);
+                var blob = new Blob([bytes], { type: "video/mp4" });
+                if (!blob.size || blob.size < MIN_VIDEO_BYTES) {
+                  throw new Error("الملف الناتج فارغ أو تالف. أعد الإنتاج.");
+                }
                 results.push({ fmt: fmt, blob: blob, url: URL.createObjectURL(blob), type: "video" });
                 try { ff.deleteFile("out.mp4"); } catch (e) {}
               });
@@ -255,12 +299,45 @@
       a.textContent = "⤓ تنزيل (" + human(r.blob.size) + ")";
       head.appendChild(tag); head.appendChild(a);
       blk.appendChild(head);
-      var v = document.createElement("video"); v.src = r.url; v.controls = true;
-      var vert = r.fmt.h > r.fmt.w;
-      v.style.cssText = "border-radius:12px;background:#000;display:block;" + (vert ? "max-height:420px;width:auto;margin-inline:auto" : "width:100%");
-      blk.appendChild(v);
+
+      if (!r.blob || r.blob.size < MIN_VIDEO_BYTES) {
+        var empty = document.createElement("p");
+        empty.className = "studio-result-err";
+        empty.textContent = "الملف الناتج فارغ أو تالف. أعد الإنتاج.";
+        blk.appendChild(empty);
+        wrapEl.appendChild(blk);
+        return;
+      }
+
+      var frame = document.createElement("div");
+      frame.className = "studio-frame studio-frame--" + (r.fmt.frame || "reel");
+      var v = document.createElement("video");
+      v.controls = true;
+      v.preload = "metadata";
+      v.playsInline = true;
+      v.setAttribute("playsinline", "");
+      v.setAttribute("webkit-playsinline", "");
+      v.setAttribute("controls", "");
+      v.addEventListener("error", function () {
+        if (blk.querySelector(".studio-result-err")) return;
+        var err = document.createElement("p");
+        err.className = "studio-result-err";
+        err.textContent = "تعذّر تشغيل المعاينة في المتصفّح. استخدم زر التنزيل.";
+        blk.appendChild(err);
+      });
+      var src = document.createElement("source");
+      src.src = r.url;
+      src.type = "video/mp4";
+      v.appendChild(src);
+      v.src = r.url;
+      try { v.load(); } catch (e) {}
+      frame.appendChild(v);
+      blk.appendChild(frame);
+      var cap = document.createElement("span");
+      cap.className = "studio-result-cap";
+      cap.textContent = r.fmt.caption || r.fmt.label;
+      blk.appendChild(cap);
       wrapEl.appendChild(blk);
-      try { a.click(); } catch (e) {}
     });
     if (results.length) $("publishPanel").hidden = false;
   }
@@ -286,9 +363,9 @@
     var toSite = dests.indexOf("site") !== -1;
     var channels = dests.filter(function (d) { return d !== "site"; });
 
-    // للموقع: نختار صيغة فيديو أفقيّة إن وُجدت. للقنوات: أفضل ناتج (فيديو وإلا صورة).
+    // للموقع: أفقي إن وُجد. للقنوات (فيسبوك/انستقرام): ريلز 9:16 أولاً.
     var siteVid = results.filter(function (r) { return r.type === "video" && r.fmt.key === "wide"; })[0] || results.filter(function (r) { return r.type === "video"; })[0];
-    var media = results.filter(function (r) { return r.fmt.key === "wide"; })[0] || results[0];
+    var media = results.filter(function (r) { return r.fmt.key === "story"; })[0] || results.filter(function (r) { return r.type === "video"; })[0] || results[0];
 
     $("pubBtn").disabled = true; pubShow("جارٍ الرفع والنشر…");
     var jobs = [];
@@ -336,10 +413,10 @@
     .then(function (d) {
       var staff = d && d.user && (d.user.role === "manager" || d.user.role === "admin");
       document.querySelectorAll("[data-meta-label=facebook]").forEach(function (n) {
-        n.textContent = staff ? "فيسبوك — صفحة رياض المتقين الرسمية" : "فيسبوك — صفحتك الخاصة";
+        n.textContent = staff ? "فيسبوك — صفحة رياض المتقين الرسمية (جاهز)" : "فيسبوك — صفحتك الخاصة (جاهز)";
       });
       document.querySelectorAll("[data-meta-label=instagram]").forEach(function (n) {
-        n.textContent = staff ? "انستقرام — @almutaqyn الرسمي" : "انستقرام — صفحتك الخاصة";
+        n.textContent = staff ? "انستقرام ريلز — @almutaqyn الرسمي (جاهز)" : "انستقرام ريلز — صفحتك الخاصة (جاهز)";
       });
     })
     .catch(function () {});
