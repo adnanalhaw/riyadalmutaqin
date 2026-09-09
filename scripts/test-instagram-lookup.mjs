@@ -12,6 +12,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const metaSrc = readFileSync(join(root, "src/meta.ts"), "utf8");
 const indexSrc = readFileSync(join(root, "src/index.ts"), "utf8");
 const connHtml = readFileSync(join(root, "public/manager/connections.html"), "utf8");
+const publishHtml = readFileSync(join(root, "public/teacher/publish.html"), "utf8");
 const deployYml = readFileSync(join(root, ".github/workflows/deploy.yml"), "utf8");
 
 /** نسخة موازية لـ pickPageInstagramUser في src/meta.ts — أي اختلاف يُعدّ انحداراً في الترتيب. */
@@ -76,9 +77,29 @@ test("رسالة الفراغ تميّز مركز الحسابات عن حساب
 test("refreshSavedInstagram يرمي InstagramNotLinkedError بدل null صامت", () => {
   assert.match(metaSrc, /throw new InstagramNotLinkedError/);
   assert.match(metaSrc, /fetchInstagram\(acc\.page_id, acc\.page_token, acc\.user_token\)/);
+  assert.match(metaSrc, /decideInstagramRefresh/);
   assert.match(indexSrc, /isInstagramNotLinkedError/);
   assert.match(indexSrc, /getInstagram\(page\.id, page\.access_token, userToken\)/);
   assert.match(indexSrc, /getInstagram\(page\.id, page\.access_token, acc\.user_token\)/);
+});
+
+test("refresh-instagram يحافظ على الربط اليدوي عندما يفرغ Graph", () => {
+  assert.match(metaSrc, /IG_GRAPH_EMPTY_MANUAL_KEPT/);
+  assert.match(metaSrc, /action: "keep_manual"/);
+  assert.match(metaSrc, /source: "manual"/);
+  assert.match(metaSrc, /decideSavedInstagramFields/);
+  assert.doesNotMatch(
+    metaSrc.slice(metaSrc.indexOf("export async function refreshSavedInstagram")),
+    /ig\?\.id \?\? null/,
+  );
+  assert.match(indexSrc, /kept_manual: true/);
+  assert.match(indexSrc, /graph_empty: true/);
+  assert.match(indexSrc, /ig\.source === "manual"/);
+  assert.match(connHtml, /kept_manual/);
+  assert.match(connHtml, /الربط اليدوي ما زال فعّالاً/);
+  assert.match(publishHtml, /kept_manual/);
+  assert.match(publishHtml, /الربط اليدوي ما زال فعّالاً/);
+  assert.equal(extractExportString(metaSrc, "IG_GRAPH_EMPTY_MANUAL_KEPT"), IG_GRAPH_EMPTY_MANUAL_KEPT);
 });
 
 test("set-instagram مسار احتياطي لمدير الموقع/النظام بعد فشل Graph", () => {
@@ -222,6 +243,9 @@ function looksLikeIgAppPermissionDenied(message) {
   return /\(#10\)/.test(message) || /application does not have permission/i.test(message);
 }
 
+const IG_GRAPH_EMPTY_MANUAL_KEPT =
+  "واجهة Graph ما زالت فارغة (ربط مركز الحسابات أو حساب غير جاهز للواجهة)، لكن الربط اليدوي ما زال فعّالاً ولم يُمسَح.";
+
 const IG_SCOPE_PUBLISH_ERROR =
   "توكن الصفحة لا يملك صلاحية نشر انستقرام (instagram_content_publish / instagram_business_content_publish). الربط اليدوي يحفظ المعرّف ويظهر الحساب مربوطاً في الموقع، لكن Meta ترفض إنشاء/نشر الحاوية إلى أن يُضبط Facebook Login for Business (سرّ FB_LOGIN_CONFIG_ID من لوحة المطوّر) ثم يُعاد ربط فيسبوك من /manager/connections. لا تُضاف تلك الصلاحيات إلى OAuth العادي لأنها تُرفض فوراً (Invalid Scopes).";
 
@@ -355,4 +379,76 @@ test("pickPageInstagramUser يعيد null عندما تفرغ كل الحقول 
   assert.equal(pickPageInstagramUser({}), null);
   assert.equal(pickPageInstagramUser({ instagram_business_account: null }), null);
   assert.equal(pickPageInstagramUser({ instagram_accounts: { data: [] } }), null);
+});
+
+/** نسخة موازية لـ decideInstagramRefresh في src/meta.ts. */
+function decideInstagramRefresh(graph, saved) {
+  if (graph?.id) {
+    return { action: "update", ig_user_id: graph.id, ig_username: graph.username ?? null };
+  }
+  if (saved.ig_user_id) {
+    return { action: "keep_manual", ig_user_id: saved.ig_user_id, ig_username: saved.ig_username };
+  }
+  return { action: "none" };
+}
+
+function decideSavedInstagramFields(incoming, existing) {
+  if (incoming.ig_user_id) {
+    return { ig_user_id: incoming.ig_user_id, ig_username: incoming.ig_username ?? null };
+  }
+  if (existing?.ig_user_id) {
+    return { ig_user_id: existing.ig_user_id, ig_username: existing.ig_username };
+  }
+  return { ig_user_id: null, ig_username: null };
+}
+
+test("decideInstagramRefresh يحدّث عندما يجد Graph حساباً", () => {
+  const got = decideInstagramRefresh(
+    { id: "17841405822304914", username: "almutaqyn" },
+    { ig_user_id: "old-manual", ig_username: "old" },
+  );
+  assert.deepEqual(got, {
+    action: "update",
+    ig_user_id: "17841405822304914",
+    ig_username: "almutaqyn",
+  });
+});
+
+test("decideInstagramRefresh يبقي المعرّف اليدوي إن فرغ Graph", () => {
+  const got = decideInstagramRefresh(null, {
+    ig_user_id: "17841405822304914",
+    ig_username: "almutaqyn",
+  });
+  assert.deepEqual(got, {
+    action: "keep_manual",
+    ig_user_id: "17841405822304914",
+    ig_username: "almutaqyn",
+  });
+});
+
+test("decideInstagramRefresh لا يكتب null إن فرغ Graph ولا ربط يدوي", () => {
+  assert.deepEqual(decideInstagramRefresh(null, { ig_user_id: null, ig_username: null }), {
+    action: "none",
+  });
+});
+
+test("decideSavedInstagramFields يحافظ على اليدوي إن فرغ Graph عند إعادة ربط فيسبوك", () => {
+  assert.deepEqual(
+    decideSavedInstagramFields(
+      { ig_user_id: null, ig_username: null },
+      { ig_user_id: "17841405822304914", ig_username: "almutaqyn" },
+    ),
+    { ig_user_id: "17841405822304914", ig_username: "almutaqyn" },
+  );
+  assert.deepEqual(
+    decideSavedInstagramFields(
+      { ig_user_id: "new-ig", ig_username: "from_graph" },
+      { ig_user_id: "17841405822304914", ig_username: "almutaqyn" },
+    ),
+    { ig_user_id: "new-ig", ig_username: "from_graph" },
+  );
+  assert.deepEqual(decideSavedInstagramFields({ ig_user_id: null }, null), {
+    ig_user_id: null,
+    ig_username: null,
+  });
 });

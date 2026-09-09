@@ -154,5 +154,6 @@ test("واجهة المعلّم تعرض دليل الربط الشخصي وتح
   assert.match(publishHtml, /بعد الربط يمكنك طلب نشر لمنتج الموقع على صفحتك بعد موافقة المدير/);
   assert.match(publishHtml, /لا تنشر على الصفحة الرسمية لرياض المتقين/);
   assert.match(publishHtml, /صفحتك الخاصة/);
+  assert.match(publishHtml, /kept_manual/);
   assert.match(connHtml, /صفحة المعلّم الخاصة|صفحته الخاصة/);
 });

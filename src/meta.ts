@@ -270,6 +270,10 @@ export const BUSINESS_IG_EDGES = [
 export const IG_NOT_API_READY =
   "واجهة Graph لم تجد حساب انستقرام احترافياً مربوطاً بالصفحة بعد تجربة instagram_business_account و connected_instagram_account و instagram_accounts وأصول الأعمال. ظهور الحساب «متصلاً» في إعدادات الصفحة قد يكون ربط مركز الحسابات فقط — وهذا لا يكفي للنشر عبر الواجهة. حوّل انستقرام إلى حساب احترافي (أعمال أو منشئ) واربطه بالصفحة من إعدادات انستقرام ← الصفحة (لا من مركز الحسابات وحده)، ثم اضغط «تحديث انستقرام». إن بقي الحساب ظاهراً في Meta Business Suite والحقول فارغة هنا، الصق معرّف حساب انستقرام للأعمال يدوياً من إعدادات الأعمال ← حسابات انستقرام.";
 
+/** Graph فارغ بعد التحديث، لكن معرّفاً يدوياً كان محفوظاً فلا يُمسَح. */
+export const IG_GRAPH_EMPTY_MANUAL_KEPT =
+  "واجهة Graph ما زالت فارغة (ربط مركز الحسابات أو حساب غير جاهز للواجهة)، لكن الربط اليدوي ما زال فعّالاً ولم يُمسَح.";
+
 /** هل الحوار يستخدم Facebook Login for Business (`config_id`) بدل scope الكلاسيكي. */
 export function usesLoginForBusiness(env?: Pick<MetaEnv, "FB_LOGIN_CONFIG_ID"> | null): boolean {
   return Boolean(env?.FB_LOGIN_CONFIG_ID?.trim());
@@ -352,6 +356,47 @@ export function isInstagramNotLinkedError(err: unknown): err is InstagramNotLink
     err instanceof InstagramNotLinkedError ||
     (err instanceof Error && err.name === "InstagramNotLinkedError")
   );
+}
+
+export type SavedIgFields = {
+  ig_user_id: string | null;
+  ig_username: string | null;
+};
+
+export type InstagramRefreshDecision =
+  | { action: "update"; ig_user_id: string; ig_username: string | null }
+  | { action: "keep_manual"; ig_user_id: string; ig_username: string | null }
+  | { action: "none" };
+
+/**
+ * قرار كتابة انستقرام بعد اكتشاف Graph:
+ * وُجد حساب → حدّث · لم يُوجد ومعرّف يدوي محفوظ → أبقِ · وإلا لا تكتب null.
+ */
+export function decideInstagramRefresh(
+  graph: InstagramUser | null,
+  saved: SavedIgFields,
+): InstagramRefreshDecision {
+  if (graph?.id) {
+    return { action: "update", ig_user_id: graph.id, ig_username: graph.username ?? null };
+  }
+  if (saved.ig_user_id) {
+    return { action: "keep_manual", ig_user_id: saved.ig_user_id, ig_username: saved.ig_username };
+  }
+  return { action: "none" };
+}
+
+/** عند حفظ الصفحة: Graph يحدّث إن وُجد، وإلا يُحفَظ المعرّف اليدوي السابق. */
+export function decideSavedInstagramFields(
+  incoming: { ig_user_id?: string | null; ig_username?: string | null },
+  existing: SavedIgFields | null,
+): SavedIgFields {
+  if (incoming.ig_user_id) {
+    return { ig_user_id: incoming.ig_user_id, ig_username: incoming.ig_username ?? null };
+  }
+  if (existing?.ig_user_id) {
+    return { ig_user_id: existing.ig_user_id, ig_username: existing.ig_username };
+  }
+  return { ig_user_id: null, ig_username: null };
 }
 
 type GraphIgNode = { id?: string; username?: string | null };
@@ -549,6 +594,8 @@ export async function saveAccount(
   page: PageInfo,
   userToken?: string,
 ): Promise<void> {
+  const existing = await getAccount(env, userId);
+  const ig = decideSavedInstagramFields(page, existing);
   await env.DB.prepare(
     `INSERT INTO meta_accounts (user_id, page_id, page_name, page_token, ig_user_id, ig_username, user_token, connected_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -556,7 +603,7 @@ export async function saveAccount(
        page_token=excluded.page_token, ig_user_id=excluded.ig_user_id, ig_username=excluded.ig_username,
        user_token=COALESCE(excluded.user_token, meta_accounts.user_token), connected_at=datetime('now')`,
   )
-    .bind(userId, page.id, page.name, page.access_token, page.ig_user_id ?? null, page.ig_username ?? null, userToken ?? null)
+    .bind(userId, page.id, page.name, page.access_token, ig.ig_user_id, ig.ig_username, userToken ?? null)
     .run();
 }
 
@@ -568,23 +615,46 @@ export async function getAccount(env: MetaEnv, userId: number): Promise<MetaAcco
     .first<MetaAccount>();
 }
 
+export type RefreshInstagramResult =
+  | { ig_user_id: string; ig_username: string | null; source: "graph" }
+  | {
+      ig_user_id: string;
+      ig_username: string | null;
+      source: "manual";
+      why: "accounts_center_or_not_professional";
+      message: string;
+    };
+
 /** يعيد اكتشاف انستقرام للصفحة المحفوظة ويحدّث `meta_accounts` دون OAuth جديد. */
 export async function refreshSavedInstagram(
   env: MetaEnv,
   userId: number,
-): Promise<{ ig_user_id: string; ig_username: string | null }> {
+): Promise<RefreshInstagramResult> {
   const acc = await getAccount(env, userId);
   if (!acc?.page_id || !acc.page_token) {
     throw new Error("لا صفحة فيسبوك مربوطة.");
   }
   const ig = await fetchInstagram(acc.page_id, acc.page_token, acc.user_token);
-  await env.DB.prepare(
-    "UPDATE meta_accounts SET ig_user_id = ?, ig_username = ? WHERE user_id = ?",
-  )
-    .bind(ig?.id ?? null, ig?.username ?? null, userId)
-    .run();
-  if (!ig) throw new InstagramNotLinkedError();
-  return { ig_user_id: ig.id, ig_username: ig.username };
+  const decision = decideInstagramRefresh(ig, acc);
+  if (decision.action === "update") {
+    await env.DB.prepare(
+      "UPDATE meta_accounts SET ig_user_id = ?, ig_username = ? WHERE user_id = ?",
+    )
+      .bind(decision.ig_user_id, decision.ig_username, userId)
+      .run();
+    return { ig_user_id: decision.ig_user_id, ig_username: decision.ig_username, source: "graph" };
+  }
+  if (decision.action === "keep_manual") {
+    // لا نكتب null فوق الربط اليدوي — المسح فقط عند فصل Meta صراحةً.
+    return {
+      ig_user_id: decision.ig_user_id,
+      ig_username: decision.ig_username,
+      source: "manual",
+      why: "accounts_center_or_not_professional",
+      message: IG_GRAPH_EMPTY_MANUAL_KEPT,
+    };
+  }
+  throw new InstagramNotLinkedError();
 }
 
 /**

@@ -188,9 +188,11 @@
               RM.api("/api/connections/meta/refresh-instagram", { method: "POST" }).then(function (r) {
                 var msg = document.getElementById("fbFlash");
                 msg.hidden = false;
-                msg.textContent = (r.ok && r.d.ok && r.d.instagram_linked)
-                  ? ("ظهر حساب انستقرام: @" + (r.d.instagram || "—") + " ✓")
-                  : ((r.d && r.d.error) || "تعذّر تحديث انستقرام.");
+                msg.textContent = (r.ok && r.d.ok && r.d.kept_manual)
+                  ? ((r.d.error) || "واجهة Graph فارغة، والربط اليدوي ما زال فعّالاً.")
+                  : (r.ok && r.d.ok && r.d.instagram_linked)
+                    ? ("ظهر حساب انستقرام: @" + (r.d.instagram || "—") + " ✓")
+                    : ((r.d && r.d.error) || "تعذّر تحديث انستقرام.");
                 loadMetaConnect();
               });
             });

@@ -2216,6 +2216,17 @@ async function handleConnections(
     try {
       const ig = await meta.refreshSavedInstagram(env, user.id);
       await audit(env, user.email, "meta.refresh_instagram", ig.ig_user_id);
+      if (ig.source === "manual") {
+        return json({
+          ok: true,
+          instagram: ig.ig_username,
+          instagram_linked: true,
+          kept_manual: true,
+          graph_empty: true,
+          why: ig.why,
+          error: ig.message,
+        });
+      }
       return json({
         ok: true,
         instagram: ig.ig_username,

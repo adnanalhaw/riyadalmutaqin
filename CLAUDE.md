@@ -109,6 +109,8 @@ npm run db:migrate:local   # ترحيلات محلية
    ثم `instagram_accounts` ثم أصول الأعمال إن وُجد `business_management`.
    `POST /api/connections/meta/refresh-instagram` يعيد الاكتشاف دون OAuth
    (المسار الأساسي)، ويميّز ربط مركز الحسابات عن حساب أعمال جاهز للواجهة.
+   إن فرغ Graph وبقي معرّف يدوي محفوظاً: **لا يُمسَح** — الردّ `kept_manual`
+   و`instagram_linked: true`. المسح فقط عند فكّ ربط فيسبوك.
    احتياطي المدير: `POST /api/connections/meta/set-instagram` يلصق
    `ig_user_id` (أرقام) و`ig_username` اختيارياً إن ظهر الحساب في Meta UI
    وبقيت حقول Graph فارغة — يظهر `instagram_linked`. نشر Graph يحتاج صلاحية
