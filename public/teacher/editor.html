@@ -10,6 +10,56 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .studio-frame {
+      display: inline-block;
+      max-width: 100%;
+      background: #07182C;
+      overflow: hidden;
+      position: relative;
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+    }
+    .studio-frame canvas,
+    .studio-frame video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #000;
+    }
+    .studio-frame--reel {
+      width: min(280px, 72vw);
+      aspect-ratio: 9 / 16;
+      border-radius: 28px;
+      border: 3px solid var(--gold-dim);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35), inset 0 0 0 2px rgba(217, 178, 76, 0.15);
+    }
+    .studio-frame--square {
+      width: min(360px, 86vw);
+      aspect-ratio: 1;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+    .studio-frame--wide {
+      width: min(560px, 100%);
+      aspect-ratio: 16 / 9;
+      border-radius: 16px;
+      border: 1px solid var(--border);
+    }
+    .studio-result-cap {
+      display: block;
+      text-align: center;
+      margin-top: .55rem;
+      font-size: .85rem;
+      color: var(--muted);
+    }
+    .studio-result-err {
+      margin: .6rem 0 0;
+      color: #f3c6c6;
+      font-size: .88rem;
+    }
+    .studio-fmt-later { opacity: .72; }
+  </style>
 </head>
 <body>
   <div data-header></div>
@@ -22,7 +72,7 @@
         <section>
           <div class="page-head" style="padding-top:0">
             <h1>المونتاج</h1>
-            <p>صمّم بطاقةً موحّدةً (شعار + اسم الملقي + عنوان الدرس) وأنتج منها <strong>فيديو</strong> (صوت + الخلفية المزخرفة) بعدّة مقاسات للمنصّات — كل ذلك داخل متصفّحك.</p>
+            <p>صمّم بطاقةً موحّدةً (شعار + اسم الملقي + عنوان الدرس) وأنتج منها <strong>ريلز 9:16</strong> لانستقرام وفيسبوك (صوت + الخلفية المزخرفة) — كل ذلك داخل متصفّحك.</p>
           </div>
 
           <!-- البيانات -->
@@ -60,11 +110,11 @@
           <!-- المقاسات -->
           <div class="card" style="margin-bottom:1.2rem">
             <h3 style="color:var(--gold);margin-top:0">٢) المقاسات</h3>
-            <p class="muted" style="font-size:.85rem;margin:.2rem 0 .8rem">تُنتَج المحدّدة دفعةً واحدة، كلٌّ يغطّي كامل إطار منصّته.</p>
+            <p class="muted" style="font-size:.85rem;margin:.2rem 0 .8rem">الأولوية الآن: ريلز 9:16 لانستقرام وفيسبوك (1080×1920). المقاسات الأخرى اختيارية.</p>
             <div style="display:flex;flex-direction:column;gap:.6rem">
-              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_square" checked style="width:auto" /> مربّع 1:1 — إنستغرام / فيسبوك / تيليجرام / X</label>
-              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_story" checked style="width:auto" /> ستوري 9:16 — تيك توك / ريلز / شورتس / ستوري</label>
-              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_wide" style="width:auto" /> أفقي 16:9 — يوتيوب / فيديو</label>
+              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_story" checked style="width:auto" /> <strong>ريلز 9:16</strong> — انستقرام ريلز + فيسبوك (1080×1920)</label>
+              <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_square" style="width:auto" /> منشور مربّع 1:1 — فيسبوك/انستقرام (تغذية) — اختياري</label>
+              <label class="studio-fmt-later" style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="fmt_wide" style="width:auto" /> أفقي 16:9 — يوتيوب (لاحقاً)</label>
             </div>
           </div>
 
@@ -80,10 +130,11 @@
 
           <!-- المعاينة -->
           <div class="card" style="margin-bottom:1.2rem">
-            <span class="muted" style="font-size:.85rem" id="previewLbl">معاينة</span>
+            <span class="muted" style="font-size:.85rem" id="previewLbl">معاينة ريلز 9:16 — انستقرام / فيسبوك</span>
             <div style="text-align:center;margin-top:.6rem">
-              <canvas id="preview" width="1080" height="1080"
-                style="max-width:100%;max-height:480px;width:auto;display:inline-block;border:1px solid var(--border);border-radius:12px;background:#07182C"></canvas>
+              <div id="previewFrame" class="studio-frame studio-frame--reel">
+                <canvas id="preview" width="1080" height="1920"></canvas>
+              </div>
             </div>
           </div>
 
@@ -109,17 +160,18 @@
                 <label>اختر وجهات النشر</label>
                 <div style="display:flex;flex-direction:column;gap:.6rem">
                   <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" id="dest_site" value="site" checked style="width:auto" /> الموقع — مكتبة المقاطع</label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" style="width:auto" /> تيليجرام</label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" style="width:auto" /> يوتيوب</label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="tiktok" style="width:auto" /> تيك توك</label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> <span data-meta-label="facebook">فيسبوك — صفحتك الخاصة</span></label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="instagram" style="width:auto" /> <span data-meta-label="instagram">انستقرام — صفحتك الخاصة</span></label>
-                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="x" style="width:auto" /> إكس / تويتر</label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="facebook" style="width:auto" /> <span data-meta-label="facebook">فيسبوك — جاهز (ريلز/منشور)</span></label>
+                  <label style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="instagram" style="width:auto" /> <span data-meta-label="instagram">انستقرام ريلز — جاهز</span></label>
+                  <label class="studio-fmt-later" style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="telegram" style="width:auto" /> تيليجرام</label>
+                  <label class="studio-fmt-later" style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="youtube" style="width:auto" /> يوتيوب (لاحقاً)</label>
+                  <label class="studio-fmt-later" style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="tiktok" style="width:auto" /> تيك توك (لاحقاً)</label>
+                  <label class="studio-fmt-later" style="display:flex;align-items:center;gap:.6rem;margin:0"><input type="checkbox" value="x" style="width:auto" /> إكس / تويتر (لاحقاً)</label>
                 </div>
               </div>
               <button class="btn btn-primary" id="pubBtn" type="button">نشر إلى المحدّد</button>
               <div class="notice" id="pubMsg" hidden style="margin-top:1rem"></div>
               <p class="muted" style="font-size:.82rem;margin:.7rem 0 0;line-height:1.8">
+                <strong>فيسبوك وانستقرام ريلز</strong> هما القناتان الجاهزتان الآن (بعد الربط).
                 <strong>الموقع</strong> و<strong>تيليجرام</strong> يُنشَران مباشرةً.
                 فيسبوك وانستقرام للمعلّم يصلان إلى <strong>صفحتك الخاصة</strong> بعد موافقة المدير
                 (اربطها من <a class="gold" href="/teacher/publish">صفحة النشر</a>) — لا إلى صفحة رياض المتقين الرسمية.
