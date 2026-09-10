@@ -206,17 +206,102 @@
     }
     return holder;
   }
+  function gtHideCss() {
+    // أخفِ شريط Google وبلوناته فقط. لا تُخفَى .skiptranslate الجذر ولا
+    // iframe.skiptranslate — ذلك يوقف محرّك الترجمة (عطل سابق).
+    return [
+      ".goog-te-banner-frame,",
+      "iframe.goog-te-banner-frame,",
+      ".VIpgJd-ZVi9od-ORHb,",
+      ".VIpgJd-ZVi9od-ORHb-OEVmcd,",
+      "[class*=\"VIpgJd-ZVi9od-ORHb\"]{",
+      "display:none!important;visibility:hidden!important;",
+      "height:0!important;max-height:0!important;overflow:hidden!important}",
+      "#goog-gt-tt,.goog-te-balloon-frame,.goog-tooltip,.goog-tooltip:hover{",
+      "display:none!important;visibility:hidden!important}",
+      ".goog-logo-link,.goog-te-gadget-icon,.goog-te-gadget>span{",
+      "display:none!important}",
+      "html body{top:0!important;position:static!important}",
+      "font{background:transparent!important;box-shadow:none!important}",
+      ".goog-text-highlight{background:none!important;box-shadow:none!important}",
+    ].join("");
+  }
   function injectGtCss() {
     if (document.getElementById("gt-hide-ui")) return;
     var st = document.createElement("style");
     st.id = "gt-hide-ui";
-    // أخفِ شريط Google العلوي فقط. إخفاء iframe.skiptranslate يوقف الترجمة.
-    st.textContent =
-      ".goog-te-banner-frame.skiptranslate{display:none!important}" +
-      "body{top:0!important;position:static!important}" +
-      "font{background:transparent!important;box-shadow:none!important}" +
-      ".goog-text-highlight{background:none!important;box-shadow:none!important}";
-    document.head.appendChild(st);
+    st.textContent = gtHideCss();
+    (document.head || document.documentElement).appendChild(st);
+  }
+  function hideGtEl(el) {
+    if (!el || !el.style) return;
+    el.style.setProperty("display", "none", "important");
+    el.style.setProperty("visibility", "hidden", "important");
+    el.style.setProperty("height", "0", "important");
+    el.style.setProperty("max-height", "0", "important");
+    el.style.setProperty("overflow", "hidden", "important");
+  }
+  function isGtEngineRoot(el) {
+    if (!el) return false;
+    if (el.id === "google_translate_element" || (el.className && /\bgt-slot\b/.test(String(el.className)))) return true;
+    return !!(el.querySelector && el.querySelector(".goog-te-combo, .goog-te-menu-frame, #google_translate_element"));
+  }
+  var gtHiding = false;
+  function hideGtChrome() {
+    if (gtHiding) return;
+    gtHiding = true;
+    try {
+      var sel = [
+        ".goog-te-banner-frame",
+        "iframe.goog-te-banner-frame",
+        ".VIpgJd-ZVi9od-ORHb",
+        ".VIpgJd-ZVi9od-ORHb-OEVmcd",
+        "[class*=\"VIpgJd-ZVi9od-ORHb\"]",
+        "#goog-gt-tt",
+        ".goog-te-balloon-frame",
+        ".goog-tooltip",
+      ].join(",");
+      var nodes = document.querySelectorAll(sel);
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        if (isGtEngineRoot(el)) continue;
+        hideGtEl(el);
+        var p = el.parentElement;
+        // غلاف الشريط غالباً skiptranslate مباشر تحت body — لا تُخفَى جذر المحرّك.
+        if (p && p !== document.body && /\bskiptranslate\b/.test(String(p.className || "")) && !isGtEngineRoot(p)) {
+          hideGtEl(p);
+        }
+      }
+      var frames = document.querySelectorAll("iframe");
+      for (var j = 0; j < frames.length; j++) {
+        var fr = frames[j];
+        var cls = String(fr.className || "");
+        var id = String(fr.id || "");
+        if (/\bgoog-te-menu-frame\b/.test(cls)) continue;
+        if (/\bgoog-te-banner-frame\b/.test(cls) || /VIpgJd-ZVi9od-ORHb/.test(cls) || /\.container$/.test(id)) {
+          hideGtEl(fr);
+        }
+      }
+      if (document.body) {
+        document.body.style.setProperty("top", "0", "important");
+        document.body.style.setProperty("position", "static", "important");
+      }
+    } finally {
+      gtHiding = false;
+    }
+  }
+  function watchGtChrome() {
+    if (window.__gtChromeWatch) return;
+    window.__gtChromeWatch = true;
+    hideGtChrome();
+    var mo = new MutationObserver(function () { hideGtChrome(); });
+    mo.observe(document.documentElement, { childList: true, subtree: true });
+    if (document.body) mo.observe(document.body, { attributes: true, attributeFilter: ["style"] });
+    var n = 0;
+    var t = setInterval(function () {
+      hideGtChrome();
+      if (++n > 40) clearInterval(t);
+    }, 250);
   }
   function fireComboChange(combo, code) {
     combo.value = code;
@@ -298,6 +383,7 @@
     window.__gtLoaded = true;
     ensureGtHolder();
     injectGtCss();
+    watchGtChrome();
     window.googleTranslateElementInit = function () {
       try {
         new google.translate.TranslateElement({
@@ -306,6 +392,7 @@
           autoDisplay: false,
         }, "google_translate_element");
       } catch (e) { /* عنصر الترجمة قد يفشل بصمت إن حُجب السكربت */ }
+      hideGtChrome();
       forceCombo(code);
     };
     var s = document.createElement("script");
@@ -316,8 +403,10 @@
 
   // أعد الكوكي مبكّراً (قبل جلب الجلسة) حتى يراها عنصر الترجمة عند التحميل.
   // الاتجاه يبقى rtl حتى تكتمل الترجمة (applyDir بعد class=translated-*).
+  injectGtCss();
   if (readStoredLang() !== "ar") {
     try { setGoogTransCookie("/ar/" + readStoredLang()); } catch (e) { /* تجاهل */ }
+    watchGtChrome();
   }
 
   function buildLangMenu(menu) {

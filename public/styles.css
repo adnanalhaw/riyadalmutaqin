@@ -217,6 +217,39 @@ table.t th { color: var(--gold); font-weight: 700; }
 .lang-code { font-size: .72rem; font-weight: 800; letter-spacing: .04em; color: var(--gold); text-transform: uppercase; }
 .gt-slot { position: absolute; inset-inline-start: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: visible; }
 
+/* شريط وترويسة Google Translate — لا تُخفَى .skiptranslate الجذر (توقف المحرّك) */
+.goog-te-banner-frame,
+iframe.goog-te-banner-frame,
+.VIpgJd-ZVi9od-ORHb,
+.VIpgJd-ZVi9od-ORHb-OEVmcd,
+[class*="VIpgJd-ZVi9od-ORHb"] {
+  display: none !important;
+  visibility: hidden !important;
+  height: 0 !important;
+  max-height: 0 !important;
+  overflow: hidden !important;
+}
+#goog-gt-tt,
+.goog-te-balloon-frame,
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+  visibility: hidden !important;
+}
+.goog-logo-link,
+.goog-te-gadget-icon,
+.goog-te-gadget > span {
+  display: none !important;
+}
+html body {
+  top: 0 !important;
+  position: static !important;
+}
+.goog-text-highlight {
+  background: none !important;
+  box-shadow: none !important;
+}
+
 /* خرائط Leaflet (مساجد / قبلة) — هوية الموقع، دون تغطية الترويسة */
 .site-map {
   width: 100%;
