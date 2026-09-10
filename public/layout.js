@@ -42,10 +42,12 @@
   }
 
   function authArea(user) {
-    var lang = '<div class="lang-wrap" style="position:relative">' +
-      '<button class="btn btn-ghost" id="langBtn" title="اللغة / Language" aria-haspopup="true" aria-expanded="false" style="padding:.45rem .6rem">🌐</button>' +
-      '<div id="langMenu" class="lang-menu" hidden></div></div>' +
-      '<div id="google_translate_element" style="display:none"></div>';
+    var cur = readStoredLang();
+    var curLabel = langLabel(cur);
+    var lang = '<div class="lang-wrap notranslate" translate="no" style="position:relative">' +
+      '<button class="btn btn-ghost" id="langBtn" title="اللغة / Language — ' + curLabel + '" aria-haspopup="true" aria-expanded="false" style="padding:.45rem .6rem">🌐 <span class="lang-code">' + escLang(cur) + "</span></button>" +
+      '<div id="langMenu" class="lang-menu notranslate" translate="no" hidden></div></div>' +
+      '<div id="google_translate_element" class="gt-slot" aria-hidden="true"></div>';
     if (user) {
       var home = user.role === "manager" ? "/manager"
         : user.role === "admin" ? "/admin"
@@ -74,51 +76,252 @@
     ["am", "አማርኛ"], ["fil", "Filipino"], ["sv", "Svenska"], ["fi", "Suomi"],
   ];
 
+  // العربية الأصل. أي لغة أخرى تُحفَظ عندنا ثم تُمرَّر لـ Google Translate
+  // عبر googtrans + الهاش + اختيار القائمة — الثلاث معاً لأن الكوكي وحدها
+  // تفشل غالباً (نسخ متعارضة على النطاق / CSP / توقيت التحميل).
+  var LANG_STORE = "rm_lang";
+  var RTL_LANGS = { ar: 1, ur: 1, fa: 1, he: 1, ps: 1, ku: 1 };
+
+  function escLang(s) {
+    return String(s || "ar").replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function langLabel(code) {
+    for (var i = 0; i < LANGS.length; i++) if (LANGS[i][0] === code) return LANGS[i][1];
+    return code || "العربية";
+  }
   function getCookie(n) {
     var m = document.cookie.match(new RegExp("(?:^|; )" + n + "=([^;]*)"));
     return m ? decodeURIComponent(m[1]) : "";
   }
-  function setLangCookie(val) {
-    // googtrans مقروءٌ من Google Translate لتطبيق الترجمة بعد إعادة التحميل.
-    var host = location.hostname;
-    document.cookie = "googtrans=" + val + "; path=/";
-    document.cookie = "googtrans=" + val + "; path=/; domain=" + host;
-    document.cookie = "googtrans=" + val + "; path=/; domain=." + host;
+  function cookieFlags() {
+    return (location.protocol === "https:" ? "; Secure" : "") + "; SameSite=Lax";
   }
-  function currentLang() {
-    var c = getCookie("googtrans"); // مثل /ar/en
-    var parts = c.split("/");
-    return parts[2] || "ar";
+  function cookieDomains() {
+    var host = location.hostname;
+    var list = ["", host];
+    if (host && host.indexOf(".") !== -1 && host !== "localhost") {
+      list.push("." + host);
+      var parts = host.split(".");
+      if (parts.length >= 2) {
+        var root = parts.slice(-2).join(".");
+        list.push(root);
+        list.push("." + root);
+      }
+    }
+    var out = [];
+    var seen = {};
+    list.forEach(function (d) {
+      if (seen[d]) return;
+      seen[d] = 1;
+      out.push(d);
+    });
+    return out;
+  }
+  function writeCookie(name, value, extra) {
+    document.cookie = name + "=" + value + "; path=/; max-age=31536000" + cookieFlags() + (extra || "");
+  }
+  function expireCookie(name, domain) {
+    var extra = domain ? "; domain=" + domain : "";
+    document.cookie = name + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0" + extra;
+    document.cookie = name + "=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0" + extra + cookieFlags();
+  }
+  function clearGoogTransCookies() {
+    cookieDomains().forEach(function (d) { expireCookie("googtrans", d); });
+  }
+  function setGoogTransCookie(val) {
+    // امسح النسخ القديمة أولاً حتى لا يقرأ Google قيمة فارغة من نطاق آخر.
+    clearGoogTransCookies();
+    writeCookie("googtrans", val);
+    cookieDomains().forEach(function (d) {
+      if (d) writeCookie("googtrans", val, "; domain=" + d);
+    });
+  }
+  function persistOurLang(code) {
+    try { localStorage.setItem(LANG_STORE, code); } catch (e) { /* تجاهل */ }
+    writeCookie(LANG_STORE, encodeURIComponent(code));
+  }
+  function clearOurLang() {
+    try { localStorage.removeItem(LANG_STORE); } catch (e) { /* تجاهل */ }
+    cookieDomains().forEach(function (d) { expireCookie(LANG_STORE, d); });
+  }
+  function langFromGoogTrans(raw) {
+    var parts = String(raw || "").split("/");
+    return parts[2] || "";
+  }
+  function readStoredLang() {
+    try {
+      var ls = localStorage.getItem(LANG_STORE);
+      if (ls) return ls;
+    } catch (e) { /* تجاهل */ }
+    var ours = getCookie(LANG_STORE);
+    if (ours) return ours;
+    return langFromGoogTrans(getCookie("googtrans")) || "ar";
+  }
+  function applyDir(code, force) {
+    var rtl = !!RTL_LANGS[code || "ar"];
+    // لا نقلب الاتجاه قبل أن يترجم Google وإلا ينفصل رسم العربية.
+    var translated = /translated/i.test(document.documentElement.className || "");
+    if (force || code === "ar" || translated) {
+      document.documentElement.lang = code || "ar";
+      document.documentElement.dir = rtl ? "rtl" : "ltr";
+    }
+  }
+  function stripGoogTransHash() {
+    if (location.hash && /googtrans/i.test(location.hash)) {
+      try { history.replaceState(null, "", location.pathname + location.search); } catch (e) { location.hash = ""; }
+    }
+  }
+  function setGoogTransHash(code) {
+    var want = "#googtrans(ar|" + code + ")";
+    if (location.hash === want) return;
+    try { history.replaceState(null, "", location.pathname + location.search + want); } catch (e) { location.hash = want.slice(1); }
   }
   function chooseLang(code) {
+    if (!code) code = "ar";
     if (code === "ar") {
-      setLangCookie(""); // إزالة الترجمة
+      clearOurLang();
+      clearGoogTransCookies();
+      stripGoogTransHash();
+      applyDir("ar", true);
     } else {
-      setLangCookie("/ar/" + code);
+      persistOurLang(code);
+      setGoogTransCookie("/ar/" + code);
+      setGoogTransHash(code);
     }
     location.reload();
   }
+  function includedLangCodes() {
+    return LANGS.filter(function (l) { return l[0] !== "ar"; }).map(function (l) { return l[0]; }).join(",");
+  }
+  function ensureGtHolder() {
+    var holder = document.getElementById("google_translate_element");
+    if (!holder) {
+      holder = document.createElement("div");
+      holder.id = "google_translate_element";
+      holder.className = "gt-slot";
+      holder.setAttribute("aria-hidden", "true");
+      document.body.appendChild(holder);
+    }
+    return holder;
+  }
+  function injectGtCss() {
+    if (document.getElementById("gt-hide-ui")) return;
+    var st = document.createElement("style");
+    st.id = "gt-hide-ui";
+    // أخفِ شريط Google العلوي فقط. إخفاء iframe.skiptranslate يوقف الترجمة.
+    st.textContent =
+      ".goog-te-banner-frame.skiptranslate{display:none!important}" +
+      "body{top:0!important;position:static!important}" +
+      "font{background:transparent!important;box-shadow:none!important}" +
+      ".goog-text-highlight{background:none!important;box-shadow:none!important}";
+    document.head.appendChild(st);
+  }
+  function fireComboChange(combo, code) {
+    combo.value = code;
+    try {
+      var ev = document.createEvent("HTMLEvents");
+      ev.initEvent("change", true, true);
+      combo.dispatchEvent(ev);
+    } catch (e) {
+      combo.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+  function clickGtMenu(code) {
+    var label = langLabel(code);
+    var frames = document.querySelectorAll(".goog-te-menu-frame, iframe.goog-te-menu-frame");
+    for (var i = 0; i < frames.length; i++) {
+      try {
+        var doc = frames[i].contentDocument || frames[i].contentWindow.document;
+        var items = doc.querySelectorAll(".goog-te-menu2-item span.text, .goog-te-menu2-item");
+        for (var j = 0; j < items.length; j++) {
+          var t = (items[j].textContent || "").trim();
+          if (t === label || t.toLowerCase() === String(code).toLowerCase()) {
+            items[j].click();
+            return true;
+          }
+        }
+      } catch (e) { /* إطار ترجمة قد يكون عبر أصل آخر */ }
+    }
+    return false;
+  }
+  function forceCombo(code) {
+    var tries = 0;
+    (function tick() {
+      var combo = document.querySelector(".goog-te-combo");
+      if (combo) fireComboChange(combo, code);
+      clickGtMenu(code);
+      if (/translated/i.test(document.documentElement.className || "")) {
+        applyDir(code, true);
+        return;
+      }
+      if (++tries < 60) setTimeout(tick, 200);
+    })();
+  }
+  function retranslate() {
+    var code = readStoredLang();
+    if (!code || code === "ar") return;
+    var combo = document.querySelector(".goog-te-combo");
+    if (!combo) { forceCombo(code); return; }
+    var v = combo.value || code;
+    combo.value = "";
+    combo.dispatchEvent(new Event("change", { bubbles: true }));
+    setTimeout(function () {
+      combo.value = v;
+      combo.dispatchEvent(new Event("change", { bubbles: true }));
+    }, 80);
+  }
+  window.rmRetranslate = retranslate;
 
   // إن كانت هناك لغةٌ مختارة (غير العربية) نُحمّل سكربت Google ليطبّق الترجمة.
   function applyStoredLang() {
-    if (currentLang() === "ar") return;
-    if (window.__gtLoaded) return;
+    var code = readStoredLang();
+    applyDir(code);
+    if (code === "ar") {
+      // إن بقي googtrans من زيارة سابقة أزلْه حتى لا تُترجم الصفحة دون قصد.
+      if (getCookie("googtrans")) clearGoogTransCookies();
+      stripGoogTransHash();
+      return;
+    }
+    persistOurLang(code);
+    setGoogTransCookie("/ar/" + code);
+    setGoogTransHash(code);
+    var mo = new MutationObserver(function () {
+      if (/translated/i.test(document.documentElement.className || "")) {
+        applyDir(code, true);
+        mo.disconnect();
+      }
+    });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    if (window.__gtLoaded) { forceCombo(code); return; }
     window.__gtLoaded = true;
-    var holder = document.getElementById("google_translate_element");
-    if (!holder) { holder = document.createElement("div"); holder.id = "google_translate_element"; holder.style.display = "none"; document.body.appendChild(holder); }
-    var st = document.createElement("style");
-    st.textContent = ".goog-te-banner-frame,.skiptranslate>iframe{display:none!important}body{top:0!important;position:static!important}#goog-gt-tt,.goog-te-balloon-frame{display:none!important}";
-    document.head.appendChild(st);
+    ensureGtHolder();
+    injectGtCss();
     window.googleTranslateElementInit = function () {
-      try { new google.translate.TranslateElement({ pageLanguage: "ar", autoDisplay: false }, "google_translate_element"); } catch (e) { /* تجاهل */ }
+      try {
+        new google.translate.TranslateElement({
+          pageLanguage: "ar",
+          includedLanguages: includedLangCodes(),
+          autoDisplay: false,
+        }, "google_translate_element");
+      } catch (e) { /* عنصر الترجمة قد يفشل بصمت إن حُجب السكربت */ }
+      forceCombo(code);
     };
     var s = document.createElement("script");
     s.src = "https://translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+    s.async = true;
     document.head.appendChild(s);
   }
 
+  // أعد الكوكي مبكّراً (قبل جلب الجلسة) حتى يراها عنصر الترجمة عند التحميل.
+  // الاتجاه يبقى rtl حتى تكتمل الترجمة (applyDir بعد class=translated-*).
+  if (readStoredLang() !== "ar") {
+    try { setGoogTransCookie("/ar/" + readStoredLang()); } catch (e) { /* تجاهل */ }
+  }
+
   function buildLangMenu(menu) {
-    var cur = currentLang();
+    var cur = readStoredLang();
     menu.innerHTML = LANGS.map(function (l) {
       var on = l[0] === cur;
       return '<button type="button" class="lang-opt' + (on ? " on" : "") + '" data-lang="' + l[0] + '">' +

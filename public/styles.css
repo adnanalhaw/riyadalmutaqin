@@ -214,6 +214,57 @@ table.t th { color: var(--gold); font-weight: 700; }
 .lang-opt { text-align: start; background: transparent; border: 0; color: var(--text, #eaf3ec); padding: .5rem .6rem; border-radius: 8px; cursor: pointer; font: inherit; font-size: .9rem; }
 .lang-opt:hover { background: var(--gold-faint); color: var(--gold); }
 .lang-opt.on { color: var(--gold); font-weight: 700; }
+.lang-code { font-size: .72rem; font-weight: 800; letter-spacing: .04em; color: var(--gold); text-transform: uppercase; }
+.gt-slot { position: absolute; inset-inline-start: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: visible; }
+
+/* خرائط Leaflet (مساجد / قبلة) — هوية الموقع، دون تغطية الترويسة */
+.site-map {
+  width: 100%;
+  height: min(52vh, 440px);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: var(--navy-card);
+  position: relative;
+  z-index: 1;
+  margin-bottom: 1.2rem;
+  box-shadow: var(--shadow);
+}
+.site-map-sm { height: min(42vh, 280px); margin-top: 1.2rem; }
+.site-map .leaflet-container { background: #0a3320; font-family: inherit; }
+.site-map .leaflet-tile { filter: saturate(.55) brightness(.72) sepia(.25) hue-rotate(70deg); }
+.site-map .leaflet-control-attribution {
+  background: rgba(5, 29, 18, .82) !important;
+  color: var(--muted);
+  font-size: 10px;
+}
+.site-map .leaflet-control-attribution a { color: var(--gold-soft); }
+.site-map .leaflet-control-zoom a {
+  background: var(--navy-card) !important;
+  color: var(--gold) !important;
+  border-color: var(--border) !important;
+}
+.site-map .leaflet-popup-content-wrapper, .site-map .leaflet-popup-tip {
+  background: var(--navy-card);
+  color: var(--ink);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+}
+.site-map .leaflet-popup-content { margin: .7rem .85rem; font-family: inherit; }
+.site-map .leaflet-popup-content strong { color: var(--gold-soft); }
+.map-user-pin, .map-mosque-pin, .map-kaaba-pin { background: none !important; border: 0 !important; }
+.map-user-dot {
+  display: block; width: 18px; height: 18px; border-radius: 50%;
+  background: var(--gold); border: 3px solid #fff;
+  box-shadow: 0 0 0 6px rgba(217, 178, 76, .28);
+}
+.map-mosque-dot { display: block; font-size: 1.35rem; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.45)); }
+.map-kaaba-dot { display: block; font-size: 1.5rem; line-height: 1; filter: drop-shadow(0 2px 4px rgba(0,0,0,.45)); }
+.mosques-page { max-width: 920px; }
+.mosques-toolbar { display: flex; gap: .6rem; justify-content: center; margin-bottom: 1rem; flex-wrap: wrap; }
+.mosque-card { display: flex; justify-content: space-between; align-items: center; gap: .8rem; margin-bottom: .8rem; cursor: pointer; }
+.mosque-card.on { border-color: var(--gold); box-shadow: 0 0 0 1px var(--gold-dim); }
+.mosque-card .mosque-actions { display: flex; gap: .4rem; flex: none; flex-wrap: wrap; }
 
 @media (max-width: 860px) {
   .nav { position: relative; flex-wrap: wrap; }

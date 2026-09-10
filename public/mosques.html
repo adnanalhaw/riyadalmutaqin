@@ -10,35 +10,54 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
 </head>
 <body>
   <div data-header></div>
 
   <main>
-    <div class="container" style="max-width:680px">
+    <div class="container mosques-page">
       <div class="page-head center">
         <h1>خريطة المساجد</h1>
         <p id="loc">جارٍ تحديد موقعك للبحث عن أقرب المساجد…</p>
       </div>
 
-      <div style="display:flex;gap:.6rem;justify-content:center;margin-bottom:1.2rem;flex-wrap:wrap">
-        <button class="btn btn-outline" data-r="2000">٢ كم</button>
-        <button class="btn btn-primary" data-r="5000">٥ كم</button>
-        <button class="btn btn-outline" data-r="10000">١٠ كم</button>
+      <div class="mosques-toolbar">
+        <button class="btn btn-outline" data-r="2000" type="button">٢ كم</button>
+        <button class="btn btn-primary" data-r="5000" type="button">٥ كم</button>
+        <button class="btn btn-outline" data-r="10000" type="button">١٠ كم</button>
+        <button class="btn btn-ghost" id="recenter" type="button" hidden>موقعي</button>
       </div>
+
+      <div id="mosques-map" class="site-map" dir="ltr" hidden role="region" aria-label="خريطة المساجد"></div>
 
       <div id="status" class="muted" style="text-align:center"></div>
       <div id="list"></div>
+
+      <div class="card" id="manual-box" style="margin-top:1.2rem" hidden>
+        <h3 style="color:var(--gold);margin-top:0">تحديد يدويّ</h3>
+        <p class="muted" style="margin-top:0">إن تعذّر الموقع، أدخل الإحداثيات أو اعرض مكة لتجربة الخريطة.</p>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:120px;margin:0"><input type="number" step="any" id="lat" placeholder="خط العرض" /></div>
+          <div class="field" style="flex:1;min-width:120px;margin:0"><input type="number" step="any" id="lng" placeholder="خط الطول" /></div>
+        </div>
+        <div class="mosques-toolbar" style="margin-top:.8rem;margin-bottom:0">
+          <button class="btn btn-outline" id="manual-go" type="button">ابحث هنا</button>
+          <button class="btn btn-ghost" id="makkah" type="button">مكة المكرمة</button>
+        </div>
+      </div>
     </div>
   </main>
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
   <script>
     (function () {
       function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
       function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]; }); }
       var here = null, radius = 5000;
+      var map = null, userMarker = null, mosqueLayer = null, items = [], activeIdx = -1;
 
       function dist(a, b, c, d) {
         var R = 6371, p = Math.PI / 180;
@@ -49,10 +68,85 @@
       }
       function fmtDist(km) { return km < 1 ? ar(Math.round(km * 1000)) + " م" : ar((Math.round(km * 10) / 10)) + " كم"; }
 
+      var userIcon = L.divIcon({
+        className: "map-user-pin",
+        html: '<span class="map-user-dot" title="موقعك"></span>',
+        iconSize: [22, 22],
+        iconAnchor: [11, 11],
+      });
+      var mosqueIcon = L.divIcon({
+        className: "map-mosque-pin",
+        html: '<span class="map-mosque-dot">🕌</span>',
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
+        popupAnchor: [0, -12],
+      });
+
+      function ensureMap() {
+        var el = document.getElementById("mosques-map");
+        if (!here || !el) return null;
+        el.hidden = false;
+        document.getElementById("recenter").hidden = false;
+        if (map) return map;
+        map = L.map(el, { scrollWheelZoom: true, zoomControl: true }).setView([here.lat, here.lng], 14);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+          attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+        }).addTo(map);
+        userMarker = L.marker([here.lat, here.lng], { icon: userIcon, zIndexOffset: 600 })
+          .addTo(map)
+          .bindPopup("موقعك الحالي");
+        mosqueLayer = L.layerGroup().addTo(map);
+        setTimeout(function () { map.invalidateSize(); }, 80);
+        return map;
+      }
+
+      function popupHtml(e) {
+        var gmap = "https://www.google.com/maps/search/?api=1&query=" + e.lat + "," + e.lng;
+        var osm = "https://www.openstreetmap.org/?mlat=" + e.lat + "&mlon=" + e.lng + "#map=17/" + e.lat + "/" + e.lng;
+        return "<strong>" + esc(e.name) + "</strong><br>" +
+          '<span class="muted">يبعد ' + fmtDist(e.dKm) + "</span><br>" +
+          '<a href="' + esc(gmap) + '" target="_blank" rel="noopener">خرائط جوجل</a> · ' +
+          '<a href="' + esc(osm) + '" target="_blank" rel="noopener">OpenStreetMap</a>';
+      }
+
+      function highlight(idx) {
+        activeIdx = idx;
+        document.querySelectorAll(".mosque-card").forEach(function (card) {
+          card.classList.toggle("on", Number(card.getAttribute("data-idx")) === idx);
+        });
+      }
+
+      function focusMosque(idx) {
+        var e = items[idx];
+        if (!e || !map) return;
+        highlight(idx);
+        map.flyTo([e.lat, e.lng], 16, { duration: 0.45 });
+        if (e.marker) e.marker.openPopup();
+      }
+
+      function renderList(els) {
+        document.getElementById("list").innerHTML = els.map(function (e, i) {
+          var gmap = "https://www.google.com/maps/search/?api=1&query=" + e.lat + "," + e.lng;
+          var osm = "https://www.openstreetmap.org/?mlat=" + e.lat + "&mlon=" + e.lng + "#map=17/" + e.lat + "/" + e.lng;
+          return '<div class="card mosque-card" data-idx="' + i + '" role="button" tabindex="0">' +
+            '<div><div style="font-weight:700">🕌 ' + esc(e.name) + "</div>" +
+            '<div class="muted" style="font-size:.85rem">يبعد ' + fmtDist(e.dKm) + "</div></div>" +
+            '<div class="mosque-actions">' +
+            '<a class="btn btn-ghost" href="' + esc(gmap) + '" target="_blank" rel="noopener">خرائط جوجل</a>' +
+            '<a class="btn btn-ghost" href="' + esc(osm) + '" target="_blank" rel="noopener">الخريطة</a></div></div>';
+        }).join("");
+        if (typeof window.rmRetranslate === "function") window.rmRetranslate();
+      }
+
       function search() {
         if (!here) return;
+        ensureMap();
         document.getElementById("status").textContent = "جارٍ البحث…";
         document.getElementById("list").innerHTML = "";
+        items = [];
+        activeIdx = -1;
+        if (mosqueLayer) mosqueLayer.clearLayers();
         var q = "[out:json][timeout:25];(" +
           'node["amenity"="place_of_worship"]["religion"="muslim"](around:' + radius + "," + here.lat + "," + here.lng + ");" +
           'way["amenity"="place_of_worship"]["religion"="muslim"](around:' + radius + "," + here.lat + "," + here.lng + ");" +
@@ -65,18 +159,26 @@
             var lat = e.lat || (e.center && e.center.lat), lng = e.lon || (e.center && e.center.lon);
             return { name: (e.tags && (e.tags["name:ar"] || e.tags.name)) || "مسجد", lat: lat, lng: lng, dKm: dist(here.lat, here.lng, lat, lng) };
           }).filter(function (e) { return e.lat && e.lng; }).sort(function (a, b) { return a.dKm - b.dKm; }).slice(0, 40);
-          if (!els.length) { document.getElementById("status").textContent = "لم نجد مساجد في هذا النطاق. جرّب نطاقاً أوسع."; return; }
-          document.getElementById("status").textContent = "أقرب " + ar(els.length) + " مسجداً:";
-          document.getElementById("list").innerHTML = els.map(function (e) {
-            var gmap = "https://www.google.com/maps/search/?api=1&query=" + e.lat + "," + e.lng;
-            var osm = "https://www.openstreetmap.org/?mlat=" + e.lat + "&mlon=" + e.lng + "#map=17/" + e.lat + "/" + e.lng;
-            return '<div class="card" style="display:flex;justify-content:space-between;align-items:center;gap:.8rem;margin-bottom:.8rem">' +
-              '<div><div style="font-weight:700">🕌 ' + esc(e.name) + "</div>" +
-              '<div class="muted" style="font-size:.85rem">يبعد ' + fmtDist(e.dKm) + "</div></div>" +
-              '<div style="display:flex;gap:.4rem;flex:none">' +
-              '<a class="btn btn-ghost" href="' + esc(gmap) + '" target="_blank" rel="noopener">خرائط جوجل</a>' +
-              '<a class="btn btn-ghost" href="' + esc(osm) + '" target="_blank" rel="noopener">الخريطة</a></div></div>';
-          }).join("");
+          items = els;
+          if (!els.length) {
+            document.getElementById("status").textContent = "لم نجد مساجد في هذا النطاق. جرّب نطاقاً أوسع.";
+            if (map) map.setView([here.lat, here.lng], 14);
+            return;
+          }
+          document.getElementById("status").textContent = "أقرب " + ar(els.length) + " مسجداً — اضغط البطاقة أو العلامة للتفاصيل.";
+          var bounds = L.latLngBounds([[here.lat, here.lng]]);
+          els.forEach(function (e, i) {
+            e.marker = L.marker([e.lat, e.lng], { icon: mosqueIcon })
+              .addTo(mosqueLayer)
+              .bindPopup(popupHtml(e));
+            e.marker.on("click", function () { highlight(i); });
+            bounds.extend([e.lat, e.lng]);
+          });
+          if (map) {
+            map.fitBounds(bounds, { padding: [36, 36], maxZoom: 16 });
+            setTimeout(function () { map.invalidateSize(); }, 80);
+          }
+          renderList(els);
         }).catch(function () { document.getElementById("status").textContent = "تعذّر جلب المساجد. حاوِل لاحقاً."; });
       }
 
@@ -89,16 +191,53 @@
         });
       });
 
+      document.getElementById("list").addEventListener("click", function (ev) {
+        if (ev.target.closest("a")) return;
+        var card = ev.target.closest(".mosque-card");
+        if (!card) return;
+        focusMosque(+card.getAttribute("data-idx"));
+      });
+      document.getElementById("list").addEventListener("keydown", function (ev) {
+        if (ev.key !== "Enter" && ev.key !== " ") return;
+        var card = ev.target.closest(".mosque-card");
+        if (!card) return;
+        ev.preventDefault();
+        focusMosque(+card.getAttribute("data-idx"));
+      });
+      document.getElementById("recenter").addEventListener("click", function () {
+        if (map && here) {
+          map.flyTo([here.lat, here.lng], 15, { duration: 0.4 });
+          if (userMarker) userMarker.openPopup();
+        }
+      });
+
+      function useLocation(lat, lng, label) {
+        here = { lat: lat, lng: lng };
+        document.getElementById("loc").textContent = label;
+        search();
+      }
+      function showManual(msg) {
+        document.getElementById("loc").textContent = msg;
+        document.getElementById("manual-box").hidden = false;
+      }
+      document.getElementById("manual-go").addEventListener("click", function () {
+        var lat = parseFloat(document.getElementById("lat").value);
+        var lng = parseFloat(document.getElementById("lng").value);
+        if (isFinite(lat) && isFinite(lng)) useLocation(lat, lng, "إحداثيّات يدويّة");
+      });
+      document.getElementById("makkah").addEventListener("click", function () {
+        useLocation(21.4225, 39.8262, "حول المسجد الحرام — تحديد تجريبي");
+      });
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(function (pos) {
-          here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          document.getElementById("loc").textContent = "حسب موقعك الحالي";
-          search();
+          document.getElementById("manual-box").hidden = true;
+          useLocation(pos.coords.latitude, pos.coords.longitude, "حسب موقعك الحالي — العلامات على الخريطة من OpenStreetMap.");
         }, function () {
-          document.getElementById("loc").textContent = "تعذّر تحديد الموقع — فعّل صلاحية الموقع وأعِد المحاولة.";
+          showManual("تعذّر تحديد الموقع — فعّل صلاحية الموقع أو حدّد يدوياً.");
         }, { timeout: 8000 });
       } else {
-        document.getElementById("loc").textContent = "المتصفّح لا يدعم تحديد الموقع.";
+        showManual("المتصفّح لا يدعم تحديد الموقع — استخدم التحديد اليدويّ.");
       }
     })();
   </script>

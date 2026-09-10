@@ -10,6 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/vendor/leaflet/leaflet.css" />
   <style>
     .compass { width:min(80vw,320px); height:min(80vw,320px); border-radius:50%; margin:1rem auto;
       border:3px solid var(--gold); position:relative;
@@ -45,6 +46,9 @@
 
       <button class="btn btn-primary" id="enable" style="margin-top:.6rem" hidden>تفعيل البوصلة</button>
 
+      <div id="qibla-map" class="site-map site-map-sm" dir="ltr" hidden role="img" aria-label="اتجاه القبلة على الخريطة"></div>
+      <p class="muted" id="qibla-map-hint" hidden>الخط الذهبي على الخريطة يشير نحو الكعبة من موقعك.</p>
+
       <div class="card" style="margin-top:1.4rem">
         <h3 style="color:var(--gold);margin-top:0">تحديد يدويّ</h3>
         <div style="display:flex;gap:.6rem;flex-wrap:wrap">
@@ -58,14 +62,53 @@
 
   <div data-footer></div>
   <script src="/layout.js"></script>
+  <script src="/vendor/leaflet/leaflet.js"></script>
   <script>
     (function () {
       function ar(n) { return String(n).replace(/[0-9]/g, function (d) { return "٠١٢٣٤٥٦٧٨٩"[+d]; }); }
       var KAABA_LAT = 21.4225, KAABA_LNG = 39.8262;
       var qibla = null, heading = 0;
+      var qiblaMap = null, qiblaLine = null, qiblaUser = null, qiblaTip = null;
 
       function rad(d) { return d * Math.PI / 180; }
       function deg(r) { return r * 180 / Math.PI; }
+
+      function destPoint(lat, lng, brngDeg, km) {
+        var R = 6371, d = km / R, br = rad(brngDeg);
+        var lat1 = rad(lat), lng1 = rad(lng);
+        var lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(br));
+        var lng2 = lng1 + Math.atan2(Math.sin(br) * Math.sin(d) * Math.cos(lat1), Math.cos(d) - Math.sin(lat1) * Math.sin(lat2));
+        return [deg(lat2), deg(lng2)];
+      }
+
+      function drawQiblaMap(lat, lng, brng) {
+        var el = document.getElementById("qibla-map");
+        var hint = document.getElementById("qibla-map-hint");
+        if (!el || typeof L === "undefined") return;
+        el.hidden = false;
+        if (hint) hint.hidden = false;
+        var tip = destPoint(lat, lng, brng, 2.4);
+        if (!qiblaMap) {
+          qiblaMap = L.map(el, { scrollWheelZoom: false, zoomControl: true }).setView([lat, lng], 14);
+          L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 18,
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>',
+          }).addTo(qiblaMap);
+          qiblaUser = L.marker([lat, lng], {
+            icon: L.divIcon({ className: "map-user-pin", html: '<span class="map-user-dot"></span>', iconSize: [22, 22], iconAnchor: [11, 11] }),
+          }).addTo(qiblaMap).bindPopup("موقعك");
+          qiblaTip = L.marker(tip, {
+            icon: L.divIcon({ className: "map-kaaba-pin", html: '<span class="map-kaaba-dot">🕋</span>', iconSize: [28, 28], iconAnchor: [14, 14] }),
+          }).addTo(qiblaMap).bindPopup("اتجاه الكعبة");
+          qiblaLine = L.polyline([[lat, lng], tip], { color: "#d9b24c", weight: 4, opacity: 0.95 }).addTo(qiblaMap);
+        } else {
+          qiblaUser.setLatLng([lat, lng]);
+          qiblaTip.setLatLng(tip);
+          qiblaLine.setLatLngs([[lat, lng], tip]);
+        }
+        qiblaMap.fitBounds(L.latLngBounds([[lat, lng], tip]), { padding: [28, 28] });
+        setTimeout(function () { qiblaMap.invalidateSize(); }, 80);
+      }
 
       function bearing(lat, lng) {
         var dL = rad(KAABA_LNG - lng);
@@ -81,6 +124,7 @@
         document.getElementById("deg").textContent = ar(Math.round(qibla)) + "°";
         if (label) document.getElementById("loc").textContent = label;
         updateNeedle();
+        drawQiblaMap(lat, lng, qibla);
       }
 
       function updateNeedle() {
