@@ -32,15 +32,30 @@
   }
 
   // الأدمن له لوحته المستقلّة (/admin)؛ ومدير الموقع له لوحته (/manager).
-  // نعرض رابط العودة إلى لوحة الأدمن إن كان أدمن (لأنه قد يصل لصفحات المعلّم تقنيّاً).
+  // في الاستوديو/النشر نبدّل الشريط إلى لوحتهم حتى لا يظنّوا الصفحة للمعلّم فقط.
+  function swapTo(attr, src) {
+    var el = document.querySelector("[data-teacher-nav]");
+    if (!el) return false;
+    el.removeAttribute("data-teacher-nav");
+    el.setAttribute(attr, "");
+    var s = document.createElement("script");
+    s.src = src;
+    document.body.appendChild(s);
+    return true;
+  }
+
   renderNav();
   fetch("/api/auth/me", { headers: { accept: "application/json" } })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
-      if (d && d.user && d.user.role === "admin") {
-        renderNav([{ href: "/admin", label: "↩ لوحة الأدمن" }]);
-      } else if (d && d.user && d.user.role === "manager") {
-        renderNav([{ href: "/manager", label: "↩ لوحة مدير الموقع" }]);
+      var role = d && d.user && d.user.role;
+      var studio = path === "/teacher/editor" || path === "/teacher/publish";
+      if (role === "admin") {
+        if (studio && swapTo("data-admin-nav", "/admin/nav.js")) return;
+        renderNav([{ href: "/admin", label: "↩ عودة للوحة الأدمن" }]);
+      } else if (role === "manager") {
+        if (studio && swapTo("data-manager-nav", "/manager/nav.js")) return;
+        renderNav([{ href: "/manager", label: "↩ عودة للوحة المدير" }]);
       }
     })
     .catch(function () {});

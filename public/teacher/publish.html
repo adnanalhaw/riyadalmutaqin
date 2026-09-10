@@ -23,6 +23,7 @@
           <div class="page-head" style="padding-top:0">
             <h1>النشر على القنوات</h1>
             <p>اكتب منشوراً واحداً وانشُره على عدّة قنوات دفعةً واحدة.</p>
+            <p id="staffBack" class="muted" hidden style="margin:.7rem 0 0;font-size:.92rem"></p>
           </div>
 
           <div class="notice" id="fbFlash" hidden style="margin-bottom:1.2rem"></div>
@@ -237,6 +238,13 @@
         setMetaLabels(isStaff);
         flashMeta();
         loadMetaConnect();
+        var back = document.getElementById("staffBack");
+        if (back && isStaff) {
+          back.hidden = false;
+          back.innerHTML = u.role === "admin"
+            ? '<a class="gold" href="/admin">↩ عودة للوحة الأدمن</a>'
+            : '<a class="gold" href="/manager">↩ عودة للوحة المدير</a>';
+        }
       });
 
       // الزرّ المضغوط يحدّد الإجراء (now/schedule)
