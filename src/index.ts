@@ -2386,18 +2386,20 @@ async function handleYouTube(
 }
 
 // نطاقات Google Translate (تُحمَّل عند الطلب فقط عند ضغط المستخدم زرّ اللغة).
-const GT_SCRIPT = "https://translate.google.com https://translate.googleapis.com https://www.gstatic.com";
-const GT_IMG = "https://www.gstatic.com https://translate.googleapis.com https://*.gstatic.com";
+// element.js يعتمد eval/JSONP؛ بلا unsafe-eval يُحمَّل السكربت ثم تفشل الترجمة بصمت.
+const GT_SCRIPT = "https://translate.google.com https://translate.googleapis.com https://www.gstatic.com https://www.google.com";
+const GT_IMG = "https://www.gstatic.com https://translate.googleapis.com https://*.gstatic.com https://www.google.com https://*.google.com";
+const OSM_IMG = "https://*.tile.openstreetmap.org https://tile.openstreetmap.org";
 const CONTENT_SECURITY_POLICY = [
   "default-src 'self'",
-  `script-src 'self' 'unsafe-inline' ${GT_SCRIPT}`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.gstatic.com",
-  "font-src 'self' https://fonts.gstatic.com",
-  `img-src 'self' data: blob: https://i.ytimg.com https://*.ytimg.com ${GT_IMG}`,
+  `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${GT_SCRIPT}`,
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://www.gstatic.com https://www.google.com https://translate.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com https://www.gstatic.com",
+  `img-src 'self' data: blob: https://i.ytimg.com https://*.ytimg.com ${GT_IMG} ${OSM_IMG}`,
   "media-src 'self' blob: https://cdn.islamic.network",
-  "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://translate.google.com",
+  "frame-src https://www.youtube.com https://www.youtube-nocookie.com https://translate.google.com https://www.google.com https://translate.googleusercontent.com",
   // api.aladhan.com لمواقيت الصلاة؛ openstreetmap/overpass لخريطة المساجد؛ alquran.cloud للقرآن؛ google لخدمة الترجمة.
-  "connect-src 'self' https://api.aladhan.com https://overpass-api.de https://nominatim.openstreetmap.org https://api.alquran.cloud https://translate.googleapis.com",
+  "connect-src 'self' https://api.aladhan.com https://overpass-api.de https://nominatim.openstreetmap.org https://api.alquran.cloud https://translate.googleapis.com https://translate.google.com https://translate-pa.googleapis.com https://www.google.com",
   "object-src 'none'",
   "base-uri 'self'",
   "form-action 'self'",
