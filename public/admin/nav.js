@@ -6,6 +6,9 @@
 
   var links = [
     { href: "/admin", label: "📊 لوحة النظام", exact: true },
+    { href: "/teacher/editor", label: "🎬 استوديو المونتاج" },
+    { href: "/teacher/publish", label: "📣 النشر على القنوات" },
+    { href: "/manager/connections", label: "🔗 ربط حسابات النشر" },
     { href: "/admin/support", label: "🎫 الدعم والطلبات" },
     { href: "/admin/logins", label: "🕒 سجلّ الدخول" },
     { href: "/admin/users", label: "👥 المستخدمون والأدوار" },

@@ -411,13 +411,31 @@
   fetch("/api/auth/me", { headers: { accept: "application/json" } })
     .then(function (r) { return r.ok ? r.json() : null; })
     .then(function (d) {
-      var staff = d && d.user && (d.user.role === "manager" || d.user.role === "admin");
+      var role = d && d.user && d.user.role;
+      var staff = role === "manager" || role === "admin";
       document.querySelectorAll("[data-meta-label=facebook]").forEach(function (n) {
         n.textContent = staff ? "فيسبوك — صفحة رياض المتقين الرسمية (جاهز)" : "فيسبوك — صفحتك الخاصة (جاهز)";
       });
       document.querySelectorAll("[data-meta-label=instagram]").forEach(function (n) {
         n.textContent = staff ? "انستقرام ريلز — @almutaqyn الرسمي (جاهز)" : "انستقرام ريلز — صفحتك الخاصة (جاهز)";
       });
+      var hint = document.getElementById("pubHint");
+      if (hint && staff) {
+        hint.innerHTML =
+          "<strong>فيسبوك وانستقرام ريلز</strong> هما القناتان الجاهزتان الآن (بعد الربط). " +
+          "<strong>الموقع</strong> و<strong>تيليجرام</strong> يُنشَران مباشرةً. " +
+          "المدير والأدمن ينشران على <strong>الحساب الرسمي</strong> (صفحة رياض المتقين و<span dir=\"ltr\">@almutaqyn</span>) " +
+          "من <a class=\"gold\" href=\"/teacher/publish\">صفحة النشر</a> " +
+          "بعد الربط من <a class=\"gold\" href=\"/manager/connections\">ربط حسابات النشر</a>. " +
+          "يوتيوب/تيك توك/إكس تُحفَظ في قائمة الإصدار حتى يُفعَّل الربط.";
+      }
+      var back = document.getElementById("staffBack");
+      if (back && staff) {
+        back.hidden = false;
+        back.innerHTML = role === "admin"
+          ? '<a class="gold" href="/admin">↩ عودة للوحة الأدمن</a>'
+          : '<a class="gold" href="/manager">↩ عودة للوحة المدير</a>';
+      }
     })
     .catch(function () {});
 })();
