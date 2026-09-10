@@ -33,6 +33,19 @@
 
       <div id="status" class="muted" style="text-align:center"></div>
       <div id="list"></div>
+
+      <div class="card" id="manual-box" style="margin-top:1.2rem" hidden>
+        <h3 style="color:var(--gold);margin-top:0">تحديد يدويّ</h3>
+        <p class="muted" style="margin-top:0">إن تعذّر الموقع، أدخل الإحداثيات أو اعرض مكة لتجربة الخريطة.</p>
+        <div style="display:flex;gap:.6rem;flex-wrap:wrap">
+          <div class="field" style="flex:1;min-width:120px;margin:0"><input type="number" step="any" id="lat" placeholder="خط العرض" /></div>
+          <div class="field" style="flex:1;min-width:120px;margin:0"><input type="number" step="any" id="lng" placeholder="خط الطول" /></div>
+        </div>
+        <div class="mosques-toolbar" style="margin-top:.8rem;margin-bottom:0">
+          <button class="btn btn-outline" id="manual-go" type="button">ابحث هنا</button>
+          <button class="btn btn-ghost" id="makkah" type="button">مكة المكرمة</button>
+        </div>
+      </div>
     </div>
   </main>
 
@@ -198,16 +211,33 @@
         }
       });
 
+      function useLocation(lat, lng, label) {
+        here = { lat: lat, lng: lng };
+        document.getElementById("loc").textContent = label;
+        search();
+      }
+      function showManual(msg) {
+        document.getElementById("loc").textContent = msg;
+        document.getElementById("manual-box").hidden = false;
+      }
+      document.getElementById("manual-go").addEventListener("click", function () {
+        var lat = parseFloat(document.getElementById("lat").value);
+        var lng = parseFloat(document.getElementById("lng").value);
+        if (isFinite(lat) && isFinite(lng)) useLocation(lat, lng, "إحداثيّات يدويّة");
+      });
+      document.getElementById("makkah").addEventListener("click", function () {
+        useLocation(21.4225, 39.8262, "حول المسجد الحرام — تحديد تجريبي");
+      });
+
       if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(function (pos) {
-          here = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          document.getElementById("loc").textContent = "حسب موقعك الحالي — العلامات على الخريطة من OpenStreetMap.";
-          search();
+          document.getElementById("manual-box").hidden = true;
+          useLocation(pos.coords.latitude, pos.coords.longitude, "حسب موقعك الحالي — العلامات على الخريطة من OpenStreetMap.");
         }, function () {
-          document.getElementById("loc").textContent = "تعذّر تحديد الموقع — فعّل صلاحية الموقع وأعِد المحاولة.";
+          showManual("تعذّر تحديد الموقع — فعّل صلاحية الموقع أو حدّد يدوياً.");
         }, { timeout: 8000 });
       } else {
-        document.getElementById("loc").textContent = "المتصفّح لا يدعم تحديد الموقع.";
+        showManual("المتصفّح لا يدعم تحديد الموقع — استخدم التحديد اليدويّ.");
       }
     })();
   </script>

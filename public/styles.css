@@ -215,7 +215,7 @@ table.t th { color: var(--gold); font-weight: 700; }
 .lang-opt:hover { background: var(--gold-faint); color: var(--gold); }
 .lang-opt.on { color: var(--gold); font-weight: 700; }
 .lang-code { font-size: .72rem; font-weight: 800; letter-spacing: .04em; color: var(--gold); text-transform: uppercase; }
-.gt-slot { position: absolute; width: 0; height: 0; overflow: hidden; clip: rect(0,0,0,0); }
+.gt-slot { position: absolute; inset-inline-start: -9999px; top: 0; width: 1px; height: 1px; opacity: 0; pointer-events: none; overflow: visible; }
 
 /* خرائط Leaflet (مساجد / قبلة) — هوية الموقع، دون تغطية الترويسة */
 .site-map {

@@ -159,10 +159,14 @@
     if (ours) return ours;
     return langFromGoogTrans(getCookie("googtrans")) || "ar";
   }
-  function applyDir(code) {
+  function applyDir(code, force) {
     var rtl = !!RTL_LANGS[code || "ar"];
-    document.documentElement.lang = code || "ar";
-    document.documentElement.dir = rtl ? "rtl" : "ltr";
+    // لا نقلب الاتجاه قبل أن يترجم Google وإلا ينفصل رسم العربية.
+    var translated = /translated/i.test(document.documentElement.className || "");
+    if (force || code === "ar" || translated) {
+      document.documentElement.lang = code || "ar";
+      document.documentElement.dir = rtl ? "rtl" : "ltr";
+    }
   }
   function stripGoogTransHash() {
     if (location.hash && /googtrans/i.test(location.hash)) {
@@ -180,12 +184,11 @@
       clearOurLang();
       clearGoogTransCookies();
       stripGoogTransHash();
-      applyDir("ar");
+      applyDir("ar", true);
     } else {
       persistOurLang(code);
       setGoogTransCookie("/ar/" + code);
       setGoogTransHash(code);
-      applyDir(code);
     }
     location.reload();
   }
@@ -207,28 +210,53 @@
     if (document.getElementById("gt-hide-ui")) return;
     var st = document.createElement("style");
     st.id = "gt-hide-ui";
-    // لا نُخفي #google_translate_element بـ display:none حتى يبقى تغيير
-    // .goog-te-combo قادراً على إطلاق الترجمة. الإخفاء البصري عبر .gt-slot.
+    // أخفِ شريط Google العلوي فقط. إخفاء iframe.skiptranslate يوقف الترجمة.
     st.textContent =
-      ".goog-te-banner-frame,iframe.skiptranslate,#goog-gt-tt,.goog-te-balloon-frame" +
-      "{display:none!important}" +
+      ".goog-te-banner-frame.skiptranslate{display:none!important}" +
       "body{top:0!important;position:static!important}" +
       "font{background:transparent!important;box-shadow:none!important}" +
       ".goog-text-highlight{background:none!important;box-shadow:none!important}";
     document.head.appendChild(st);
   }
+  function fireComboChange(combo, code) {
+    combo.value = code;
+    try {
+      var ev = document.createEvent("HTMLEvents");
+      ev.initEvent("change", true, true);
+      combo.dispatchEvent(ev);
+    } catch (e) {
+      combo.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+  }
+  function clickGtMenu(code) {
+    var label = langLabel(code);
+    var frames = document.querySelectorAll(".goog-te-menu-frame, iframe.goog-te-menu-frame");
+    for (var i = 0; i < frames.length; i++) {
+      try {
+        var doc = frames[i].contentDocument || frames[i].contentWindow.document;
+        var items = doc.querySelectorAll(".goog-te-menu2-item span.text, .goog-te-menu2-item");
+        for (var j = 0; j < items.length; j++) {
+          var t = (items[j].textContent || "").trim();
+          if (t === label || t.toLowerCase() === String(code).toLowerCase()) {
+            items[j].click();
+            return true;
+          }
+        }
+      } catch (e) { /* إطار ترجمة قد يكون عبر أصل آخر */ }
+    }
+    return false;
+  }
   function forceCombo(code) {
     var tries = 0;
     (function tick() {
       var combo = document.querySelector(".goog-te-combo");
-      if (combo) {
-        if (combo.value !== code) {
-          combo.value = code;
-          combo.dispatchEvent(new Event("change", { bubbles: true }));
-        }
+      if (combo) fireComboChange(combo, code);
+      clickGtMenu(code);
+      if (/translated/i.test(document.documentElement.className || "")) {
+        applyDir(code, true);
         return;
       }
-      if (++tries < 50) setTimeout(tick, 120);
+      if (++tries < 60) setTimeout(tick, 200);
     })();
   }
   function retranslate() {
@@ -259,6 +287,13 @@
     persistOurLang(code);
     setGoogTransCookie("/ar/" + code);
     setGoogTransHash(code);
+    var mo = new MutationObserver(function () {
+      if (/translated/i.test(document.documentElement.className || "")) {
+        applyDir(code, true);
+        mo.disconnect();
+      }
+    });
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
     if (window.__gtLoaded) { forceCombo(code); return; }
     window.__gtLoaded = true;
     ensureGtHolder();
@@ -280,7 +315,7 @@
   }
 
   // أعد الكوكي مبكّراً (قبل جلب الجلسة) حتى يراها عنصر الترجمة عند التحميل.
-  applyDir(readStoredLang());
+  // الاتجاه يبقى rtl حتى تكتمل الترجمة (applyDir بعد class=translated-*).
   if (readStoredLang() !== "ar") {
     try { setGoogTransCookie("/ar/" + readStoredLang()); } catch (e) { /* تجاهل */ }
   }
