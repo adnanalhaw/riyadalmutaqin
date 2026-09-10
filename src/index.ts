@@ -2387,7 +2387,7 @@ async function handleYouTube(
 
 // نطاقات Google Translate (تُحمَّل عند الطلب فقط عند ضغط المستخدم زرّ اللغة).
 // element.js يعتمد eval/JSONP؛ بلا unsafe-eval يُحمَّل السكربت ثم تفشل الترجمة بصمت.
-const GT_SCRIPT = "https://translate.google.com https://translate.googleapis.com https://www.gstatic.com https://www.google.com";
+const GT_SCRIPT = "https://translate.google.com https://translate.googleapis.com https://translate-pa.googleapis.com https://www.gstatic.com https://www.google.com";
 const GT_IMG = "https://www.gstatic.com https://translate.googleapis.com https://*.gstatic.com https://www.google.com https://*.google.com";
 const OSM_IMG = "https://*.tile.openstreetmap.org https://tile.openstreetmap.org";
 const CONTENT_SECURITY_POLICY = [
