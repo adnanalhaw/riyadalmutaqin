@@ -422,12 +422,12 @@
       var hint = document.getElementById("pubHint");
       if (hint && staff) {
         hint.innerHTML =
-          "<strong>فيسبوك وانستقرام ريلز</strong> هما القناتان الجاهزتان الآن (بعد الربط). " +
+          "<strong>فيسبوك وانستقرام ريلز ويوتيوب</strong> جاهزة بعد الربط. " +
           "<strong>الموقع</strong> و<strong>تيليجرام</strong> يُنشَران مباشرةً. " +
           "المدير والأدمن ينشران على <strong>الحساب الرسمي</strong> (صفحة رياض المتقين و<span dir=\"ltr\">@almutaqyn</span>) " +
           "من <a class=\"gold\" href=\"/teacher/publish\">صفحة النشر</a> " +
           "بعد الربط من <a class=\"gold\" href=\"/manager/connections\">ربط حسابات النشر</a>. " +
-          "يوتيوب/تيك توك/إكس تُحفَظ في قائمة الإصدار حتى يُفعَّل الربط.";
+          "يوتيوب يُرفع إلى قناتك المربوطة. تيك توك/إكس تُحفَظ في قائمة الإصدار حتى يُفعَّل الربط.";
       }
       var back = document.getElementById("staffBack");
       if (back && staff) {

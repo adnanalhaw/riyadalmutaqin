@@ -7,6 +7,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const metaSrc = readFileSync(join(root, "src/meta.ts"), "utf8");
@@ -448,6 +449,46 @@ test("إكمال الريل من cron يحدّث delivery ولا يمسح فيس
   assert.match(finish, /upsertChannelDelivery/);
   assert.match(finish, /persistPostDelivery/);
   assert.match(finish, /تعذّرت معالجة ريل انستقرام/);
+});
+
+test("الاستوديو لا يصف يوتيوب بأنه لاحقاً والقائمة تُظهر فشل القناة", () => {
+  const editor = readFileSync(join(root, "public/teacher/editor.html"), "utf8");
+  const editorJs = readFileSync(join(root, "public/teacher/editor.js"), "utf8");
+  assert.doesNotMatch(editor, /يوتيوب \(لاحقاً\)/);
+  assert.doesNotMatch(editorJs, /يوتيوب \(لاحقاً\)/);
+  assert.doesNotMatch(editorJs, /يوتيوب\/تيك توك\/إكس تُحفَظ/);
+  assert.match(editor, /يوتيوب يُرفع إلى قناتك/);
+  assert.match(editorJs, /يوتيوب يُرفع إلى قناتك/);
+
+  const html = readFileSync(join(root, "public/teacher/publish.html"), "utf8");
+  const start = html.indexOf("function postBadge");
+  const end = html.indexOf("function loadPosts");
+  const ctx = {
+    STATUS: { published: ["منشور", ""], failed: ["فشل", "live"], scheduled: ["مجدول", "soon"] },
+    CH: { youtube: "يوتيوب", facebook: "فيسبوك", instagram: "انستقرام" },
+    esc: (s) => String(s == null ? "" : s),
+  };
+  vm.createContext(ctx);
+  vm.runInContext(`${html.slice(start, end)}\nthis.postBadge = postBadge;`, ctx);
+  const mixed = ctx.postBadge({
+    status: "published",
+    delivery: JSON.stringify([
+      { channel: "facebook", ok: true, id: "fb1" },
+      { channel: "youtube", ok: false, error: "تعذّر جلب الوسيط (HTTP 522)" },
+    ]),
+  });
+  assert.match(mixed, /فيسبوك ✓/);
+  assert.match(mixed, /يوتيوب ✗/);
+  assert.match(mixed, /HTTP 522/);
+  assert.doesNotMatch(mixed, />منشور</);
+  const allOk = ctx.postBadge({
+    status: "published",
+    delivery: JSON.stringify([
+      { channel: "facebook", ok: true },
+      { channel: "youtube", ok: true, id: "yt1" },
+    ]),
+  });
+  assert.match(allOk, /منشور/);
 });
 
 test("قائمة منشورات المعلّم تعرض delivery و ig_creation_id", () => {
