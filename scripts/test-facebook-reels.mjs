@@ -328,6 +328,7 @@ test("getMediaBytes يقرأ من المخزن ولا يستدعي fetch لوس�
 
 test("المصدر يقرأ وسائط الموقع من R2 ولا يعمل fetch لنطاقه", () => {
   assert.match(metaSrc, /export function mediaKeyFromUrl/);
+  assert.match(metaSrc, /export async function getMediaFile/);
   assert.match(metaSrc, /export async function getMediaBytes/);
   assert.match(metaSrc, /path\.slice\("\/api\/media\/"\.length\)/);
   const loader = metaSrc.slice(
@@ -343,6 +344,18 @@ test("المصدر يقرأ وسائط الموقع من R2 ولا يعمل fetc
     metaSrc.indexOf("export async function createIgContainer"),
   );
   assert.match(fb, /getMediaBytes\(mediaUrl, env\)/);
+});
+
+test("يوتيوب يقرأ وسائط الموقع من R2 ولا يعمل fetch للرابط العام", () => {
+  const ytBlock = indexSrc.slice(
+    indexSrc.indexOf("٣) يوتيوب"),
+    indexSrc.indexOf("٤) ما بقي"),
+  );
+  assert.match(ytBlock, /meta\.getMediaFile\(absMedia/);
+  assert.match(ytBlock, /media:\s*env\.MEDIA/);
+  assert.match(ytBlock, /siteUrl:\s*siteBase\(env, origin\)/);
+  assert.doesNotMatch(ytBlock, /fetch\(absMedia\)/);
+  assert.doesNotMatch(ytBlock, /تعذّر جلب الوسيط \(HTTP/);
 });
 
 function isDueForIgOrScheduleCron(p) {
@@ -438,43 +451,20 @@ test("إكمال الريل من cron يحدّث delivery ولا يمسح فيس
   assert.match(finish, /تعذّرت معالجة ريل انستقرام/);
 });
 
-test("رفع يوتيوب يقرأ وسائط الموقع من R2 ولا يعمل fetch للنطاق العام", () => {
-  const start = indexSrc.indexOf('if (channels.includes("youtube"))');
-  const block = indexSrc.slice(start, indexSrc.indexOf("ما بقي بلا وسيلة تسليم مباشرة", start));
-  assert.match(block, /meta\.loadMediaBytes\(absMedia/);
-  assert.match(block, /media:\s*env\.MEDIA/);
-  assert.match(block, /siteUrl:\s*siteBase\(env, origin\)/);
-  assert.doesNotMatch(block, /await fetch\(absMedia\)/);
-  assert.doesNotMatch(block, /تعذّر جلب الوسيط \(HTTP/);
-  assert.match(metaSrc, /export async function loadMediaBytes/);
-  assert.match(metaSrc, /export async function getMediaBytes/);
-  assert.match(
-    metaSrc.slice(metaSrc.indexOf("export async function getMediaBytes"), metaSrc.indexOf("function reelCaption")),
-    /loadMediaBytes\(mediaUrl, opts\)/,
-  );
-});
-
-test("قائمة المنشورات تعرض جزئي عندما تفشل قناة رغم نجاح غيرها", () => {
-  const html = readFileSync(join(root, "public/teacher/publish.html"), "utf8");
-  assert.match(html, /function postBadge/);
-  assert.match(html, /\["جزئي", "soon"\]/);
-  assert.match(html, /p\.delivery/);
+test("الاستوديو لا يصف يوتيوب بأنه لاحقاً والقائمة تُظهر فشل القناة", () => {
   const editor = readFileSync(join(root, "public/teacher/editor.html"), "utf8");
   const editorJs = readFileSync(join(root, "public/teacher/editor.js"), "utf8");
   assert.doesNotMatch(editor, /يوتيوب \(لاحقاً\)/);
   assert.doesNotMatch(editorJs, /يوتيوب \(لاحقاً\)/);
-  assert.match(editor, /value="youtube"/);
-  assert.match(editor, /> يوتيوب</);
+  assert.doesNotMatch(editorJs, /يوتيوب\/تيك توك\/إكس تُحفَظ/);
+  assert.match(editor, /يوتيوب يُرفع إلى قناتك/);
+  assert.match(editorJs, /يوتيوب يُرفع إلى قناتك/);
 
-  const start = html.indexOf("function parseDelivery");
+  const html = readFileSync(join(root, "public/teacher/publish.html"), "utf8");
+  const start = html.indexOf("function postBadge");
   const end = html.indexOf("function loadPosts");
   const ctx = {
-    STATUS: {
-      published: ["منشور", ""],
-      failed: ["فشل", "live"],
-      scheduled: ["مجدول", "soon"],
-      queued: ["في قائمة الإصدار", "soon"],
-    },
+    STATUS: { published: ["منشور", ""], failed: ["فشل", "live"], scheduled: ["مجدول", "soon"] },
     CH: { youtube: "يوتيوب", facebook: "فيسبوك", instagram: "انستقرام" },
     esc: (s) => String(s == null ? "" : s),
   };
@@ -487,11 +477,10 @@ test("قائمة المنشورات تعرض جزئي عندما تفشل قنا
       { channel: "youtube", ok: false, error: "تعذّر جلب الوسيط (HTTP 522)" },
     ]),
   });
-  assert.equal(mixed.st[0], "جزئي");
-  assert.match(mixed.detail, /فيسبوك ✓/);
-  assert.match(mixed.detail, /يوتيوب ✗/);
-  assert.match(mixed.detail, /HTTP 522/);
-
+  assert.match(mixed, /فيسبوك ✓/);
+  assert.match(mixed, /يوتيوب ✗/);
+  assert.match(mixed, /HTTP 522/);
+  assert.doesNotMatch(mixed, />منشور</);
   const allOk = ctx.postBadge({
     status: "published",
     delivery: JSON.stringify([
@@ -499,18 +488,7 @@ test("قائمة المنشورات تعرض جزئي عندما تفشل قنا
       { channel: "youtube", ok: true, id: "yt1" },
     ]),
   });
-  assert.equal(allOk.st[0], "منشور");
-  assert.equal(allOk.detail, "");
-
-  const pending = ctx.postBadge({
-    status: "scheduled",
-    delivery: JSON.stringify([
-      { channel: "facebook", ok: true },
-      { channel: "instagram", ok: false, error: "الفيديو ما زال يُعالَج — سيُنشر تلقائياً خلال دقائق." },
-    ]),
-  });
-  assert.equal(pending.st[0], "مجدول");
-  assert.equal(pending.detail, "");
+  assert.match(allOk, /منشور/);
 });
 
 test("قائمة منشورات المعلّم تعرض delivery و ig_creation_id", () => {

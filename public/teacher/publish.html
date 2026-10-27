@@ -311,40 +311,26 @@
         }).catch(function (err) { show(err && err.message ? err.message : "حدث خطأ في الاتصال."); });
       });
 
-      function parseDelivery(raw) {
-        if (Array.isArray(raw)) return raw;
-        try {
-          var parsed = JSON.parse(raw || "[]");
-          return Array.isArray(parsed) ? parsed : [];
-        } catch (e) { return []; }
-      }
-
-      // معالجة انستقرام المؤجّلة ليست فشلاً نهائياً — يكملها cron.
-      function isPendingDelivery(d) {
-        return !!(d && d.ok === false && /يُعالَج|سيُنشر تلقائياً/.test(d.error || ""));
-      }
-
-      // «منشور» كان يظهر إذا نجح أيّ قناة حتى لو فشلت أخرى. نعرض النتيجة لكل قناة.
       function postBadge(p) {
-        var delivery = parseDelivery(p.delivery);
-        var failed = delivery.filter(function (d) { return d && d.ok === false && !isPendingDelivery(d); });
-        var ok = delivery.filter(function (d) { return d && d.ok; });
         var st = STATUS[p.status] || [p.status, ""];
-        if (failed.length && ok.length) st = ["جزئي", "soon"];
-        else if (failed.length && p.status === "published") st = ["فشل", "live"];
-        var detail = "";
-        if (failed.length) {
-          detail = '<div class="muted" style="font-size:.8rem;margin-top:.25rem">' +
-            delivery.map(function (d) {
-              if (!d || !d.channel) return "";
-              var name = CH[d.channel] || d.channel;
-              var mark = d.ok ? " ✓" : (isPendingDelivery(d) ? " ⏳" : " ✗");
-              var tip = d.error ? ' title="' + esc(d.error) + '"' : "";
-              return "<span" + tip + ">" + esc(name) + mark + "</span>";
-            }).filter(Boolean).join(" · ") +
-            "</div>";
+        var delivery = [];
+        try {
+          var parsed = JSON.parse(p.delivery || "[]");
+          if (Array.isArray(parsed)) delivery = parsed;
+        } catch (e) { delivery = []; }
+        var rows = delivery.filter(function (x) { return x && x.channel; });
+        var failed = rows.filter(function (x) { return x.ok === false; });
+        if (p.status === "published" && failed.length) {
+          var bits = rows.map(function (x) {
+            var name = CH[x.channel] || x.channel;
+            return name + (x.ok ? " ✓" : " ✗");
+          }).join(" · ");
+          var title = failed.map(function (x) {
+            return (CH[x.channel] || x.channel) + ": " + (x.error || "فشل");
+          }).join(" — ");
+          return '<span class="badge soon" title="' + esc(title) + '">' + esc(bits) + "</span>";
         }
-        return { st: st, detail: detail };
+        return '<span class="badge ' + st[1] + '">' + esc(st[0]) + "</span>";
       }
 
       function loadPosts() {
@@ -366,14 +352,12 @@
             var chans = [];
             try { chans = JSON.parse(p.channels || "[]"); } catch (e) { chans = []; }
             var chLabel = chans.map(function (c) { return CH[c] || c; }).join(" · ");
-            var badge = postBadge(p);
-            var st = badge.st;
             var when = p.scheduled_at || p.created_at || "—";
             return '<tr data-id="' + p.id + '">' +
               "<td>" + (p.content ? esc(p.content) : '<span class="muted">— وسائط —</span>') + "</td>" +
               "<td>" + esc(chLabel) + "</td>" +
               "<td>" + esc(when) + "</td>" +
-              '<td><span class="badge ' + st[1] + '">' + st[0] + "</span>" + badge.detail + "</td>" +
+              "<td>" + postBadge(p) + "</td>" +
               '<td><a href="#" class="gold rm-del" data-id="' + p.id + '">حذف</a></td>' +
               "</tr>";
           }).join("");

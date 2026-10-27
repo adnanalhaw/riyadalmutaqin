@@ -2547,13 +2547,12 @@ async function deliverPost(
         delivered.push({ channel: "youtube", ok: false, error: "قناة يوتيوب غير مربوطة — اربطها من «ربط الحسابات»." });
       } else {
         try {
-          // نفس جلب ريلز فيسبوك: وسائط الموقع من R2، لا fetch للنطاق العام (HTTP 522).
-          const file = await meta.loadMediaBytes(absMedia, {
+          const file = await meta.getMediaFile(absMedia, {
             media: env.MEDIA,
             siteUrl: siteBase(env, origin),
           });
           const title = (content ?? "").split("\n")[0].slice(0, 90) || "رياض المتقين";
-          const v = await yt.uploadVideo(token, file.bytes, file.contentType, {
+          const v = await yt.uploadVideo(token, file.bytes, file.contentType || "video/mp4", {
             title,
             description: content ?? "",
             privacy: "public",
@@ -2577,11 +2576,7 @@ async function deliverPost(
   return { delivered, igPending };
 }
 
-/**
- * حالة المنشور المخزّنة. قيد CHECK لا يشمل «partial»، لذلك النجاح الجزئي يبقى
- * `published` ويُعرض «جزئي» في القائمة من حقل `delivery` (انظر واجهة النشر).
- * نجح أيٌّ منها → published، فشل الكلّ → failed.
- */
+/** حالة المنشور من نتائج التسليم: نجح أيٌّ منها → published، فشل الكلّ → failed. */
 function postStatus(delivered: DeliveryResult[], channels: string[]): string {
   if (!delivered.length) return "queued";
   if (delivered.some((d) => d.ok)) return "published";
