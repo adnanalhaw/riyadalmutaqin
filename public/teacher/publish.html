@@ -311,6 +311,42 @@
         }).catch(function (err) { show(err && err.message ? err.message : "حدث خطأ في الاتصال."); });
       });
 
+      function parseDelivery(raw) {
+        if (Array.isArray(raw)) return raw;
+        try {
+          var parsed = JSON.parse(raw || "[]");
+          return Array.isArray(parsed) ? parsed : [];
+        } catch (e) { return []; }
+      }
+
+      // معالجة انستقرام المؤجّلة ليست فشلاً نهائياً — يكملها cron.
+      function isPendingDelivery(d) {
+        return !!(d && d.ok === false && /يُعالَج|سيُنشر تلقائياً/.test(d.error || ""));
+      }
+
+      // «منشور» كان يظهر إذا نجح أيّ قناة حتى لو فشلت أخرى. نعرض النتيجة لكل قناة.
+      function postBadge(p) {
+        var delivery = parseDelivery(p.delivery);
+        var failed = delivery.filter(function (d) { return d && d.ok === false && !isPendingDelivery(d); });
+        var ok = delivery.filter(function (d) { return d && d.ok; });
+        var st = STATUS[p.status] || [p.status, ""];
+        if (failed.length && ok.length) st = ["جزئي", "soon"];
+        else if (failed.length && p.status === "published") st = ["فشل", "live"];
+        var detail = "";
+        if (failed.length) {
+          detail = '<div class="muted" style="font-size:.8rem;margin-top:.25rem">' +
+            delivery.map(function (d) {
+              if (!d || !d.channel) return "";
+              var name = CH[d.channel] || d.channel;
+              var mark = d.ok ? " ✓" : (isPendingDelivery(d) ? " ⏳" : " ✗");
+              var tip = d.error ? ' title="' + esc(d.error) + '"' : "";
+              return "<span" + tip + ">" + esc(name) + mark + "</span>";
+            }).filter(Boolean).join(" · ") +
+            "</div>";
+        }
+        return { st: st, detail: detail };
+      }
+
       function loadPosts() {
         var body = document.getElementById("postsBody");
         RM.api("/api/teacher/posts").then(function (res) {
@@ -330,13 +366,14 @@
             var chans = [];
             try { chans = JSON.parse(p.channels || "[]"); } catch (e) { chans = []; }
             var chLabel = chans.map(function (c) { return CH[c] || c; }).join(" · ");
-            var st = STATUS[p.status] || [p.status, ""];
+            var badge = postBadge(p);
+            var st = badge.st;
             var when = p.scheduled_at || p.created_at || "—";
             return '<tr data-id="' + p.id + '">' +
               "<td>" + (p.content ? esc(p.content) : '<span class="muted">— وسائط —</span>') + "</td>" +
               "<td>" + esc(chLabel) + "</td>" +
               "<td>" + esc(when) + "</td>" +
-              '<td><span class="badge ' + st[1] + '">' + st[0] + "</span></td>" +
+              '<td><span class="badge ' + st[1] + '">' + st[0] + "</span>" + badge.detail + "</td>" +
               '<td><a href="#" class="gold rm-del" data-id="' + p.id + '">حذف</a></td>' +
               "</tr>";
           }).join("");

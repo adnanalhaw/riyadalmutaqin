@@ -917,11 +917,24 @@ export type MediaBytesSource = {
   siteUrl?: string | null;
 };
 
+/** نوع MIME للرفع: من ترويسة المخزن/الاستجابة، وإلا من امتداد الرابط. */
+function contentTypeForUpload(url: string, header: string | null | undefined): string {
+  const raw = (header ?? "").split(";")[0].trim().toLowerCase();
+  if (raw.startsWith("video/")) return raw;
+  if (/\.webm(\?|#|$)/i.test(url)) return "video/webm";
+  if (/\.mov(\?|#|$)/i.test(url)) return "video/quicktime";
+  return "video/mp4";
+}
+
 /**
- * بايتات الفيديو: من R2 إن كان الرابط وسائط هذا الموقع، وإلا جلب HTTP خارجي.
+ * بايتات الفيديو ونوعها: من R2 إن كان الرابط وسائط هذا الموقع، وإلا جلب HTTP خارجي.
  * لا نعمل fetch لنطاق الموقع من داخل الـ Worker — يفشل غالباً بـ HTTP 522.
+ * يستعملها فيسبوك (`getMediaBytes`) ويوتيوب (`loadMediaBytes`) معاً.
  */
-export async function getMediaBytes(mediaUrl: string, opts?: MediaBytesSource | null): Promise<ArrayBuffer> {
+export async function loadMediaBytes(
+  mediaUrl: string,
+  opts?: MediaBytesSource | null,
+): Promise<{ bytes: ArrayBuffer; contentType: string }> {
   const key = mediaKeyFromUrl(mediaUrl, opts?.siteUrl);
   if (key) {
     const store = opts?.media;
@@ -930,14 +943,22 @@ export async function getMediaBytes(mediaUrl: string, opts?: MediaBytesSource | 
     if (!obj) throw new Error("ملف الفيديو غير موجود في المخزن.");
     const bytes = await obj.arrayBuffer();
     if (!bytes.byteLength) throw new Error("ملف الفيديو فارغ.");
-    return bytes;
+    return {
+      bytes,
+      contentType: contentTypeForUpload(mediaUrl, obj.httpMetadata?.contentType),
+    };
   }
 
   const res = await fetch(mediaUrl);
   if (!res.ok) throw new Error(`تعذّر جلب الفيديو من الخادم (HTTP ${res.status}).`);
   const bytes = await res.arrayBuffer();
   if (!bytes.byteLength) throw new Error("ملف الفيديو فارغ.");
-  return bytes;
+  return { bytes, contentType: contentTypeForUpload(mediaUrl, res.headers.get("content-type")) };
+}
+
+/** بايتات الفيديو فقط — نفس مسار `loadMediaBytes`. */
+export async function getMediaBytes(mediaUrl: string, opts?: MediaBytesSource | null): Promise<ArrayBuffer> {
+  return (await loadMediaBytes(mediaUrl, opts)).bytes;
 }
 
 function reelCaption(content: string | null): { title?: string; description?: string } {

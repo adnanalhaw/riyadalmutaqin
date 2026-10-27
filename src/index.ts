@@ -2547,11 +2547,13 @@ async function deliverPost(
         delivered.push({ channel: "youtube", ok: false, error: "قناة يوتيوب غير مربوطة — اربطها من «ربط الحسابات»." });
       } else {
         try {
-          const res = await fetch(absMedia);
-          if (!res.ok) throw new Error(`تعذّر جلب الوسيط (HTTP ${res.status})`);
-          const bytes = await res.arrayBuffer();
+          // نفس جلب ريلز فيسبوك: وسائط الموقع من R2، لا fetch للنطاق العام (HTTP 522).
+          const file = await meta.loadMediaBytes(absMedia, {
+            media: env.MEDIA,
+            siteUrl: siteBase(env, origin),
+          });
           const title = (content ?? "").split("\n")[0].slice(0, 90) || "رياض المتقين";
-          const v = await yt.uploadVideo(token, bytes, res.headers.get("content-type") || "video/mp4", {
+          const v = await yt.uploadVideo(token, file.bytes, file.contentType, {
             title,
             description: content ?? "",
             privacy: "public",
@@ -2575,7 +2577,11 @@ async function deliverPost(
   return { delivered, igPending };
 }
 
-/** حالة المنشور من نتائج التسليم: نجح أيٌّ منها → published، فشل الكلّ → failed. */
+/**
+ * حالة المنشور المخزّنة. قيد CHECK لا يشمل «partial»، لذلك النجاح الجزئي يبقى
+ * `published` ويُعرض «جزئي» في القائمة من حقل `delivery` (انظر واجهة النشر).
+ * نجح أيٌّ منها → published، فشل الكلّ → failed.
+ */
 function postStatus(delivered: DeliveryResult[], channels: string[]): string {
   if (!delivered.length) return "queued";
   if (delivered.some((d) => d.ok)) return "published";
