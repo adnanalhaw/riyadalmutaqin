@@ -2547,11 +2547,12 @@ async function deliverPost(
         delivered.push({ channel: "youtube", ok: false, error: "قناة يوتيوب غير مربوطة — اربطها من «ربط الحسابات»." });
       } else {
         try {
-          const res = await fetch(absMedia);
-          if (!res.ok) throw new Error(`تعذّر جلب الوسيط (HTTP ${res.status})`);
-          const bytes = await res.arrayBuffer();
+          const file = await meta.getMediaFile(absMedia, {
+            media: env.MEDIA,
+            siteUrl: siteBase(env, origin),
+          });
           const title = (content ?? "").split("\n")[0].slice(0, 90) || "رياض المتقين";
-          const v = await yt.uploadVideo(token, bytes, res.headers.get("content-type") || "video/mp4", {
+          const v = await yt.uploadVideo(token, file.bytes, file.contentType || "video/mp4", {
             title,
             description: content ?? "",
             privacy: "public",

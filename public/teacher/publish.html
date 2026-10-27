@@ -311,6 +311,28 @@
         }).catch(function (err) { show(err && err.message ? err.message : "حدث خطأ في الاتصال."); });
       });
 
+      function postBadge(p) {
+        var st = STATUS[p.status] || [p.status, ""];
+        var delivery = [];
+        try {
+          var parsed = JSON.parse(p.delivery || "[]");
+          if (Array.isArray(parsed)) delivery = parsed;
+        } catch (e) { delivery = []; }
+        var rows = delivery.filter(function (x) { return x && x.channel; });
+        var failed = rows.filter(function (x) { return x.ok === false; });
+        if (p.status === "published" && failed.length) {
+          var bits = rows.map(function (x) {
+            var name = CH[x.channel] || x.channel;
+            return name + (x.ok ? " ✓" : " ✗");
+          }).join(" · ");
+          var title = failed.map(function (x) {
+            return (CH[x.channel] || x.channel) + ": " + (x.error || "فشل");
+          }).join(" — ");
+          return '<span class="badge soon" title="' + esc(title) + '">' + esc(bits) + "</span>";
+        }
+        return '<span class="badge ' + st[1] + '">' + esc(st[0]) + "</span>";
+      }
+
       function loadPosts() {
         var body = document.getElementById("postsBody");
         RM.api("/api/teacher/posts").then(function (res) {
@@ -330,13 +352,12 @@
             var chans = [];
             try { chans = JSON.parse(p.channels || "[]"); } catch (e) { chans = []; }
             var chLabel = chans.map(function (c) { return CH[c] || c; }).join(" · ");
-            var st = STATUS[p.status] || [p.status, ""];
             var when = p.scheduled_at || p.created_at || "—";
             return '<tr data-id="' + p.id + '">' +
               "<td>" + (p.content ? esc(p.content) : '<span class="muted">— وسائط —</span>') + "</td>" +
               "<td>" + esc(chLabel) + "</td>" +
               "<td>" + esc(when) + "</td>" +
-              '<td><span class="badge ' + st[1] + '">' + st[0] + "</span></td>" +
+              "<td>" + postBadge(p) + "</td>" +
               '<td><a href="#" class="gold rm-del" data-id="' + p.id + '">حذف</a></td>' +
               "</tr>";
           }).join("");

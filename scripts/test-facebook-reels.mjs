@@ -327,6 +327,7 @@ test("getMediaBytes يقرأ من المخزن ولا يستدعي fetch لوس�
 
 test("المصدر يقرأ وسائط الموقع من R2 ولا يعمل fetch لنطاقه", () => {
   assert.match(metaSrc, /export function mediaKeyFromUrl/);
+  assert.match(metaSrc, /export async function getMediaFile/);
   assert.match(metaSrc, /export async function getMediaBytes/);
   assert.match(metaSrc, /path\.slice\("\/api\/media\/"\.length\)/);
   const loader = metaSrc.slice(
@@ -342,6 +343,18 @@ test("المصدر يقرأ وسائط الموقع من R2 ولا يعمل fetc
     metaSrc.indexOf("export async function createIgContainer"),
   );
   assert.match(fb, /getMediaBytes\(mediaUrl, env\)/);
+});
+
+test("يوتيوب يقرأ وسائط الموقع من R2 ولا يعمل fetch للرابط العام", () => {
+  const ytBlock = indexSrc.slice(
+    indexSrc.indexOf("٣) يوتيوب"),
+    indexSrc.indexOf("٤) ما بقي"),
+  );
+  assert.match(ytBlock, /meta\.getMediaFile\(absMedia/);
+  assert.match(ytBlock, /media:\s*env\.MEDIA/);
+  assert.match(ytBlock, /siteUrl:\s*siteBase\(env, origin\)/);
+  assert.doesNotMatch(ytBlock, /fetch\(absMedia\)/);
+  assert.doesNotMatch(ytBlock, /تعذّر جلب الوسيط \(HTTP/);
 });
 
 function isDueForIgOrScheduleCron(p) {
