@@ -36,6 +36,10 @@ bucket_name = "riyad-media"
 [triggers]
 crons = ["*/5 * * * *"]
 
+# تفريغ خطبة الجمعة (Whisper). لا سرّ؛ يُفعَّل مع Workers AI على الحساب.
+[ai]
+binding = "AI"
+
 # متغيّرات عامة غير سرّية. الأسرار تُضاف عبر:  wrangler secret put <NAME>
 [vars]
 ENVIRONMENT = "production"

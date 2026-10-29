@@ -23,6 +23,7 @@ jobs:
       FB_LOGIN_CONFIG_ID: ${{ secrets.FB_LOGIN_CONFIG_ID }}
       GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
       GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
     steps:
       - name: استنساخ المستودع
         uses: actions/checkout@v4
@@ -108,3 +109,13 @@ jobs:
           secrets: |
             GOOGLE_CLIENT_ID
             GOOGLE_CLIENT_SECRET
+
+      # اختياري: Whisper بكلمة-بكلمة لقالب خطبة الجمعة. Workers AI هو المسار الافتراضي.
+      - name: تثبيت مفتاح تفريغ OpenAI
+        if: ${{ env.OPENAI_API_KEY != '' }}
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          secrets: |
+            OPENAI_API_KEY

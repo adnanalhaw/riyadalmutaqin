@@ -19,6 +19,7 @@ import {
 } from "./auth";
 import * as yt from "./youtube";
 import * as meta from "./meta";
+import * as khutbah from "./khutbah-transcribe";
 
 export interface Env {
   /** أصول الموقع العام (Static Assets). */
@@ -50,6 +51,10 @@ export interface Env {
   FB_APP_SECRET?: string;
   /** إعداد Facebook Login for Business (config_id) — يستبدل scope في حوار الربط. */
   FB_LOGIN_CONFIG_ID?: string;
+  /** تفريغ خطبة الجمعة. الربط بلا سر؛ الغياب يُظهر خطأ التفريغ بصدق. */
+  AI?: Ai;
+  /** اختياري: Whisper بكلمة-بكلمة إن غاب Workers AI أو لم يُرجع توقيتاً. */
+  OPENAI_API_KEY?: string;
 }
 
 const json = (data: unknown, status = 200, headers: Record<string, string> = {}): Response =>
@@ -1638,6 +1643,51 @@ async function uploadMedia(request: Request, env: Env): Promise<Response> {
   return json({ ok: true, key, url: `/api/media/${key}` }, 201);
 }
 
+/** تفريغ صوت خطبة الجمعة إلى كلمات أو مقاطع موقّتة. بلا توقيت من المزود لا نختلق أوقاتاً. */
+async function transcribeClip(request: Request, env: Env, user: AuthUser): Promise<Response> {
+  if (await rateLimited(env, request, "khutbah-stt", 24, 60)) {
+    return json({ ok: false, error: "تجاوزت حد التفريغ. حاول بعد ساعة." }, 429);
+  }
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    return json({ ok: false, error: "تعذّر قراءة الملف." }, 400);
+  }
+  const entry = form.get("file");
+  if (entry == null || typeof entry === "string") return json({ ok: false, error: "لم يُرفَق صوت." }, 400);
+  const file = entry as File;
+  if (!file.size) return json({ ok: false, error: "ملف الصوت فارغ." }, 400);
+  if (file.size > khutbah.MAX_AUDIO_BYTES) {
+    return json({ ok: false, error: "ملف الصوت أكبر من حد التفريغ. قصّ مقطعاً أقصر من ٣ دقائق." }, 413);
+  }
+  const mime = khutbah.audioMime(file.type || "", file.name || "");
+  if (!mime) return json({ ok: false, error: "صيغة الصوت غير مدعومة." }, 415);
+  const bytes = await file.arrayBuffer();
+  try {
+    const workers = env.AI
+      ? (model: string, input: Record<string, unknown>) =>
+          (env.AI as unknown as { run: (m: string, i: Record<string, unknown>) => Promise<unknown> }).run(model, input)
+      : undefined;
+    const result = await khutbah.transcribeAudio({ workers, openAiKey: env.OPENAI_API_KEY }, bytes, mime);
+    await audit(env, user.email, "khutbah.transcribe", `${result.provider} words=${result.words.length} ${result.granularity}`);
+    return json({
+      ok: true,
+      provider: result.provider,
+      granularity: result.granularity,
+      text: result.text,
+      words: result.words,
+    });
+  } catch (err) {
+    const reason = err instanceof Error ? err.message.replace(/sk-[A-Za-z0-9_-]+/g, "…").slice(0, 180) : "";
+    return json({
+      ok: false,
+      error: "تعذّر تفريغ الصوت بتوقيت حقيقي. فعّل Workers AI أو أضف السر OPENAI_API_KEY. يمكنك إضافة العبارات يدوياً مع وقت البداية والنهاية.",
+      detail: reason,
+    }, 502);
+  }
+}
+
 async function handleTeacher(
   request: Request,
   env: Env,
@@ -1647,6 +1697,7 @@ async function handleTeacher(
 ): Promise<Response> {
   // رفع الوسائط
   if (route === "POST /api/teacher/media") return uploadMedia(request, env);
+  if (route === "POST /api/teacher/transcribe") return transcribeClip(request, env, user);
 
   // قائمة الدروس (تشمل المسودّات) — المعلّم يرى محتواه فقط، الأدمن يرى الكلّ.
   if (route === "GET /api/teacher/lessons") {

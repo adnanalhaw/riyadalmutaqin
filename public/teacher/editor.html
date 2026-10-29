@@ -8,7 +8,7 @@
   <meta name="theme-color" content="#0b1430" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Aref+Ruqaa:wght@400;700&family=Tajawal:wght@400;500;700;800&family=Amiri:wght@400;700&family=Scheherazade+New:wght@400;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/styles.css" />
   <style>
     .studio-frame {
@@ -27,6 +27,44 @@
       object-fit: cover;
       background: #000;
     }
+    .studio-frame.is-live canvas {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      background: transparent;
+      pointer-events: none;
+    }
+    .studio-frame.is-live video.kh-live {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      background: #000;
+    }
+    .kh-sources { display: flex; flex-direction: column; gap: .7rem; margin: .2rem 0 1rem; }
+    .kh-source {
+      display: flex; flex-direction: column; gap: .15rem;
+      border: 1px solid var(--border); border-radius: 14px;
+      padding: .75rem .9rem; cursor: pointer; background: rgba(0,0,0,.12);
+    }
+    .kh-source:has(input:checked) {
+      border-color: var(--gold);
+      box-shadow: inset 0 0 0 1px var(--gold-dim);
+    }
+    .kh-source input { width: auto; }
+    .kh-source-title { font-weight: 800; color: var(--gold-soft); }
+    .kh-source-hint { color: var(--muted); font-size: .88rem; line-height: 1.6; }
+    .kh-cue { display: flex; gap: .45rem; align-items: center; margin-bottom: .45rem; flex-wrap: wrap; }
+    .kh-cue input[type="text"] { flex: 1; min-width: 140px; }
+    .kh-time { color: var(--muted); font-size: .78rem; direction: ltr; unicode-bidi: isolate; }
+    .kh-tools { display: flex; gap: .6rem; align-items: center; margin-top: .7rem; }
+    .kh-tools[hidden],
+    #audioRow[hidden],
+    #mosqueRow[hidden],
+    #trimRow[hidden],
+    #cardRow[hidden],
+    #cueBox[hidden],
+    #speakerBox[hidden],
+    #webBox[hidden] { display: none !important; }
     .studio-frame--reel {
       width: min(280px, 72vw);
       aspect-ratio: 9 / 16;
@@ -72,7 +110,7 @@
         <section>
           <div class="page-head" style="padding-top:0">
             <h1>المونتاج</h1>
-            <p>صمّم بطاقةً موحّدةً (شعار + اسم الملقي + عنوان الدرس) وأنتج منها <strong>ريلز 9:16</strong> لانستقرام وفيسبوك (صوت + الخلفية المزخرفة) — كل ذلك داخل متصفّحك.</p>
+            <p>ارفع فيديو الخطبة من القسم ٣: <strong>فيديوهات الملقي</strong> أو <strong>مقاطع من النت</strong>. قالب خطبة الجمعة يُرسم تلقائياً فوق الصورة (عنوان وملقي من بيانات البطاقة، ونصوص متزامنة)، ثم يُنشر من نفس مسار فيسبوك وانستقرام ويوتيوب.</p>
             <p id="staffBack" class="muted" hidden style="margin:.7rem 0 0;font-size:.92rem"></p>
           </div>
 
@@ -101,9 +139,13 @@
             </div>
             <div class="field">
               <label for="topic">عنوان الدرس</label>
-              <input type="text" id="topic" placeholder="مثال: أجمل ما قيل في ذمّ التفاخر في الدنيا" />
+              <input type="text" id="topic" placeholder="مثال: نفع الناس" />
             </div>
-            <label style="display:flex;align-items:center;gap:.6rem;margin:0">
+            <div class="field" id="mosqueRow">
+              <label for="mosque">اسم المسجد في الخاتمة (اختياري)</label>
+              <input type="text" id="mosque" placeholder="مثال: مسجد غانم المنير السهلي" />
+            </div>
+            <label id="audioRow" style="display:flex;align-items:center;gap:.6rem;margin:0">
               <input type="checkbox" id="audioTgl" style="width:auto" /> إظهار موجة صوتية على البطاقة
             </label>
           </div>
@@ -119,14 +161,71 @@
             </div>
           </div>
 
-          <!-- رفع الملف -->
-          <div class="card" style="margin-bottom:1.2rem">
-            <h3 style="color:var(--gold);margin-top:0">٣) ملفّ الصوت / الفيديو</h3>
-            <div class="field" style="margin:0">
-              <label for="file">ارفع مقطعاً صوتيّاً (مُستحسَن) أو فيديو — يُؤخَذ الصوت فقط</label>
-              <input type="file" id="file" accept="audio/*,video/*" />
+          <!-- مصدر المقطع -->
+          <div class="card" id="khSource" style="margin-bottom:1.2rem">
+            <h3 style="color:var(--gold);margin-top:0">٣) مصدر المقطع</h3>
+            <label style="display:flex;align-items:center;gap:.6rem;margin:0 0 .9rem">
+              <input type="checkbox" id="khutbahTgl" checked style="width:auto" />
+              قالب خطبة الجمعة — يُطبَّق تلقائياً على الفيديو المرفوع
+            </label>
+            <div class="kh-sources">
+              <label class="kh-source">
+                <input type="radio" name="sourceKind" value="speaker" checked />
+                <span class="kh-source-title">فيديوهات الملقي</span>
+                <span class="kh-source-hint">تسجيل الملقي نفسه. صورته تبقى تحت القالب في ريلز 9:16 وبقية المقاسات.</span>
+              </label>
+              <label class="kh-source">
+                <input type="radio" name="sourceKind" value="web" />
+                <span class="kh-source-title">مقاطع من النت</span>
+                <span class="kh-source-hint">مقطع من مصدر خارجي. نفس القالب فوق الصورة. تأكد من حق الاستخدام قبل النشر.</span>
+              </label>
             </div>
-            <p class="muted" id="fileInfo" style="margin:.6rem 0 0;font-size:.88rem"></p>
+            <div class="field" id="speakerBox" style="margin:0">
+              <label for="file">ارفع فيديو الملقي</label>
+              <input type="file" id="file" accept="video/*,audio/*" />
+            </div>
+            <div class="field" id="webBox" hidden style="margin:0">
+              <label for="fileWeb">ارفع مقطع الفيديو</label>
+              <input type="file" id="fileWeb" accept="video/*,audio/*" />
+            </div>
+            <p class="muted" id="fileHint" style="margin:.7rem 0 0;font-size:.88rem;line-height:1.7"></p>
+            <p class="muted" id="fileInfo" style="margin:.35rem 0 0;font-size:.88rem"></p>
+            <div id="trimRow" style="display:flex;gap:.7rem;flex-wrap:wrap;margin-top:.9rem">
+              <div class="field" style="flex:1;min-width:120px;margin:0">
+                <label for="trimStart">بداية القص (ثانية)</label>
+                <input type="number" id="trimStart" min="0" step="0.1" value="0" />
+              </div>
+              <div class="field" style="flex:1;min-width:120px;margin:0">
+                <label for="trimEnd">نهاية القص (ثانية، فارغة = آخر المقطع)</label>
+                <input type="number" id="trimEnd" min="0" step="0.1" placeholder="تلقائي" />
+              </div>
+            </div>
+            <div id="cardRow" style="margin-top:.9rem">
+              <label for="cardText">بطاقة قرآن أو حديث (اختياري)</label>
+              <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem">
+                <select id="cardType" style="flex:0 0 110px">
+                  <option value="quran">قرآن</option>
+                  <option value="hadith">حديث</option>
+                </select>
+                <input id="cardText" type="text" placeholder="نص البطاقة" style="flex:1;min-width:160px" />
+                <input id="cardCite" type="text" placeholder="السورة أو الإسناد" style="flex:1;min-width:140px" />
+                <input id="cardAt" type="number" min="0" step="0.1" placeholder="من (ث)" style="width:96px" />
+                <input id="cardEnd" type="number" min="0" step="0.1" placeholder="إلى (ث)" style="width:96px" />
+              </div>
+              <p class="muted" style="font-size:.82rem;margin:.45rem 0 0">التوقيت هنا من اختيارك. الكشف التلقائي يغطي عبارات قليلة فقط (مثل «وافعلوا الخير» و«أنفعهم للناس») ولا يخترع أوقاتاً.</p>
+            </div>
+            <div id="cueBox" style="margin-top:1rem">
+              <label>النصوص المتزامنة</label>
+              <p class="muted" id="cueNote" style="font-size:.85rem;margin:.2rem 0 .6rem">بعد إرفاق الفيديو يُفرَّغ الصوت إلى عبارات بتوقيتها. صحّح النص كما تشاء. لإضافة عبارة: اكتبها مع وقت البداية والنهاية.</p>
+              <div id="cueList"></div>
+              <div class="kh-cue">
+                <input type="text" id="phraseText" placeholder="عبارة تُضاف يدوياً" />
+                <input type="number" id="phraseStart" min="0" step="0.1" placeholder="من" style="width:84px" />
+                <input type="number" id="phraseEnd" min="0" step="0.1" placeholder="إلى" style="width:84px" />
+                <button type="button" class="btn" id="addPhraseBtn">إضافة</button>
+              </div>
+              <button type="button" class="btn" id="reTransBtn" style="margin-top:.4rem">أعد التفريغ</button>
+            </div>
           </div>
 
           <!-- المعاينة -->
@@ -134,8 +233,13 @@
             <span class="muted" style="font-size:.85rem" id="previewLbl">معاينة ريلز 9:16 — انستقرام / فيسبوك</span>
             <div style="text-align:center;margin-top:.6rem">
               <div id="previewFrame" class="studio-frame studio-frame--reel">
+                <video id="liveVideo" class="kh-live" playsinline webkit-playsinline hidden></video>
                 <canvas id="preview" width="1080" height="1920"></canvas>
               </div>
+            </div>
+            <div id="khTools" class="kh-tools" hidden>
+              <button type="button" class="btn" id="previewPlay">▶ معاينة</button>
+              <input type="range" id="scrub" min="0" max="0" step="0.05" value="0" style="flex:1" />
             </div>
           </div>
 
@@ -150,8 +254,8 @@
             </div>
             <div id="downloadWrap" style="margin-top:1rem"></div>
             <div class="notice" style="margin-top:1rem">
-              المعالجة تجري بالكامل داخل متصفّحك — لا يُرفع شيء إلى خادم إلا عند الضغط على «نشر».
-              الفيديو يُحمّل محرّك ffmpeg لأوّل مرّة (~30MB) ثم يُحفظ بالكاش.
+              صورة الفيديو تُركَّب داخل متصفّحك. قالب خطبة الجمعة يرسل <strong>صوت</strong> المقطع فقط لتفريغ النصوص مع توقيتها، ثم يُحرق القالب على الصورة. الفيديو نفسه لا يُرفع إلا عند الضغط على «نشر».
+              محرّك ffmpeg يُحمَّل لأوّل مرّة (~30MB) ثم يُحفظ بالكاش.
             </div>
 
             <!-- وجهات النشر -->
@@ -190,6 +294,8 @@
   <script src="/teacher/nav.js"></script>
   <script src="/vendor/ffmpeg/util.js"></script>
   <script src="/vendor/ffmpeg/ffmpeg.js"></script>
+  <script src="/teacher/khutbah-cues.js"></script>
+  <script src="/teacher/khutbah.js"></script>
   <script src="/teacher/editor.js"></script>
 </body>
 </html>
