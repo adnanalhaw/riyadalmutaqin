@@ -19,6 +19,11 @@
   var MIN_VIDEO_BYTES = 1024;
 
   var ff = null, loadPromise = null, busy = false, results = [], chosenFile = null;
+  var mediaDuration = 0, liveUrl = "", scrubbing = false;
+  var ffChain = Promise.resolve();
+  var written = { sig: "", name: "" };
+  var transcriptSig = "", transcriptWords = null, pendingTranscript = null;
+  var cueState = { sig: "", cues: [] };
 
   var logo = new Image(); var logoReady = false;
   logo.onload = function () { logoReady = true; drawPreview(); };
@@ -51,7 +56,151 @@
     var hon = val("hon");
     var nm = val("name");
     var nameLine = (hon ? hon + " " : "") + nm;
-    return { name: nameLine.trim(), topic: val("topic"), audio: $("audioTgl") && $("audioTgl").checked };
+    return { name: nameLine.trim(), topic: val("topic"), audio: $("audioTgl") && $("audioTgl").checked, mosque: val("mosque") };
+  }
+
+  function khutbahOn() { var e = $("khutbahTgl"); return !!(e && e.checked && window.Khutbah); }
+  function sourceKind() {
+    var r = document.querySelector('input[name="sourceKind"]:checked');
+    return r && r.value === "web" ? "web" : "speaker";
+  }
+  function sourceLabel() { return sourceKind() === "web" ? "مقاطع من النت" : "فيديوهات الملقي"; }
+  function activeInput() { return sourceKind() === "web" ? $("fileWeb") : $("file"); }
+  function activeFile() {
+    var input = activeInput();
+    return (input && input.files && input.files[0]) || null;
+  }
+  function fileSig(file) {
+    return [file.name, file.size, file.lastModified].join("|");
+  }
+  function trimWindow() {
+    var full = isFinite(mediaDuration) ? mediaDuration : 0;
+    var start = Math.max(0, Number(val("trimStart")) || 0);
+    var endRaw = $("trimEnd") ? $("trimEnd").value : "";
+    var end = endRaw === "" ? full : Number(endRaw);
+    if (!isFinite(end) || end <= start) end = full > start ? full : start;
+    if (full && end > full) end = full;
+    return { start: start, end: end, dur: Math.max(0, end - start), full: full };
+  }
+  function clipSig(file) {
+    var tw = trimWindow();
+    return [fileSig(file), tw.start, tw.end, sourceKind()].join("|");
+  }
+  function manualCard() {
+    var text = val("cardText");
+    if (!text) return null;
+    return { text: text, cite: val("cardCite"), type: $("cardType") ? $("cardType").value : "quran", at: Number($("cardAt") && $("cardAt").value), end: Number($("cardEnd") && $("cardEnd").value) };
+  }
+  function cuesForExport() {
+    var file = activeFile();
+    var sig = file ? clipSig(file) : "";
+    var base = cueState.sig === sig || cueState.sig === "manual" ? cueState.cues : [];
+    var copy = base.map(function (c) { return Object.assign({}, c, { keywords: (c.keywords || []).slice() }); });
+    copy.forEach(function (c) { KhutbahCues.refreshCue(c); });
+    return KhutbahCues.applyManual(copy, manualCard());
+  }
+  function ffEnqueue(fn) {
+    var run = ffChain.then(fn, fn);
+    ffChain = run.then(function () {}, function () {});
+    return run;
+  }
+  function writeInput(file) {
+    var sig = fileSig(file);
+    if (written.sig === sig && written.name) return Promise.resolve(written.name);
+    var name = "in_" + Date.now() + "_" + String(file.name || "clip").replace(/[^\w.\-]+/g, "_");
+    return FU.fetchFile(file).then(function (data) {
+      return ff.writeFile(name, data).then(function () {
+        if (written.name && written.name !== name) {
+          try { ff.deleteFile(written.name); } catch (e) { /* previous input */ }
+        }
+        written = { sig: sig, name: name };
+        return name;
+      });
+    });
+  }
+  function renderCueList() {
+    var list = $("cueList");
+    if (!list) return;
+    list.innerHTML = "";
+    cueState.cues.forEach(function (cue, index) {
+      var row = document.createElement("div");
+      row.className = "kh-cue";
+      var time = document.createElement("span");
+      time.className = "kh-time";
+      time.textContent = cue.start.toFixed(1) + "–" + cue.end.toFixed(1);
+      var input = document.createElement("input");
+      input.type = "text";
+      input.value = cue.text;
+      input.addEventListener("input", function () {
+        cueState.cues[index].text = input.value;
+        cueState.cues[index].manual = false;
+        KhutbahCues.refreshCue(cueState.cues[index]);
+        drawPreview();
+      });
+      row.appendChild(time);
+      row.appendChild(input);
+      list.appendChild(row);
+    });
+  }
+  function acceptWords(file, words) {
+    var kept = cueState.cues.filter(function (c) { return c.userAdded; });
+    var built = KhutbahCues.buildCues(words).concat(kept);
+    built.sort(function (a, b) { return a.start - b.start; });
+    cueState = { sig: clipSig(file), cues: built };
+    transcriptWords = words;
+    transcriptSig = clipSig(file);
+    renderCueList();
+    drawPreview();
+  }
+  function postTranscribe(audio) {
+    var fd = new FormData();
+    fd.append("file", new Blob([audio.bytes], { type: audio.mime }), audio.filename);
+    return fetch("/api/teacher/transcribe", { method: "POST", body: fd })
+      .then(function (r) { return r.json().catch(function () { return { ok: false, error: "تعذّر قراءة رد التفريغ" }; }); })
+      .then(function (d) {
+        if (!d.ok || !d.words || !d.words.length) throw new Error(d.error || "لا توقيت للكلمات");
+        return d.words;
+      });
+  }
+  function ensureTranscript(file) {
+    var sig = clipSig(file);
+    if (transcriptWords && transcriptSig === sig) return Promise.resolve(transcriptWords);
+    if (pendingTranscript && pendingTranscript.sig === sig) return pendingTranscript.promise;
+    var tw = trimWindow();
+    if (tw.dur > 180) {
+      return Promise.reject(new Error("التفريغ الآلي يدعم حتى ٣ دقائق. قصّ المقطع، أو أضف العبارات بوقتها."));
+    }
+    var promise = ffEnqueue(function () {
+      setStatus("جارٍ استخراج الصوت للتفريغ…");
+      return loadEngine().then(function () {
+        return writeInput(file).then(function (inName) {
+          return Khutbah.extractAudio(ff, FU, inName, tw.start, tw.dur);
+        });
+      });
+    }).then(function (audio) {
+      setStatus("جارٍ تفريغ النص العربي…");
+      return postTranscribe(audio);
+    }).then(function (words) {
+      acceptWords(file, words);
+      setStatus("تم التفريغ — " + words.length + " وحدة موقّتة. راجع النصوص ثم أنتج.");
+      return words;
+    });
+    pendingTranscript = { sig: sig, promise: promise };
+    promise.then(function () {}, function () { if (pendingTranscript && pendingTranscript.sig === sig) pendingTranscript = null; });
+    return promise;
+  }
+  function previewModel() {
+    var f = fields();
+    var tw = trimWindow();
+    return {
+      title: f.topic,
+      speaker: f.name,
+      mosque: f.mosque,
+      logo: logoReady ? logo : null,
+      duration: tw.dur || tw.full || 0,
+      cues: window.KhutbahCues ? cuesForExport() : [],
+      placeholders: true,
+    };
   }
 
   // ===== لفّ النصّ =====
@@ -187,10 +336,30 @@
     var c = $("preview"); if (!c) return;
     var fmt = previewFormat();
     if (c.width !== fmt.w || c.height !== fmt.h) { c.width = fmt.w; c.height = fmt.h; }
-    paint(c.getContext("2d"), fmt.w, fmt.h);
-    var lbl = $("previewLbl"); if (lbl) lbl.textContent = fmt.caption || ("معاينة: " + fmt.label);
+    var file = activeFile();
+    var live = khutbahOn() && Khutbah.isVideoFile(file);
+    var sermon = khutbahOn();
     var frame = $("previewFrame");
-    if (frame) frame.className = "studio-frame studio-frame--" + (fmt.frame || "reel");
+    if (frame) frame.className = "studio-frame studio-frame--" + (fmt.frame || "reel") + (live ? " is-live" : "");
+    var vid = $("liveVideo");
+    if (vid) vid.hidden = !live;
+    var tools = $("khTools");
+    if (tools) tools.hidden = !live;
+    var ctx = c.getContext("2d");
+    if (sermon && window.Khutbah) {
+      var tw = trimWindow();
+      var tRel = 0;
+      if (live && vid) tRel = (vid.currentTime || 0) - tw.start;
+      Khutbah.paintFrame(ctx, fmt.w, fmt.h, previewModel(), tRel, { backdrop: !live });
+    } else {
+      paint(ctx, fmt.w, fmt.h);
+    }
+    var lbl = $("previewLbl");
+    if (lbl) {
+      lbl.textContent = sermon
+        ? ("معاينة خطبة الجمعة — " + sourceLabel() + " — " + (fmt.caption || fmt.label))
+        : (fmt.caption || ("معاينة: " + fmt.label));
+    }
   }
   function paintToBlob(fmt) {
     var c = document.createElement("canvas"); c.width = fmt.w; c.height = fmt.h;
@@ -215,16 +384,53 @@
   }
 
   // ===== الإنتاج =====
-  $("file").addEventListener("change", function (e) {
-    chosenFile = (e.target.files && e.target.files[0]) || null;
-    $("fileInfo").textContent = chosenFile ? ("المُختار: " + chosenFile.name + " (" + human(chosenFile.size) + ")") : "";
-  });
+  function onPicked() {
+    var file = activeFile();
+    chosenFile = file;
+    $("fileInfo").textContent = file
+      ? (sourceLabel() + " — " + file.name + " (" + human(file.size) + ")")
+      : "";
+    if (khutbahOn() && file && Khutbah.isVideoFile(file)) {
+      attachLivePreview(file);
+      ensureTranscript(file).catch(function (err) {
+        setStatus((err && err.message) || "تعذّر التفريغ. أضف العبارات بوقتها ثم أنتج.");
+      });
+    } else {
+      detachLivePreview();
+      drawPreview();
+    }
+  }
+  function attachLivePreview(file) {
+    var vid = $("liveVideo");
+    if (!vid) return;
+    if (liveUrl) URL.revokeObjectURL(liveUrl);
+    liveUrl = URL.createObjectURL(file);
+    vid.src = liveUrl;
+    vid.hidden = false;
+    vid.onloadedmetadata = function () {
+      mediaDuration = vid.duration || 0;
+      var scrub = $("scrub");
+      if (scrub) { scrub.max = String(mediaDuration || 0); scrub.value = "0"; }
+      var tw = trimWindow();
+      try { vid.currentTime = tw.start || 0.05; } catch (e) { /* seek after metadata */ }
+      drawPreview();
+    };
+  }
+  function detachLivePreview() {
+    var vid = $("liveVideo");
+    if (vid) { try { vid.pause(); } catch (e) { /* ignore */ } vid.removeAttribute("src"); vid.hidden = true; }
+    if (liveUrl) { URL.revokeObjectURL(liveUrl); liveUrl = ""; }
+    mediaDuration = 0;
+  }
+  $("file").addEventListener("change", onPicked);
+  if ($("fileWeb")) $("fileWeb").addEventListener("change", onPicked);
 
   $("genBtn").addEventListener("click", function () {
     if (busy) return;
     var fmts = selectedFormats();
     if (!fmts.length) { setStatus("اختر مقاساً واحداً على الأقلّ."); return; }
-    if (!chosenFile) { setStatus("ارفع ملفاً صوتيّاً/فيديو أوّلاً."); return; }
+    chosenFile = activeFile();
+    if (!chosenFile) { setStatus("ارفع فيديو الملقي أو مقطعاً من النت أوّلاً."); return; }
     runVideo(fmts);
   });
 
@@ -238,10 +444,77 @@
   }
   function endRun() { busy = false; }
 
-  function runVideo(fmts) {
+  function runKhutbah(fmts, file) {
     startRun();
-    var inName = "in_" + Date.now() + "_" + chosenFile.name.replace(/[^\w.\-]+/g, "_");
-    loadEngine()
+    var tw = trimWindow();
+    ensureTranscript(file).catch(function (err) {
+      setStatus(((err && err.message) || "تعذّر التفريغ") + " — سيُنتَج القالب بلا تفريغ آلي.");
+      return [];
+    }).then(function () {
+      var cues = cuesForExport();
+      var dur = tw.dur || tw.full;
+      return ffEnqueue(function () {
+        return loadEngine().then(function () {
+          return writeInput(file).then(function (inName) {
+            var chain = Promise.resolve();
+            fmts.forEach(function (fmt, i) {
+              chain = chain.then(function () {
+                setStatus("جارٍ إنتاج خطبة الجمعة: " + fmt.label + " (" + (i + 1) + "/" + fmts.length + ")");
+                setBar(0);
+                return Khutbah.renderReel({
+                  ff: ff,
+                  FU: FU,
+                  inName: inName,
+                  w: fmt.w,
+                  h: fmt.h,
+                  start: tw.start,
+                  duration: dur,
+                  cues: cues,
+                  title: fields().topic,
+                  speaker: fields().name,
+                  mosque: fields().mosque,
+                  logo: logoReady ? logo : null,
+                });
+              }).then(function (blob) {
+                if (!blob || blob.size < MIN_VIDEO_BYTES) throw new Error("الملف الناتج فارغ أو تالف. أعد الإنتاج.");
+                results.push({
+                  fmt: fmt,
+                  blob: blob,
+                  url: URL.createObjectURL(blob),
+                  type: "video",
+                  duration: dur ? Math.round(dur) : 0,
+                  sourceLabel: sourceLabel(),
+                });
+              });
+            });
+            return chain;
+          });
+        });
+      });
+    }).then(function () {
+      setStatus("اكتمل ✓ — " + results.length + " صيغة.");
+      setBar(100);
+      showResults();
+    }).catch(function (err) {
+      setStatus("تعذّر: " + ((err && err.message) || err));
+      setBar(0);
+    }).then(endRun);
+  }
+
+  function runVideo(fmts) {
+    var file = activeFile();
+    chosenFile = file;
+    if (!file) { setStatus("ارفع ملفاً صوتيّاً أو فيديو أوّلاً."); return; }
+    if (khutbahOn() && Khutbah.isVideoFile(file)) {
+      runKhutbah(fmts, file);
+      return;
+    }
+    if (khutbahOn()) {
+      setStatus("الملف بلا صورة فيديو — تُرسم بطاقة الصوت. قالب الخطبة يحتاج فيديو الملقي أو مقطعاً من النت.");
+    }
+    startRun();
+    var inName = "in_" + Date.now() + "_" + file.name.replace(/[^\w.\-]+/g, "_");
+    ffEnqueue(function () { return loadEngine()
       .then(function () { setStatus("جارٍ قراءة الملف…"); return FU.fetchFile(chosenFile).then(function (d) { return ff.writeFile(inName, d); }); })
       .then(function () {
         var chain = Promise.resolve();
@@ -273,7 +546,7 @@
                 if (!blob.size || blob.size < MIN_VIDEO_BYTES) {
                   throw new Error("الملف الناتج فارغ أو تالف. أعد الإنتاج.");
                 }
-                results.push({ fmt: fmt, blob: blob, url: URL.createObjectURL(blob), type: "video" });
+                results.push({ fmt: fmt, blob: blob, url: URL.createObjectURL(blob), type: "video", sourceLabel: sourceLabel() });
                 try { ff.deleteFile("out.mp4"); } catch (e) {}
               });
           });
@@ -283,6 +556,7 @@
       .then(function () { try { ff.deleteFile(inName); ff.deleteFile("bg.png"); } catch (e) {} setStatus("اكتمل ✓ — " + results.length + " صيغة."); setBar(100); showResults(); })
       .catch(function (err) { setStatus("تعذّر: " + (err.message || err)); setBar(0); })
       .then(endRun);
+    });
   }
 
   function showResults() {
@@ -292,7 +566,7 @@
       blk.style.cssText = "margin-bottom:1.2rem;padding-bottom:1.2rem;border-bottom:1px solid var(--border)";
       var head = document.createElement("div");
       head.style.cssText = "display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:.6rem";
-      var tag = document.createElement("span"); tag.className = "badge"; tag.textContent = r.fmt.label + " · " + r.fmt.chips;
+      var tag = document.createElement("span"); tag.className = "badge"; tag.textContent = r.fmt.label + " · " + r.fmt.chips + (r.sourceLabel ? " · " + r.sourceLabel : "");
       var a = document.createElement("a");
       a.href = r.url; a.download = "riyad-" + r.fmt.key + ".mp4";
       a.className = "btn btn-primary"; a.style.cssText = "padding:.4rem 1rem;font-size:.9rem";
@@ -372,7 +646,7 @@
     if (toSite && siteVid) {
       jobs.push(uploadMedia(siteVid.blob, true).then(function (url) {
         return fetch("/api/teacher/clips", { method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify({ title: f.topic || f.name, doctor_name: f.name, video_url: url }) })
+          body: JSON.stringify({ title: f.topic || f.name, doctor_name: f.name, video_url: url, duration: siteVid.duration || undefined }) })
           .then(function (r) { return r.json(); }).then(function (d) { return { name: "الموقع", ok: !!d.ok, error: d.error }; });
       }).catch(function () { return { name: "الموقع", ok: false }; }));
     }
@@ -406,7 +680,97 @@
   var at = $("audioTgl"); if (at) at.addEventListener("change", drawPreview);
   FORMATS.forEach(function (f) { var b = $("fmt_" + f.key); if (b) b.addEventListener("change", drawPreview); });
 
-  drawPreview();
+  function syncSourceUi() {
+    var web = sourceKind() === "web";
+    if ($("speakerBox")) $("speakerBox").hidden = web;
+    if ($("webBox")) $("webBox").hidden = !web;
+    var on = khutbahOn();
+    ["mosqueRow", "trimRow", "cardRow", "cueBox"].forEach(function (id) {
+      if ($(id)) $(id).hidden = !on;
+    });
+    if ($("audioRow")) $("audioRow").hidden = on;
+    var hint = $("fileHint");
+    if (hint) {
+      if (!on) hint.textContent = "يُؤخذ الصوت وتُرسم بطاقة موحّدة. فعّل قالب خطبة الجمعة وارفع فيديو لتبقى الصورة.";
+      else if (web) hint.textContent = "مقطع من النت: صورة الفيديو تبقى تحت قالب الخطبة. تأكد من حق الاستخدام قبل النشر.";
+      else hint.textContent = "فيديو الملقي: صورته تبقى تحت القالب. اللقب والاسم والعنوان من بيانات البطاقة.";
+    }
+    drawPreview();
+  }
+  document.querySelectorAll('input[name="sourceKind"]').forEach(function (radio) {
+    radio.addEventListener("change", function () { syncSourceUi(); onPicked(); });
+  });
+  if ($("khutbahTgl")) $("khutbahTgl").addEventListener("change", function () {
+    if (!(khutbahOn() && activeFile() && Khutbah.isVideoFile(activeFile()))) detachLivePreview();
+    syncSourceUi();
+    if (khutbahOn() && activeFile() && Khutbah.isVideoFile(activeFile())) onPicked();
+  });
+  ["trimStart", "trimEnd"].forEach(function (id) {
+    var el = $(id);
+    if (!el) return;
+    el.addEventListener("input", function () {
+      drawPreview();
+      var file = activeFile();
+      if (file && transcriptSig && transcriptSig !== clipSig(file)) {
+        setStatus("تغيّر القص. «أعد التفريغ» أو الإنتاج يعيد التفريغ على المقطع الجديد.");
+      }
+    });
+  });
+  ["mosque", "cardText", "cardCite", "cardAt", "cardEnd"].forEach(function (id) {
+    var el = $(id);
+    if (el) el.addEventListener("input", drawPreview);
+  });
+  if ($("cardType")) $("cardType").addEventListener("change", drawPreview);
+  if ($("addPhraseBtn")) $("addPhraseBtn").addEventListener("click", function () {
+    var next = KhutbahCues.addPhrase(cueState.cues, {
+      text: val("phraseText"),
+      start: Number($("phraseStart").value),
+      end: Number($("phraseEnd").value),
+    });
+    if (next === cueState.cues) { setStatus("اكتب العبارة ووقت البداية والنهاية. لا يُخمَّن التوقيت."); return; }
+    var file = activeFile();
+    cueState = { sig: file ? clipSig(file) : "manual", cues: next };
+    renderCueList();
+    drawPreview();
+    setStatus("أُضيفت العبارة بتوقيتها.");
+  });
+  if ($("reTransBtn")) $("reTransBtn").addEventListener("click", function () {
+    var file = activeFile();
+    if (!file || !Khutbah.isVideoFile(file)) { setStatus("ارفع فيديو الملقي أو مقطعاً من النت أوّلاً."); return; }
+    transcriptSig = "";
+    transcriptWords = null;
+    pendingTranscript = null;
+    ensureTranscript(file).catch(function (err) {
+      setStatus((err && err.message) || "تعذّر التفريغ.");
+    });
+  });
+  var live = $("liveVideo");
+  if (live) {
+    live.addEventListener("timeupdate", function () {
+      if (!scrubbing && $("scrub")) $("scrub").value = String(live.currentTime || 0);
+      if (khutbahOn()) drawPreview();
+    });
+    live.addEventListener("seeked", drawPreview);
+    live.addEventListener("play", function () { if ($("previewPlay")) $("previewPlay").textContent = "❚❚ إيقاف"; });
+    live.addEventListener("pause", function () { if ($("previewPlay")) $("previewPlay").textContent = "▶ معاينة"; });
+  }
+  if ($("previewPlay")) $("previewPlay").addEventListener("click", function () {
+    var v = $("liveVideo");
+    if (!v || !v.src) return;
+    if (v.paused) { v.muted = false; v.play(); }
+    else v.pause();
+  });
+  if ($("scrub")) {
+    $("scrub").addEventListener("pointerdown", function () { scrubbing = true; });
+    $("scrub").addEventListener("input", function () {
+      var v = $("liveVideo");
+      if (!v) return;
+      try { v.currentTime = Number($("scrub").value) || 0; } catch (e) { /* not seekable yet */ }
+    });
+    $("scrub").addEventListener("change", function () { scrubbing = false; drawPreview(); });
+  }
+
+  syncSourceUi();
 
   fetch("/api/auth/me", { headers: { accept: "application/json" } })
     .then(function (r) { return r.ok ? r.json() : null; })
